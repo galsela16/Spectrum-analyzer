@@ -130,14 +130,9 @@
       <label>רגישות פידבק <b id="fbSensVal">בינונית</b></label>
       <input type="range" id="fbSens" min="6" max="20" step="1" value="12">
     </div>
-    <div class="ctrl" style="flex:0 0 auto">
-      <label>רזולוציה</label>
-      <div class="seg" id="resSeg">
-        <button data-bpo="3" class="on">1/3</button>
-        <button data-bpo="6">1/6</button>
-        <button data-bpo="12">1/12</button>
-        <button data-bpo="24">1/24</button>
-      </div>
+    <div class="ctrl">
+      <label>רזולוציה <b id="resVal">1/6 אוקטבה</b></label>
+      <input type="range" id="res" min="1" max="48" step="1" value="6">
     </div>
     <button class="toggle on" id="peakBtn">Peak Hold</button>
     <button class="toggle on" id="fbBtn">גלאי פידבק</button>
@@ -157,7 +152,7 @@ function buildBands(bpo){          // bpo = bands per octave: 3=1/3oct, 6=1/6, 1
   R=Math.pow(2,1/(2*bpo));         // fc/R .. fc*R spans one band
   peaks=new Array(BANDS).fill(0);
 }
-buildBands(3);
+buildBands(6);
 
 const cv = document.getElementById('cv');
 const ctx = cv.getContext('2d');
@@ -223,12 +218,10 @@ document.getElementById('peakBtn').addEventListener('click',function(){
 document.getElementById('fbBtn').addEventListener('click',function(){
   fbOn=!fbOn; this.classList.toggle('on',fbOn); fbTrack.clear(); fbPanel.innerHTML='';
 });
-document.querySelectorAll('#resSeg button').forEach(btn=>{
-  btn.addEventListener('click',()=>{
-    document.querySelectorAll('#resSeg button').forEach(b=>b.classList.remove('on'));
-    btn.classList.add('on');
-    buildBands(parseInt(btn.dataset.bpo,10));
-  });
+document.getElementById('res').addEventListener('input',e=>{
+  const bpo=parseInt(e.target.value,10);
+  document.getElementById('resVal').textContent='1/'+bpo+' אוקטבה';
+  buildBands(bpo);
 });
 document.getElementById('mRta').addEventListener('click',()=>setMode('rta'));
 document.getElementById('mSpec').addEventListener('click',()=>setMode('spec'));
