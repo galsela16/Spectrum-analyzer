@@ -14,7 +14,7 @@
 <style>
   :root{
     --panel:#0d1117; --panel-2:#161b22; --line:#21262d; --grid:#1c2530;
-    --text:#c9d3df; --dim:#5b6673; --accent:#00e5a8; --warn:#ffd166; --hot:#ff3b6b;
+    --text:#c9d3df; --dim:#5b6673; --accent:#2f9bff; --warn:#ffd166; --hot:#ff3b6b;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%}
@@ -30,19 +30,19 @@
     background:linear-gradient(180deg,var(--panel-2),transparent)}
   .dot{width:9px;height:9px;border-radius:50%;background:var(--dim);transition:.3s;flex:none}
   .dot.live{background:var(--accent);animation:pulse 1.6s infinite}
-  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(0,229,168,.45)}70%{box-shadow:0 0 0 7px rgba(0,229,168,0)}100%{box-shadow:0 0 0 0 rgba(0,229,168,0)}}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(47,155,255,.45)}70%{box-shadow:0 0 0 7px rgba(47,155,255,0)}100%{box-shadow:0 0 0 0 rgba(47,155,255,0)}}
   h1{font-size:13px;font-weight:600;letter-spacing:2px;text-transform:uppercase}
   h1 span{color:var(--accent)}
   .modes{margin-inline-start:auto;display:flex;gap:4px}
   .modes button{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);
     font-family:inherit;font-size:11px;letter-spacing:.5px;padding:7px 12px;border-radius:7px;cursor:pointer;transition:.15s}
-  .modes button.on{border-color:var(--accent);color:var(--accent);background:rgba(0,229,168,.08)}
+  .modes button.on{border-color:var(--accent);color:var(--accent);background:rgba(47,155,255,.08)}
   #stage{flex:1;position:relative;min-height:0}
   canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
   .idle{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
     gap:16px;text-align:center;padding:24px;z-index:4}
   .idle p{color:var(--dim);font-size:13px;line-height:1.7;max-width:300px}
-  .btn{appearance:none;border:1px solid var(--accent);cursor:pointer;background:rgba(0,229,168,.08);
+  .btn{appearance:none;border:1px solid var(--accent);cursor:pointer;background:rgba(47,155,255,.08);
     color:var(--accent);font-family:inherit;font-size:14px;font-weight:600;letter-spacing:2px;
     padding:14px 30px;border-radius:10px;text-transform:uppercase;transition:.15s}
   .btn:active{transform:scale(.97)}
@@ -60,7 +60,7 @@
   .meter{position:absolute;bottom:8px;inset-inline:10px;z-index:3;height:26px;border:1px solid var(--line);
     border-radius:7px;background:rgba(13,17,23,.55);backdrop-filter:blur(4px);overflow:hidden;display:flex;align-items:center}
   .meterFill{position:absolute;inset-inline-start:0;top:0;bottom:0;width:0%;
-    background:linear-gradient(90deg,var(--accent) 0%,var(--accent) 60%,var(--warn) 80%,var(--hot) 100%);
+    background:linear-gradient(90deg,var(--accent) 0%,var(--accent) 65%,#7cc4ff 82%,var(--hot) 100%);
     opacity:.55;transition:width .05s linear}
   .meterPeak{position:absolute;top:0;bottom:0;width:2px;background:#fff;opacity:.9}
   .meterVal{position:relative;margin-inline-start:auto;padding-inline-end:10px;font-size:13px;font-weight:600;
@@ -76,12 +76,12 @@
   input[type=range]::-moz-range-thumb{width:18px;height:18px;border:none;border-radius:50%;background:var(--accent)}
   .toggle{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;font-size:11px;
     letter-spacing:1px;padding:9px 13px;border-radius:8px;cursor:pointer;text-transform:uppercase;transition:.15s;white-space:nowrap}
-  .toggle.on{border-color:var(--accent);color:var(--accent);background:rgba(0,229,168,.08)}
+  .toggle.on{border-color:var(--accent);color:var(--accent);background:rgba(47,155,255,.08)}
   .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
   .seg button{border:none;background:var(--panel-2);color:var(--dim);font-family:inherit;font-size:11px;
     letter-spacing:.5px;padding:9px 11px;cursor:pointer;transition:.15s;border-inline-start:1px solid var(--line)}
   .seg button:first-child{border-inline-start:none}
-  .seg button.on{color:var(--accent);background:rgba(0,229,168,.12)}
+  .seg button.on{color:var(--accent);background:rgba(47,155,255,.12)}
   .err{position:absolute;bottom:14px;inset-inline:14px;z-index:5;background:rgba(255,59,107,.12);border:1px solid var(--hot);
     color:#ffb3c4;padding:10px 14px;border-radius:8px;font-size:12px;line-height:1.6;display:none}
 </style>
@@ -273,12 +273,12 @@ function stop(){
 
 // map a dB value to 0..1 using floor..ceil
 function norm(db){ return Math.max(0,Math.min(1,(db-floorDb)/(ceilDb-floorDb))); }
-// viridis-ish colour ramp 0..1
+// blue -> white intensity ramp 0..1
 function heat(t){
   t=Math.max(0,Math.min(1,t));
-  const r=Math.round(255*Math.min(1,Math.max(0,1.6*t-0.5)));
-  const g=Math.round(255*Math.min(1,Math.max(0,1.4*t-0.1)));
-  const b=Math.round(255*Math.min(1,Math.max(0,0.9-1.2*Math.abs(t-0.35))+0.15*(1-t)));
+  const r=Math.round(255*Math.max(0,Math.min(1,1.3*t-0.35)));
+  const g=Math.round(255*Math.max(0,Math.min(1,1.1*t-0.05)));
+  const b=Math.round(255*Math.max(0,Math.min(1,0.30+0.70*t)));
   return 'rgb('+r+','+g+','+b+')';
 }
 function fLabel(f){return f>=1000?(f%1000?(f/1000).toFixed(1):f/1000)+'k':''+f;}
@@ -343,7 +343,7 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     if(v>peakVal){peakVal=v;peakBand=b;}
     const x=b*bw+gap/2, barW=bw-gap;
     const barH=v*plotH, y=plotH-barH;
-    let col= v<0.6?'rgba(0,229,168,'+(0.4+v).toFixed(2)+')' : v<0.85?'#ffd166':'#ff3b6b';
+    let col= v<0.85?'rgba(47,155,255,'+(0.4+v).toFixed(2)+')' : '#ff3b6b';
     ctx.fillStyle=col; ctx.fillRect(x,y,barW,barH);
     if(peakHold){
       if(v>=peaks[b]) peaks[b]=v; else peaks[b]=Math.max(0,peaks[b]-0.005);
