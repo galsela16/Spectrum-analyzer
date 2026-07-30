@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0d1117">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="RTA">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<title>אנלייזר ספקטרום · RTA</title>
+<style>
+  :root{
+    --panel:#0d1117; --panel-2:#161b22; --line:#21262d; --grid:#1c2530;
+    --text:#c9d3df; --dim:#5b6673; --accent:#00e5a8; --warn:#ffd166; --hot:#ff3b6b;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:radial-gradient(120% 80% at 50% -10%, #12222b 0%, var(--panel) 55%);
+    color:var(--text);
+    font-family:"SF Mono",ui-monospace,"Menlo",monospace;
+    display:flex;flex-direction:column;height:100dvh;overflow:hidden;
+    -webkit-user-select:none;user-select:none;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  header{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,var(--panel-2),transparent)}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--dim);transition:.3s;flex:none}
+  .dot.live{background:var(--accent);animation:pulse 1.6s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(0,229,168,.45)}70%{box-shadow:0 0 0 7px rgba(0,229,168,0)}100%{box-shadow:0 0 0 0 rgba(0,229,168,0)}}
+  h1{font-size:13px;font-weight:600;letter-spacing:2px;text-transform:uppercase}
+  h1 span{color:var(--accent)}
+  .modes{margin-inline-start:auto;display:flex;gap:4px}
+  .modes button{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);
+    font-family:inherit;font-size:11px;letter-spacing:.5px;padding:7px 12px;border-radius:7px;cursor:pointer;transition:.15s}
+  .modes button.on{border-color:var(--accent);color:var(--accent);background:rgba(0,229,168,.08)}
+  #stage{flex:1;position:relative;min-height:0}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .idle{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:16px;text-align:center;padding:24px;z-index:4}
+  .idle p{color:var(--dim);font-size:13px;line-height:1.7;max-width:300px}
+  .btn{appearance:none;border:1px solid var(--accent);cursor:pointer;background:rgba(0,229,168,.08);
+    color:var(--accent);font-family:inherit;font-size:14px;font-weight:600;letter-spacing:2px;
+    padding:14px 30px;border-radius:10px;text-transform:uppercase;transition:.15s}
+  .btn:active{transform:scale(.97)}
+  /* feedback alert list */
+  #fbPanel{position:absolute;top:10px;inset-inline-start:10px;z-index:3;display:flex;flex-direction:column;gap:6px;pointer-events:none}
+  .fbItem{background:rgba(255,59,107,.14);border:1px solid var(--hot);color:#ffd7e0;
+    padding:6px 11px;border-radius:8px;font-size:12px;letter-spacing:.5px;display:flex;gap:10px;align-items:baseline;
+    backdrop-filter:blur(4px);animation:fbin .2s ease}
+  @keyframes fbin{from{opacity:0;transform:translateY(-4px)}to{opacity:1}}
+  .fbItem b{color:#fff;font-size:13px;font-variant-numeric:tabular-nums}
+  .fbItem small{color:#ffb3c4}
+  .readout{position:absolute;top:10px;inset-inline-end:10px;z-index:3;text-align:end;font-size:11px;color:var(--dim);letter-spacing:1px}
+  .readout b{display:block;color:var(--text);font-size:15px;font-variant-numeric:tabular-nums}
+  /* level meter pinned to bottom of stage */
+  .meter{position:absolute;bottom:8px;inset-inline:10px;z-index:3;height:26px;border:1px solid var(--line);
+    border-radius:7px;background:rgba(13,17,23,.55);backdrop-filter:blur(4px);overflow:hidden;display:flex;align-items:center}
+  .meterFill{position:absolute;inset-inline-start:0;top:0;bottom:0;width:0%;
+    background:linear-gradient(90deg,var(--accent) 0%,var(--accent) 60%,var(--warn) 80%,var(--hot) 100%);
+    opacity:.55;transition:width .05s linear}
+  .meterPeak{position:absolute;top:0;bottom:0;width:2px;background:#fff;opacity:.9}
+  .meterVal{position:relative;margin-inline-start:auto;padding-inline-end:10px;font-size:13px;font-weight:600;
+    color:var(--text);font-variant-numeric:tabular-nums;letter-spacing:.5px;z-index:1}
+  .meterLbl{position:relative;padding-inline-start:10px;font-size:10px;color:var(--dim);letter-spacing:1.5px;z-index:1}
+  footer{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:11px 16px;border-top:1px solid var(--line);
+    background:linear-gradient(0deg,var(--panel-2),transparent)}
+  .ctrl{display:flex;flex-direction:column;gap:5px;flex:1;min-width:110px}
+  .ctrl label{font-size:10px;letter-spacing:1.5px;color:var(--dim);text-transform:uppercase;display:flex;justify-content:space-between}
+  .ctrl label b{color:var(--accent);font-variant-numeric:tabular-nums}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:4px;border-radius:4px;background:var(--line);outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--accent);cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:18px;height:18px;border:none;border-radius:50%;background:var(--accent)}
+  .toggle{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;font-size:11px;
+    letter-spacing:1px;padding:9px 13px;border-radius:8px;cursor:pointer;text-transform:uppercase;transition:.15s;white-space:nowrap}
+  .toggle.on{border-color:var(--accent);color:var(--accent);background:rgba(0,229,168,.08)}
+  .err{position:absolute;bottom:14px;inset-inline:14px;z-index:5;background:rgba(255,59,107,.12);border:1px solid var(--hot);
+    color:#ffb3c4;padding:10px 14px;border-radius:8px;font-size:12px;line-height:1.6;display:none}
+</style>
+</head>
+<body>
+  <header>
+    <div class="dot" id="dot"></div>
+    <h1>RTA <span>אנלייזר</span></h1>
+    <div class="modes">
+      <button id="mRta" class="on">1/3 אוקטבה</button>
+      <button id="mSpec">ווטרפול</button>
+    </div>
+  </header>
+
+  <div id="stage">
+    <canvas id="cv"></canvas>
+    <div id="fbPanel"></div>
+    <div class="readout"><span>PEAK</span><b id="peakHz">—</b></div>
+    <div class="meter" id="meter" style="display:none">
+      <div class="meterFill" id="meterFill"></div>
+      <div class="meterPeak" id="meterPeak" style="inset-inline-start:0"></div>
+      <span class="meterLbl">LEVEL</span>
+      <span class="meterVal" id="meterVal">—</span>
+    </div>
+    <div class="idle" id="idle">
+      <button class="btn" id="startBtn">הפעל מיקרופון</button>
+      <p>ניתוח 1/3 אוקטבה בתקן ISO, ווטרפול לאורך זמן, וגלאי פידבק בזמן אמת.</p>
+    </div>
+    <div class="err" id="err"></div>
+  </div>
+
+  <footer>
+    <div class="ctrl">
+      <label>רצפת רעש <b id="floorVal">-85dB</b></label>
+      <input type="range" id="floor" min="-100" max="-50" step="1" value="-85">
+    </div>
+    <div class="ctrl">
+      <label>החלקה <b id="smoothVal">0.7</b></label>
+      <input type="range" id="smooth" min="0" max="0.92" step="0.02" value="0.7">
+    </div>
+    <div class="ctrl">
+      <label>כיול SPL <b id="calVal">+0dB</b></label>
+      <input type="range" id="cal" min="0" max="130" step="1" value="0">
+    </div>
+    <div class="ctrl">
+      <label>רגישות פידבק <b id="fbSensVal">בינונית</b></label>
+      <input type="range" id="fbSens" min="6" max="20" step="1" value="12">
+    </div>
+    <button class="toggle on" id="peakBtn">Peak Hold</button>
+    <button class="toggle on" id="fbBtn">גלאי פידבק</button>
+    <button class="toggle" id="stopBtn" style="display:none">עצור</button>
+  </footer>
+
+<script>
+// ---------- ISO 1/3-octave band centers (Hz) ----------
+const ISO = [20,25,31.5,40,50,63,80,100,125,160,200,250,315,400,500,630,800,1000,
+             1250,1600,2000,2500,3150,4000,5000,6300,8000,10000,12500,16000,20000];
+const BANDS = ISO.length;
+const R6 = Math.pow(2,1/6); // 1/3-octave half-width factor
+
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const dot = document.getElementById('dot');
+const idle = document.getElementById('idle');
+const errBox = document.getElementById('err');
+const peakHzEl = document.getElementById('peakHz');
+const fbPanel = document.getElementById('fbPanel');
+const meterEl = document.getElementById('meter');
+const meterFill = document.getElementById('meterFill');
+const meterPeak = document.getElementById('meterPeak');
+const meterVal = document.getElementById('meterVal');
+
+let audioCtx, analyser, source, stream, raf;
+let floatData;            // Float32 dB per bin
+let timeData;             // Float32 time-domain samples
+let running=false, mode='rta';
+let peakHold=true, fbOn=true;
+let floorDb=-85, ceilDb=-15;
+let calib=0;              // dB offset for SPL calibration
+let fbProm=12;            // feedback prominence threshold (dB)
+let lvlPeak=-120, lvlPeakT=0;  // held level peak (dBFS) + timestamp
+let peaks=new Array(BANDS).fill(0);
+let specCanvas, specCtx;  // offscreen for waterfall
+
+// feedback tracking: key = rounded Hz, value = {frames, db, hz}
+let fbTrack=new Map();
+
+function resize(){
+  const r=cv.getBoundingClientRect();
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  cv.width=r.width*dpr; cv.height=r.height*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  // rebuild waterfall buffer at CSS pixel size
+  specCanvas=document.createElement('canvas');
+  specCanvas.width=Math.max(2,Math.floor(r.width));
+  specCanvas.height=Math.max(2,Math.floor(r.height));
+  specCtx=specCanvas.getContext('2d');
+  specCtx.fillStyle='#0d1117'; specCtx.fillRect(0,0,specCanvas.width,specCanvas.height);
+}
+window.addEventListener('resize',resize);
+
+// ---------- controls ----------
+document.getElementById('floor').addEventListener('input',e=>{
+  floorDb=parseFloat(e.target.value);
+  document.getElementById('floorVal').textContent=floorDb+'dB';
+});
+document.getElementById('smooth').addEventListener('input',e=>{
+  const v=parseFloat(e.target.value);
+  document.getElementById('smoothVal').textContent=v.toFixed(2);
+  if(analyser) analyser.smoothingTimeConstant=v;
+});
+document.getElementById('cal').addEventListener('input',e=>{
+  calib=parseFloat(e.target.value);
+  document.getElementById('calVal').textContent=(calib>=0?'+':'')+calib+'dB';
+});
+document.getElementById('fbSens').addEventListener('input',e=>{
+  fbProm=parseFloat(e.target.value);
+  document.getElementById('fbSensVal').textContent = fbProm>=15?'נמוכה':fbProm>=10?'בינונית':'גבוהה';
+});
+document.getElementById('peakBtn').addEventListener('click',function(){
+  peakHold=!peakHold; this.classList.toggle('on',peakHold); peaks.fill(0);
+});
+document.getElementById('fbBtn').addEventListener('click',function(){
+  fbOn=!fbOn; this.classList.toggle('on',fbOn); fbTrack.clear(); fbPanel.innerHTML='';
+});
+document.getElementById('mRta').addEventListener('click',()=>setMode('rta'));
+document.getElementById('mSpec').addEventListener('click',()=>setMode('spec'));
+document.getElementById('startBtn').addEventListener('click',start);
+document.getElementById('stopBtn').addEventListener('click',stop);
+
+function setMode(m){
+  mode=m;
+  document.getElementById('mRta').classList.toggle('on',m==='rta');
+  document.getElementById('mSpec').classList.toggle('on',m==='spec');
+  if(specCtx){specCtx.fillStyle='#0d1117';specCtx.fillRect(0,0,specCanvas.width,specCanvas.height);}
+}
+
+async function start(){
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({audio:{
+      echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+    audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    if(audioCtx.state==='suspended') await audioCtx.resume();
+    analyser=audioCtx.createAnalyser();
+    analyser.fftSize=16384;                 // ~2.9Hz bins @48k — good low-end resolution
+    analyser.smoothingTimeConstant=parseFloat(document.getElementById('smooth').value);
+    analyser.minDecibels=-100; analyser.maxDecibels=-10;
+    source=audioCtx.createMediaStreamSource(stream);
+    source.connect(analyser);
+    floatData=new Float32Array(analyser.frequencyBinCount);
+    timeData=new Float32Array(analyser.fftSize);
+    resize();
+    peaks.fill(0); fbTrack.clear(); fbPanel.innerHTML=''; lvlPeak=-120;
+    running=true; idle.style.display='none'; dot.classList.add('live');
+    meterEl.style.display='flex';
+    document.getElementById('stopBtn').style.display='';
+    draw();
+  }catch(e){
+    errBox.style.display='block';
+    errBox.textContent='לא ניתן לגשת למיקרופון: '+(e.message||e.name)+'. יש לאשר הרשאה ולהריץ מעל HTTPS.';
+  }
+}
+function stop(){
+  running=false; if(raf) cancelAnimationFrame(raf);
+  if(stream) stream.getTracks().forEach(t=>t.stop());
+  if(audioCtx) audioCtx.close();
+  dot.classList.remove('live'); idle.style.display='flex';
+  document.getElementById('stopBtn').style.display='none';
+  meterEl.style.display='none';
+  peakHzEl.textContent='—'; fbPanel.innerHTML='';
+  ctx.clearRect(0,0,cv.clientWidth,cv.clientHeight);
+}
+
+// map a dB value to 0..1 using floor..ceil
+function norm(db){ return Math.max(0,Math.min(1,(db-floorDb)/(ceilDb-floorDb))); }
+// viridis-ish colour ramp 0..1
+function heat(t){
+  t=Math.max(0,Math.min(1,t));
+  const r=Math.round(255*Math.min(1,Math.max(0,1.6*t-0.5)));
+  const g=Math.round(255*Math.min(1,Math.max(0,1.4*t-0.1)));
+  const b=Math.round(255*Math.min(1,Math.max(0,0.9-1.2*Math.abs(t-0.35))+0.15*(1-t)));
+  return 'rgb('+r+','+g+','+b+')';
+}
+function fLabel(f){return f>=1000?(f%1000?(f/1000).toFixed(1):f/1000)+'k':''+f;}
+
+// integrate power across an ISO band -> dB
+function bandDb(fLo,fHi,nyquist,bins){
+  let lo=Math.floor(fLo/nyquist*bins), hi=Math.ceil(fHi/nyquist*bins);
+  lo=Math.max(0,lo); hi=Math.min(bins-1,hi); if(hi<lo) hi=lo;
+  let p=0;
+  for(let i=lo;i<=hi;i++){ p+=Math.pow(10,floatData[i]/10); }
+  return 10*Math.log10(p+1e-12);
+}
+
+function updateLevel(){
+  analyser.getFloatTimeDomainData(timeData);
+  let sum=0;
+  for(let i=0;i<timeData.length;i++){ const s=timeData[i]; sum+=s*s; }
+  const rms=Math.sqrt(sum/timeData.length);
+  const dbfs=20*Math.log10(rms+1e-9);          // full-scale ref, ~ -inf..0
+  const now=performance.now();
+  if(dbfs>lvlPeak || now-lvlPeakT>1500){ lvlPeak=dbfs; lvlPeakT=now; }
+  // display range -60..0 dBFS -> 0..100%
+  const pct=v=>Math.max(0,Math.min(100,(v+60)/60*100));
+  meterFill.style.width=pct(dbfs)+'%';
+  meterPeak.style.insetInlineStart=pct(lvlPeak)+'%';
+  const shown=dbfs+calib;
+  meterVal.textContent = calib>0 ? (shown.toFixed(0)+' dB SPL≈') : (dbfs.toFixed(1)+' dBFS');
+}
+
+function draw(){
+  raf=requestAnimationFrame(draw);
+  analyser.getFloatFrequencyData(floatData);
+  updateLevel();
+  const W=cv.clientWidth,H=cv.clientHeight;
+  const nyquist=audioCtx.sampleRate/2, bins=floatData.length;
+  const logMin=Math.log(ISO[0]), logMax=Math.log(ISO[BANDS-1]);
+  const xForFreq=f=>((Math.log(f)-logMin)/(logMax-logMin))*W; // low freq LEFT (audio standard)
+
+  if(mode==='rta') drawRta(W,H,nyquist,bins,xForFreq);
+  else drawSpec(W,H,nyquist,bins,xForFreq);
+
+  if(fbOn) detectFeedback(nyquist,bins);
+}
+
+function drawRta(W,H,nyquist,bins,xForFreq){
+  ctx.clearRect(0,0,W,H);
+  const plotH=H-18;
+  // grid
+  ctx.strokeStyle='#1c2530'; ctx.fillStyle='#5b6673'; ctx.font='10px monospace'; ctx.textAlign='center';
+  [31.5,100,1000,10000].forEach(f=>{
+    const x=xForFreq(f);
+    ctx.globalAlpha=.5; ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,plotH);ctx.stroke(); ctx.globalAlpha=1;
+    ctx.fillText(fLabel(f)+'Hz',x,H-4);
+  });
+  [0.25,0.5,0.75].forEach(p=>{ctx.globalAlpha=.3;ctx.beginPath();ctx.moveTo(0,plotH*p);ctx.lineTo(W,plotH*p);ctx.stroke();ctx.globalAlpha=1;});
+
+  const bw=W/BANDS, gap=Math.max(1,bw*0.14);
+  let peakBand=-1,peakVal=0;
+  for(let b=0;b<BANDS;b++){
+    const fc=ISO[b];
+    const v=norm(bandDb(fc/R6,fc*R6,nyquist,bins));
+    if(v>peakVal){peakVal=v;peakBand=b;}
+    const x=b*bw+gap/2, barW=bw-gap;
+    const barH=v*plotH, y=plotH-barH;
+    let col= v<0.6?'rgba(0,229,168,'+(0.4+v).toFixed(2)+')' : v<0.85?'#ffd166':'#ff3b6b';
+    ctx.fillStyle=col; ctx.fillRect(x,y,barW,barH);
+    if(peakHold){
+      if(v>=peaks[b]) peaks[b]=v; else peaks[b]=Math.max(0,peaks[b]-0.005);
+      const py=plotH-peaks[b]*plotH;
+      ctx.fillStyle='rgba(255,255,255,.85)'; ctx.fillRect(x,py-2,barW,2);
+    }
+  }
+  peakHzEl.textContent = (peakBand>=0&&peakVal>0.05)
+    ? (ISO[peakBand]>=1000?(ISO[peakBand]/1000)+' kHz':ISO[peakBand]+' Hz') : '—';
+}
+
+function drawSpec(W,H,nyquist,bins,xForFreq){
+  // scroll existing buffer up by 1px, draw newest row at bottom
+  specCtx.drawImage(specCanvas,0,-1);
+  const y=specCanvas.height-1;
+  // draw across width using log-frequency mapping
+  for(let px=0;px<specCanvas.width;px++){
+    const f=Math.exp(((px/specCanvas.width))*(Math.log(ISO[BANDS-1])-Math.log(ISO[0]))+Math.log(ISO[0]));
+    const bin=Math.min(bins-1,Math.round(f/nyquist*bins));
+    specCtx.fillStyle=heat(norm(floatData[bin]));
+    specCtx.fillRect(px,y,1,1);
+  }
+  ctx.clearRect(0,0,W,H);
+  ctx.drawImage(specCanvas,0,0,W,H);
+  // freq gridlines + labels overlay
+  ctx.fillStyle='#8b97a5'; ctx.font='10px monospace'; ctx.textAlign='center';
+  [31.5,100,1000,10000].forEach(f=>{
+    const x=xForFreq(f);
+    ctx.strokeStyle='rgba(255,255,255,.12)';ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();
+    ctx.fillText(fLabel(f)+'Hz',x,12);
+  });
+  // peak freq
+  let pk=-Infinity,pkf=0;
+  for(let i=1;i<bins;i++){ if(floatData[i]>pk){pk=floatData[i]; pkf=i*nyquist/bins;} }
+  peakHzEl.textContent= pk>floorDb ? (pkf>=1000?(pkf/1000).toFixed(1)+' kHz':Math.round(pkf)+' Hz') : '—';
+}
+
+// ---------- feedback detector ----------
+// a feedback tone is a narrow, prominent, sustained peak above the local spectral floor
+function detectFeedback(nyquist,bins){
+  const PROM=fbProm;  // dB above local average to count as a tonal peak (from slider)
+  const MINDB=-58;    // must be reasonably loud
+  const HOLD=14;      // frames of persistence to confirm (~0.23s @60fps)
+  const win=24;       // local-average half window (bins)
+  const seen=new Set();
+
+  // scan meaningful range 60Hz–12kHz
+  const iLo=Math.max(2,Math.floor(60/nyquist*bins));
+  const iHi=Math.min(bins-2,Math.floor(12000/nyquist*bins));
+  for(let i=iLo;i<=iHi;i++){
+    const d=floatData[i];
+    if(d<MINDB) continue;
+    if(!(d>floatData[i-1]&&d>=floatData[i+1])) continue; // local max
+    // local average excluding immediate neighbours
+    let sum=0,n=0;
+    for(let j=i-win;j<=i+win;j++){ if(Math.abs(j-i)>2&&j>=0&&j<bins){sum+=floatData[j];n++;} }
+    const avg=sum/Math.max(1,n);
+    if(d-avg<PROM) continue;
+    const hz=Math.round(i*nyquist/bins);
+    const key=Math.round(hz/ (hz<300?5:hz<2000?15:60)); // cluster nearby bins
+    seen.add(key);
+    const rec=fbTrack.get(key)||{frames:0,db:d,hz:hz};
+    rec.frames=Math.min(HOLD+30,rec.frames+2);
+    rec.db=d; rec.hz=hz; fbTrack.set(key,rec);
+  }
+  // decay unseen
+  for(const [k,rec] of fbTrack){ if(!seen.has(k)){ rec.frames-=1; if(rec.frames<=0) fbTrack.delete(k);} }
+
+  // render confirmed, top 4 by level
+  const conf=[...fbTrack.values()].filter(r=>r.frames>=HOLD).sort((a,b)=>b.db-a.db).slice(0,4);
+  fbPanel.innerHTML = conf.map(r=>{
+    const hz=r.hz>=1000?(r.hz/1000).toFixed(2)+'kHz':r.hz+'Hz';
+    return '<div class="fbItem"><b>'+hz+'</b><small>פידבק · חתוך כאן</small></div>';
+  }).join('');
+}
+
+resize();
+// register service worker for offline / installable PWA
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+</script>
+</body>
+</html>
