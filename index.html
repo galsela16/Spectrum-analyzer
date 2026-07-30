@@ -136,6 +136,7 @@
         <button data-bpo="3" class="on">1/3</button>
         <button data-bpo="6">1/6</button>
         <button data-bpo="12">1/12</button>
+        <button data-bpo="24">1/24</button>
       </div>
     </div>
     <button class="toggle on" id="peakBtn">Peak Hold</button>
@@ -248,7 +249,7 @@ async function start(){
     audioCtx=new (window.AudioContext||window.webkitAudioContext)();
     if(audioCtx.state==='suspended') await audioCtx.resume();
     analyser=audioCtx.createAnalyser();
-    analyser.fftSize=16384;                 // ~2.9Hz bins @48k — good low-end resolution
+    analyser.fftSize=32768;                 // ~1.5Hz bins @48k — supports 1/24-octave detail
     analyser.smoothingTimeConstant=parseFloat(document.getElementById('smooth').value);
     analyser.minDecibels=-100; analyser.maxDecibels=-10;
     source=audioCtx.createMediaStreamSource(stream);
