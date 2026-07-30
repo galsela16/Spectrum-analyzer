@@ -77,6 +77,11 @@
   .toggle{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;font-size:11px;
     letter-spacing:1px;padding:9px 13px;border-radius:8px;cursor:pointer;text-transform:uppercase;transition:.15s;white-space:nowrap}
   .toggle.on{border-color:var(--accent);color:var(--accent);background:rgba(0,229,168,.08)}
+  .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{border:none;background:var(--panel-2);color:var(--dim);font-family:inherit;font-size:11px;
+    letter-spacing:.5px;padding:9px 11px;cursor:pointer;transition:.15s;border-inline-start:1px solid var(--line)}
+  .seg button:first-child{border-inline-start:none}
+  .seg button.on{color:var(--accent);background:rgba(0,229,168,.12)}
   .err{position:absolute;bottom:14px;inset-inline:14px;z-index:5;background:rgba(255,59,107,.12);border:1px solid var(--hot);
     color:#ffb3c4;padding:10px 14px;border-radius:8px;font-size:12px;line-height:1.6;display:none}
 </style>
@@ -86,7 +91,7 @@
     <div class="dot" id="dot"></div>
     <h1>RTA <span>אנלייזר</span></h1>
     <div class="modes">
-      <button id="mRta" class="on">1/3 אוקטבה</button>
+      <button id="mRta" class="on">ספקטרום</button>
       <button id="mSpec">ווטרפול</button>
     </div>
   </header>
@@ -125,17 +130,33 @@
       <label>רגישות פידבק <b id="fbSensVal">בינונית</b></label>
       <input type="range" id="fbSens" min="6" max="20" step="1" value="12">
     </div>
+    <div class="ctrl" style="flex:0 0 auto">
+      <label>רזולוציה</label>
+      <div class="seg" id="resSeg">
+        <button data-bpo="3" class="on">1/3</button>
+        <button data-bpo="6">1/6</button>
+        <button data-bpo="12">1/12</button>
+      </div>
+    </div>
     <button class="toggle on" id="peakBtn">Peak Hold</button>
     <button class="toggle on" id="fbBtn">גלאי פידבק</button>
     <button class="toggle" id="stopBtn" style="display:none">עצור</button>
   </footer>
 
 <script>
-// ---------- ISO 1/3-octave band centers (Hz) ----------
-const ISO = [20,25,31.5,40,50,63,80,100,125,160,200,250,315,400,500,630,800,1000,
-             1250,1600,2000,2500,3150,4000,5000,6300,8000,10000,12500,16000,20000];
-const BANDS = ISO.length;
-const R6 = Math.pow(2,1/6); // 1/3-octave half-width factor
+// ---------- fractional-octave bands (log-spaced 20Hz..20kHz) ----------
+const FMIN=20, FMAX=20000;
+let ISO=[], BANDS=0, R=1;        // band centers, count, half-width factor
+let peaks=[];
+function buildBands(bpo){          // bpo = bands per octave: 3=1/3oct, 6=1/6, 12=1/12
+  ISO=[];
+  const n=Math.round(Math.log2(FMAX/FMIN)*bpo);
+  for(let k=0;k<=n;k++) ISO.push(FMIN*Math.pow(2,k/bpo));
+  BANDS=ISO.length;
+  R=Math.pow(2,1/(2*bpo));         // fc/R .. fc*R spans one band
+  peaks=new Array(BANDS).fill(0);
+}
+buildBands(3);
 
 const cv = document.getElementById('cv');
 const ctx = cv.getContext('2d');
@@ -158,7 +179,6 @@ let floorDb=-85, ceilDb=-15;
 let calib=0;              // dB offset for SPL calibration
 let fbProm=12;            // feedback prominence threshold (dB)
 let lvlPeak=-120, lvlPeakT=0;  // held level peak (dBFS) + timestamp
-let peaks=new Array(BANDS).fill(0);
 let specCanvas, specCtx;  // offscreen for waterfall
 
 // feedback tracking: key = rounded Hz, value = {frames, db, hz}
@@ -201,6 +221,13 @@ document.getElementById('peakBtn').addEventListener('click',function(){
 });
 document.getElementById('fbBtn').addEventListener('click',function(){
   fbOn=!fbOn; this.classList.toggle('on',fbOn); fbTrack.clear(); fbPanel.innerHTML='';
+});
+document.querySelectorAll('#resSeg button').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('#resSeg button').forEach(b=>b.classList.remove('on'));
+    btn.classList.add('on');
+    buildBands(parseInt(btn.dataset.bpo,10));
+  });
 });
 document.getElementById('mRta').addEventListener('click',()=>setMode('rta'));
 document.getElementById('mSpec').addEventListener('click',()=>setMode('spec'));
@@ -314,11 +341,11 @@ function drawRta(W,H,nyquist,bins,xForFreq){
   });
   [0.25,0.5,0.75].forEach(p=>{ctx.globalAlpha=.3;ctx.beginPath();ctx.moveTo(0,plotH*p);ctx.lineTo(W,plotH*p);ctx.stroke();ctx.globalAlpha=1;});
 
-  const bw=W/BANDS, gap=Math.max(1,bw*0.14);
+  const bw=W/BANDS, gap=Math.max(0.5,bw*0.12);
   let peakBand=-1,peakVal=0;
   for(let b=0;b<BANDS;b++){
     const fc=ISO[b];
-    const v=norm(bandDb(fc/R6,fc*R6,nyquist,bins));
+    const v=norm(bandDb(fc/R,fc*R,nyquist,bins));
     if(v>peakVal){peakVal=v;peakBand=b;}
     const x=b*bw+gap/2, barW=bw-gap;
     const barH=v*plotH, y=plotH-barH;
@@ -330,8 +357,9 @@ function drawRta(W,H,nyquist,bins,xForFreq){
       ctx.fillStyle='rgba(255,255,255,.85)'; ctx.fillRect(x,py-2,barW,2);
     }
   }
+  const pf=peakBand>=0?ISO[peakBand]:0;
   peakHzEl.textContent = (peakBand>=0&&peakVal>0.05)
-    ? (ISO[peakBand]>=1000?(ISO[peakBand]/1000)+' kHz':ISO[peakBand]+' Hz') : '—';
+    ? (pf>=1000?(pf/1000).toFixed(2)+' kHz':Math.round(pf)+' Hz') : '—';
 }
 
 function drawSpec(W,H,nyquist,bins,xForFreq){
