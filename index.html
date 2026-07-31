@@ -111,6 +111,23 @@
   #rtCanvas{background:#0b0f16;border:1px solid var(--line);border-radius:8px}
   #rtClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
     font-size:12px;padding:8px 20px;border-radius:8px;cursor:pointer}
+  #eqPanel{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:6;display:none;
+    flex-direction:column;gap:10px;width:280px;max-height:80%;padding:16px 18px;border:1px solid var(--accent);
+    border-radius:14px;background:rgba(13,17,23,.97);backdrop-filter:blur(6px);box-shadow:0 8px 40px rgba(0,0,0,.6)}
+  #eqPanel.open{display:flex}
+  #eqPanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
+  #eqPanel .sub{font-size:10px;color:var(--dim);letter-spacing:.5px;line-height:1.5}
+  #eqList{display:flex;flex-direction:column;gap:6px;overflow:auto}
+  .eqRow{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;border:1px solid var(--line);
+    font-variant-numeric:tabular-nums;font-size:13px}
+  .eqRow.cut{background:rgba(255,59,107,.08);border-color:rgba(255,59,107,.4)}
+  .eqRow.boost{background:rgba(47,155,255,.08);border-color:rgba(47,155,255,.4)}
+  .eqRow .f{font-weight:600;min-width:64px}
+  .eqRow .g{min-width:52px;color:var(--text)}
+  .eqRow.cut .g{color:#ff6b8b} .eqRow.boost .g{color:#7cc4ff}
+  .eqRow .q{color:var(--dim);font-size:11px}
+  #eqClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
+    font-size:12px;padding:8px 20px;border-radius:8px;cursor:pointer;align-self:center}
   .err{position:absolute;bottom:14px;inset-inline:14px;z-index:5;background:rgba(255,59,107,.12);border:1px solid var(--hot);
     color:#ffb3c4;padding:10px 14px;border-radius:8px;font-size:12px;line-height:1.6;display:none}
 </style>
@@ -139,6 +156,12 @@
       <div id="rtStatus">RT60</div>
       <canvas id="rtCanvas" width="300" height="120"></canvas>
       <button id="rtClose">סגור</button>
+    </div>
+    <div id="eqPanel">
+      <h3>הצעות EQ למערכת</h3>
+      <div class="sub" id="eqSub"></div>
+      <div id="eqList"></div>
+      <button id="eqClose">סגור</button>
     </div>
     <div class="meter" id="meter" style="display:none">
       <div class="meterFill" id="meterFill"></div>
@@ -203,6 +226,7 @@
     <button class="toggle" id="genBtn">גנרטור</button>
     <button class="toggle" id="tgtBtn">יעד</button>
     <button class="toggle" id="compBtn">תגובה pink</button>
+    <button class="toggle" id="eqBtn">הצע EQ</button>
     <button class="toggle" id="rtBtn">RT60</button>
     <button class="toggle" id="stopBtn" style="display:none">עצור</button>
   </footer>
@@ -261,6 +285,7 @@ let genType='pink', genOn=false, genGain=null, genSrc=null, genOsc=null;
 let genDb=-34, genHz=1000, targetMode='off';
 let pinkComp=false;
 let rt60State='idle', rt60Samples=[], rt60CutT=0;
+let eqMarks=null;   // [{f,gain,q,type}] to draw on graph
 let specCanvas, specCtx;  // offscreen for waterfall
 
 // feedback tracking: key = rounded Hz, value = {frames, db, hz}
@@ -461,6 +486,75 @@ document.getElementById('tgtBtn').addEventListener('click',function(){
 document.getElementById('compBtn').addEventListener('click',function(){
   pinkComp=!pinkComp; this.classList.toggle('on',pinkComp);
 });
+
+// ---- auto-EQ suggestions ----
+const eqPanel=document.getElementById('eqPanel');
+document.getElementById('eqClose').addEventListener('click',()=>{ eqPanel.classList.remove('open'); eqMarks=null; });
+document.getElementById('eqBtn').addEventListener('click',suggestEQ);
+
+function targetDb(f){                 // desired system shape, in dB (relative)
+  if(targetMode==='house') return Math.max(-5,Math.min(6, -1.0*Math.log2(f/250)));
+  return 0;                          // flat (also used when target is off)
+}
+function suggestEQ(){
+  if(!running){ alert('קודם הפעל את המיקרופון.'); return; }
+  // system response in dB, pink-compensated (flat system → flat curve) — from live spectrum
+  const nyq=audioCtx.sampleRate/2, bins=floatData.length;
+  const resp=new Array(BANDS), rawB=new Array(BANDS);
+  for(let b=0;b<BANDS;b++){ const fc=ISO[b]; rawB[b]=bandDb(fc/R,fc*R,nyq,bins); resp[b]=rawB[b]+3*Math.log2(fc/1000); }
+  // enough signal?
+  const loud=rawB.filter(d=>d>-70).length;
+  if(loud<BANDS*0.25){ alert('אין מספיק אות — הפעל רעש ורוד דרך המערכת ואז נסה שוב.'); return; }
+  // smooth across ~1/3 octave
+  const win=Math.max(1,Math.round(curBpo/3));
+  const sm=new Array(BANDS);
+  for(let b=0;b<BANDS;b++){ let s=0,n=0;
+    for(let j=b-win;j<=b+win;j++){ if(j>=0&&j<BANDS){s+=resp[j];n++;} } sm[b]=s/n; }
+  // deviation from target, with offset removed over 200Hz–4kHz
+  const dev=new Array(BANDS); let os=0,on=0;
+  for(let b=0;b<BANDS;b++){ dev[b]=sm[b]-targetDb(ISO[b]); if(ISO[b]>=200&&ISO[b]<=4000){os+=dev[b];on++;} }
+  const offset=on?os/on:0;
+  for(let b=0;b<BANDS;b++) dev[b]-=offset;
+
+  // working range 40Hz..16kHz
+  const inRange=b=>ISO[b]>=40&&ISO[b]<=16000;
+  const PEAK=2.5, DIP=3.0;
+  const cand=[];
+  for(let b=1;b<BANDS-1;b++){
+    if(!inRange(b)) continue;
+    const isMax=dev[b]>dev[b-1]&&dev[b]>=dev[b+1]&&dev[b]>PEAK;
+    const isMin=dev[b]<dev[b-1]&&dev[b]<=dev[b+1]&&dev[b]<-DIP;
+    if(!isMax&&!isMin) continue;
+    const prom=Math.abs(dev[b]);
+    // width at half prominence → Q
+    let li=b, ri=b; const half=dev[b]/2;
+    if(isMax){ while(li>0&&dev[li]>half)li--; while(ri<BANDS-1&&dev[ri]>half)ri++; }
+    else     { while(li>0&&dev[li]<half)li--; while(ri<BANDS-1&&dev[ri]<half)ri++; }
+    const fl=ISO[Math.max(0,li)], fr=ISO[Math.min(BANDS-1,ri)];
+    const q=Math.max(0.7,Math.min(8, ISO[b]/Math.max(1,(fr-fl))));
+    const gain = isMax ? -Math.min(9,prom) : Math.min(4,prom); // cut deep, boost gently
+    cand.push({f:ISO[b], gain:gain, q:q, type:isMax?'cut':'boost', b:b, prom:prom});
+  }
+  // suppress weaker candidates within ~2/3 octave of a stronger one
+  cand.sort((a,b)=>b.prom-a.prom);
+  const picked=[];
+  cand.forEach(c=>{ if(!picked.some(p=>Math.abs(Math.log2(p.f/c.f))<0.66)) picked.push(c); });
+  const list=picked.slice(0,6).sort((a,b)=>a.f-b.f);
+  eqMarks=list;
+
+  // render
+  const eqList=document.getElementById('eqList');
+  document.getElementById('eqSub').textContent =
+    'יעד: '+(targetMode==='house'?'House':'שטוח')+' · חתוכים באדום, הגברות בכחול. עבוד מהגדול לקטן.';
+  if(!list.length){ eqList.innerHTML='<div class="sub">המערכת נראית מאוזנת — אין תיקונים משמעותיים 👌</div>'; }
+  else eqList.innerHTML=list.map(s=>{
+    const f=s.f>=1000?(s.f/1000).toFixed(2)+'kHz':Math.round(s.f)+'Hz';
+    const g=(s.gain>0?'+':'')+s.gain.toFixed(1)+'dB';
+    return '<div class="eqRow '+s.type+'"><span class="f">'+f+'</span><span class="g">'+g+
+           '</span><span class="q">Q '+s.q.toFixed(1)+'</span></div>';
+  }).join('');
+  eqPanel.classList.add('open');
+}
 
 // ---- RT60 (interrupted-noise method) ----
 const rtPanel=document.getElementById('rtPanel'), rtStatus=document.getElementById('rtStatus');
@@ -774,6 +868,20 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     ctx.stroke(); ctx.setLineDash([]);
     ctx.fillStyle='rgba(80,230,140,.9)'; ctx.font='10px monospace'; ctx.textAlign='end';
     ctx.fillText(targetMode==='house'?'יעד House':'יעד שטוח', W-8, 12);
+  }
+  // EQ suggestion markers
+  if(eqMarks && eqMarks.length){
+    ctx.textAlign='center'; ctx.font='9px monospace';
+    eqMarks.forEach(m=>{
+      if(m.f<ISO[0]||m.f>ISO[BANDS-1]) return;
+      const x=xForFreq(m.f);
+      const col=m.type==='cut'?'#ff3b6b':'#2f9bff';
+      ctx.strokeStyle=col; ctx.globalAlpha=.5; ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(x,14);ctx.lineTo(x,plotH);ctx.stroke(); ctx.globalAlpha=1;
+      ctx.fillStyle=col;
+      ctx.beginPath();ctx.moveTo(x,8);ctx.lineTo(x-4,14);ctx.lineTo(x+4,14);ctx.closePath();ctx.fill();
+      ctx.fillText((m.gain>0?'+':'')+m.gain.toFixed(0), x, 26);
+    });
   }
   const pf=peakBand>=0?ISO[peakBand]:0;
   peakHzEl.textContent = (peakBand>=0&&peakVal>0.05)
