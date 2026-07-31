@@ -158,8 +158,14 @@
       <button id="rtClose">סגור</button>
     </div>
     <div id="eqPanel">
-      <h3>הצעות EQ למערכת</h3>
-      <div class="sub" id="eqSub"></div>
+      <h3>מדידת EQ למערכת</h3>
+      <div class="sub" id="eqSub">מיקומים שנמדדו: 0</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+        <button id="eqMeasBtn" class="toggle">מדוד מיקום (5ש')</button>
+        <button id="eqResetBtn" class="toggle">אפס</button>
+        <label class="toggle" style="cursor:pointer">טען כיול מיק'<input id="eqCal" type="file" accept=".txt,.cal,.frd,.csv" style="display:none"></label>
+      </div>
+      <div class="sub" id="eqCalName"></div>
       <div id="eqList"></div>
       <button id="eqClose">סגור</button>
     </div>
@@ -286,6 +292,9 @@ let genDb=-34, genHz=1000, targetMode='off';
 let pinkComp=false;
 let rt60State='idle', rt60Samples=[], rt60CutT=0;
 let eqMarks=null;   // [{f,gain,q,type}] to draw on graph
+let measState='idle', measAccum=null, measFrames=0;
+let eqPositions=[];      // each: Float32Array of per-bin averaged dB
+let micCal=null;         // {f:[], g:[]} loaded calibration
 let specCanvas, specCtx;  // offscreen for waterfall
 
 // feedback tracking: key = rounded Hz, value = {frames, db, hz}
@@ -487,72 +496,115 @@ document.getElementById('compBtn').addEventListener('click',function(){
   pinkComp=!pinkComp; this.classList.toggle('on',pinkComp);
 });
 
-// ---- auto-EQ suggestions ----
+// ---- auto-EQ: measure → average positions → suggest ----
 const eqPanel=document.getElementById('eqPanel');
 document.getElementById('eqClose').addEventListener('click',()=>{ eqPanel.classList.remove('open'); eqMarks=null; });
-document.getElementById('eqBtn').addEventListener('click',suggestEQ);
+document.getElementById('eqBtn').addEventListener('click',()=>{ eqPanel.classList.add('open'); updateEqUI(); });
+document.getElementById('eqMeasBtn').addEventListener('click',measurePosition);
+document.getElementById('eqResetBtn').addEventListener('click',()=>{ eqPositions=[]; eqMarks=null; document.getElementById('eqList').innerHTML=''; updateEqUI(); });
+document.getElementById('eqCal').addEventListener('change',loadMicCal);
 
-function targetDb(f){                 // desired system shape, in dB (relative)
-  if(targetMode==='house') return Math.max(-5,Math.min(6, -1.0*Math.log2(f/250)));
-  return 0;                          // flat (also used when target is off)
+function updateEqUI(){
+  const meas = measState==='measuring';
+  document.getElementById('eqSub').textContent = meas ? 'מודד… החזק את המיק\' יציב' : ('מיקומים שנמדדו: '+eqPositions.length);
+  document.getElementById('eqMeasBtn').textContent = meas ? 'מודד…' : (eqPositions.length?'מדוד מיקום נוסף':'מדוד מיקום (5ש\')');
+  document.getElementById('eqMeasBtn').style.opacity = meas?0.5:1;
 }
-function suggestEQ(){
+
+function targetDb(f){
+  if(targetMode==='house') return Math.max(-5,Math.min(6, -1.0*Math.log2(f/250)));
+  return 0;
+}
+function micCalAt(f){
+  if(!micCal||!micCal.f.length) return 0;
+  const F=micCal.f, G=micCal.g;
+  if(f<=F[0]) return G[0]; if(f>=F[F.length-1]) return G[G.length-1];
+  let i=1; while(i<F.length && F[i]<f) i++;
+  const t=(Math.log(f)-Math.log(F[i-1]))/(Math.log(F[i])-Math.log(F[i-1]));
+  return G[i-1]+(G[i]-G[i-1])*t;
+}
+function loadMicCal(e){
+  const file=e.target.files[0]; if(!file) return;
+  const r=new FileReader();
+  r.onload=()=>{
+    const F=[],G=[];
+    r.result.split(/\r?\n/).forEach(line=>{
+      const m=line.trim().match(/^([\d.]+)[\s,]+(-?[\d.]+)/);
+      if(m){ F.push(parseFloat(m[1])); G.push(parseFloat(m[2])); }
+    });
+    if(F.length>1){ micCal={f:F,g:G}; document.getElementById('eqCalName').textContent='כיול נטען: '+file.name+' ('+F.length+' נק\')'; }
+    else document.getElementById('eqCalName').textContent='קובץ כיול לא תקין';
+    if(eqPositions.length) computeAndShow();
+  };
+  r.readAsText(file);
+}
+function measurePosition(){
   if(!running){ alert('קודם הפעל את המיקרופון.'); return; }
-  // system response in dB, pink-compensated (flat system → flat curve) — from live spectrum
-  const nyq=audioCtx.sampleRate/2, bins=floatData.length;
-  const resp=new Array(BANDS), rawB=new Array(BANDS);
-  for(let b=0;b<BANDS;b++){ const fc=ISO[b]; rawB[b]=bandDb(fc/R,fc*R,nyq,bins); resp[b]=rawB[b]+3*Math.log2(fc/1000); }
-  // enough signal?
-  const loud=rawB.filter(d=>d>-70).length;
-  if(loud<BANDS*0.25){ alert('אין מספיק אות — הפעל רעש ורוד דרך המערכת ואז נסה שוב.'); return; }
-  // smooth across ~1/3 octave
-  const win=Math.max(1,Math.round(curBpo/3));
-  const sm=new Array(BANDS);
-  for(let b=0;b<BANDS;b++){ let s=0,n=0;
-    for(let j=b-win;j<=b+win;j++){ if(j>=0&&j<BANDS){s+=resp[j];n++;} } sm[b]=s/n; }
-  // deviation from target, with offset removed over 200Hz–4kHz
+  if(measState==='measuring') return;
+  measAccum=new Float64Array(floatData.length); measFrames=0; measState='measuring';
+  updateEqUI();
+  setTimeout(()=>{
+    const bins=measAccum.length, bd=new Float32Array(bins);
+    for(let i=0;i<bins;i++) bd[i]=10*Math.log10(measAccum[i]/Math.max(1,measFrames)+1e-12);
+    eqPositions.push(bd); measState='idle';
+    computeAndShow(); updateEqUI();
+  },5000);
+}
+function avgPositions(){
+  const bins=eqPositions[0].length, out=new Float32Array(bins);
+  for(let i=0;i<bins;i++){ let p=0; for(const pos of eqPositions) p+=Math.pow(10,pos[i]/10); out[i]=10*Math.log10(p/eqPositions.length+1e-12); }
+  return out;
+}
+function bandDbFromBins(bd,fLo,fHi,nyq,bins){
+  let lo=Math.floor(fLo/nyq*bins), hi=Math.ceil(fHi/nyq*bins);
+  lo=Math.max(0,lo);hi=Math.min(bins-1,hi);if(hi<lo)hi=lo;
+  let p=0; for(let i=lo;i<=hi;i++) p+=Math.pow(10,bd[i]/10);
+  return 10*Math.log10(p+1e-12);
+}
+function computeAndShow(){
+  if(!eqPositions.length){ alert('מדוד לפחות מיקום אחד.'); return; }
+  const binDb=avgPositions();
+  const nyq=audioCtx.sampleRate/2, bins=binDb.length;
+  if(micCal){ for(let i=0;i<bins;i++) binDb[i]-=micCalAt(i*nyq/bins); }  // remove mic coloration
+  // per-band response, pink-compensated
+  const resp=new Array(BANDS);
+  for(let b=0;b<BANDS;b++){ const fc=ISO[b]; resp[b]=bandDbFromBins(binDb,fc/R,fc*R,nyq,bins)+3*Math.log2(fc/1000); }
+  // smooth ~1/3 octave
+  const win=Math.max(1,Math.round(curBpo/3)); const sm=new Array(BANDS);
+  for(let b=0;b<BANDS;b++){ let s=0,n=0; for(let j=b-win;j<=b+win;j++){ if(j>=0&&j<BANDS){s+=resp[j];n++;} } sm[b]=s/n; }
+  // deviation from target, offset-aligned over 200Hz–4kHz
   const dev=new Array(BANDS); let os=0,on=0;
   for(let b=0;b<BANDS;b++){ dev[b]=sm[b]-targetDb(ISO[b]); if(ISO[b]>=200&&ISO[b]<=4000){os+=dev[b];on++;} }
-  const offset=on?os/on:0;
-  for(let b=0;b<BANDS;b++) dev[b]-=offset;
+  const offset=on?os/on:0; for(let b=0;b<BANDS;b++) dev[b]-=offset;
 
-  // working range 40Hz..16kHz
   const inRange=b=>ISO[b]>=40&&ISO[b]<=16000;
-  const PEAK=2.5, DIP=3.0;
-  const cand=[];
+  const PEAK=2.5, DIP=3.0, cand=[];
   for(let b=1;b<BANDS-1;b++){
     if(!inRange(b)) continue;
     const isMax=dev[b]>dev[b-1]&&dev[b]>=dev[b+1]&&dev[b]>PEAK;
     const isMin=dev[b]<dev[b-1]&&dev[b]<=dev[b+1]&&dev[b]<-DIP;
     if(!isMax&&!isMin) continue;
-    const prom=Math.abs(dev[b]);
-    // width at half prominence → Q
-    let li=b, ri=b; const half=dev[b]/2;
+    const prom=Math.abs(dev[b]); let li=b, ri=b; const half=dev[b]/2;
     if(isMax){ while(li>0&&dev[li]>half)li--; while(ri<BANDS-1&&dev[ri]>half)ri++; }
     else     { while(li>0&&dev[li]<half)li--; while(ri<BANDS-1&&dev[ri]<half)ri++; }
     const fl=ISO[Math.max(0,li)], fr=ISO[Math.min(BANDS-1,ri)];
     const q=Math.max(0.7,Math.min(8, ISO[b]/Math.max(1,(fr-fl))));
-    const gain = isMax ? -Math.min(9,prom) : Math.min(4,prom); // cut deep, boost gently
-    cand.push({f:ISO[b], gain:gain, q:q, type:isMax?'cut':'boost', b:b, prom:prom});
+    const gain=isMax?-Math.min(9,prom):Math.min(4,prom);
+    cand.push({f:ISO[b],gain,q,type:isMax?'cut':'boost',prom});
   }
-  // suppress weaker candidates within ~2/3 octave of a stronger one
   cand.sort((a,b)=>b.prom-a.prom);
-  const picked=[];
-  cand.forEach(c=>{ if(!picked.some(p=>Math.abs(Math.log2(p.f/c.f))<0.66)) picked.push(c); });
+  const picked=[]; cand.forEach(c=>{ if(!picked.some(p=>Math.abs(Math.log2(p.f/c.f))<0.66)) picked.push(c); });
   const list=picked.slice(0,6).sort((a,b)=>a.f-b.f);
   eqMarks=list;
 
-  // render
   const eqList=document.getElementById('eqList');
-  document.getElementById('eqSub').textContent =
-    'יעד: '+(targetMode==='house'?'House':'שטוח')+' · חתוכים באדום, הגברות בכחול. עבוד מהגדול לקטן.';
-  if(!list.length){ eqList.innerHTML='<div class="sub">המערכת נראית מאוזנת — אין תיקונים משמעותיים 👌</div>'; }
-  else eqList.innerHTML=list.map(s=>{
-    const f=s.f>=1000?(s.f/1000).toFixed(2)+'kHz':Math.round(s.f)+'Hz';
-    const g=(s.gain>0?'+':'')+s.gain.toFixed(1)+'dB';
-    return '<div class="eqRow '+s.type+'"><span class="f">'+f+'</span><span class="g">'+g+
-           '</span><span class="q">Q '+s.q.toFixed(1)+'</span></div>';
-  }).join('');
+  if(!list.length){ eqList.innerHTML='<div class="sub">המערכת מאוזנת מול היעד — אין תיקונים משמעותיים 👌</div>'; }
+  else eqList.innerHTML='<div class="sub">יעד '+(targetMode==='house'?'House':'שטוח')+
+    (micCal?' · כיול פעיל':'')+' · '+eqPositions.length+' מיקומים · אדום=חתוך, כחול=הגבר</div>'+
+    list.map(s=>{ const f=s.f>=1000?(s.f/1000).toFixed(2)+'kHz':Math.round(s.f)+'Hz';
+      const g=(s.gain>0?'+':'')+s.gain.toFixed(1)+'dB';
+      return '<div class="eqRow '+s.type+'"><span class="f">'+f+'</span><span class="g">'+g+'</span><span class="q">Q '+s.q.toFixed(1)+'</span></div>';
+    }).join('');
   eqPanel.classList.add('open');
 }
 
@@ -789,6 +841,10 @@ function updateLevel(){
 function draw(){
   raf=requestAnimationFrame(draw);
   analyser.getFloatFrequencyData(floatData);
+  if(measState==='measuring' && measAccum){
+    for(let i=0;i<floatData.length;i++) measAccum[i]+=Math.pow(10,floatData[i]/10);
+    measFrames++;
+  }
   updateLevel();
   const W=cv.clientWidth,H=cv.clientHeight;
   const nyquist=audioCtx.sampleRate/2, bins=floatData.length;
