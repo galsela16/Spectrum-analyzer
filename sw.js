@@ -1,5 +1,5 @@
 // bump CACHE version whenever you change files
-const CACHE = 'rta-v9';
+const CACHE = 'rta-v10';
 const ASSETS = [
   './',
   './index.html',

@@ -54,11 +54,21 @@
   @keyframes fbin{from{opacity:0;transform:translateY(-4px)}to{opacity:1}}
   .fbItem b{color:#fff;font-size:13px;font-variant-numeric:tabular-nums}
   .fbItem small{color:#ffb3c4}
-  .readout{position:absolute;top:10px;inset-inline-end:10px;z-index:3;text-align:end;font-size:11px;color:var(--dim);letter-spacing:1px}
+  .readout{position:absolute;top:10px;inset-inline-end:10px;z-index:3;text-align:end;font-size:11px;color:var(--dim);letter-spacing:1px;pointer-events:none}
   .readout b{display:block;color:var(--text);font-size:15px;font-variant-numeric:tabular-nums}
+  /* SPL stats box */
+  .stats{position:absolute;top:52px;inset-inline-end:10px;z-index:3;pointer-events:none;
+    display:flex;flex-direction:column;gap:2px;text-align:end;font-size:10px;color:var(--dim);letter-spacing:1px}
+  .stats div{font-variant-numeric:tabular-nums}
+  .stats b{color:var(--text);font-size:13px}
+  .stats .big{color:var(--accent);font-size:16px}
+  /* zoom reset floating button */
+  .zoomBtn{position:absolute;top:10px;inset-inline-start:10px;z-index:4;display:none;
+    border:1px solid var(--accent);background:rgba(47,155,255,.12);color:var(--accent);
+    font-family:inherit;font-size:11px;letter-spacing:1px;padding:7px 12px;border-radius:8px;cursor:pointer}
   /* level meter pinned to bottom of stage */
   .meter{position:absolute;bottom:8px;inset-inline:10px;z-index:3;height:26px;border:1px solid var(--line);
-    border-radius:7px;background:rgba(13,17,23,.55);backdrop-filter:blur(4px);overflow:hidden;display:flex;align-items:center}
+    border-radius:7px;background:rgba(13,17,23,.55);backdrop-filter:blur(4px);overflow:hidden;display:flex;align-items:center;pointer-events:none}
   .meterFill{position:absolute;inset-inline-start:0;top:0;bottom:0;width:0%;
     background:linear-gradient(90deg,var(--accent) 0%,var(--accent) 65%,#7cc4ff 82%,var(--hot) 100%);
     opacity:.55;transition:width .05s linear}
@@ -82,6 +92,8 @@
     letter-spacing:.5px;padding:9px 11px;cursor:pointer;transition:.15s;border-inline-start:1px solid var(--line)}
   .seg button:first-child{border-inline-start:none}
   .seg button.on{color:var(--accent);background:rgba(47,155,255,.12)}
+  select.inp{border:1px solid var(--line);background:var(--panel-2);color:var(--text);font-family:inherit;
+    font-size:11px;padding:8px 10px;border-radius:8px;max-width:150px;outline:none}
   .err{position:absolute;bottom:14px;inset-inline:14px;z-index:5;background:rgba(255,59,107,.12);border:1px solid var(--hot);
     color:#ffb3c4;padding:10px 14px;border-radius:8px;font-size:12px;line-height:1.6;display:none}
 </style>
@@ -100,6 +112,12 @@
     <canvas id="cv"></canvas>
     <div id="fbPanel"></div>
     <div class="readout"><span>PEAK</span><b id="peakHz">—</b></div>
+    <div class="stats" id="stats" style="display:none">
+      <div><span id="wLbl">Z</span> <b class="big" id="splNow">—</b></div>
+      <div>Leq <b id="splLeq">—</b></div>
+      <div>Max <b id="splMax">—</b></div>
+    </div>
+    <button class="zoomBtn" id="zoomBtn">⤢ טווח מלא</button>
     <div class="meter" id="meter" style="display:none">
       <div class="meterFill" id="meterFill"></div>
       <div class="meterPeak" id="meterPeak" style="inset-inline-start:0"></div>
@@ -140,26 +158,32 @@
     <button class="toggle" id="freezeBtn">הקפא</button>
     <button class="toggle" id="pngBtn">PNG</button>
     <button class="toggle" id="csvBtn">CSV</button>
+    <button class="toggle" id="wgtBtn">שקלול Z</button>
+    <button class="toggle" id="leqBtn">אפס Leq</button>
+    <select class="inp" id="inSel" title="מקור קלט"><option>מיקרופון ברירת מחדל</option></select>
     <button class="toggle" id="stopBtn" style="display:none">עצור</button>
   </footer>
 
 <script>
-// ---------- fractional-octave bands (log-spaced 20Hz..20kHz) ----------
-const FMIN=20, FMAX=20000;
-let ISO=[], BANDS=0, R=1;        // band centers, count, half-width factor
+// ---------- fractional-octave bands (log-spaced across current view) ----------
+const FMIN=20, FMAX=20000;         // absolute limits
+let viewMin=20, viewMax=20000;     // current displayed range (zoom)
+let curBpo=6;                      // current bands-per-octave
+let ISO=[], BANDS=0, R=1;          // band centers, count, half-width factor
 let peaks=[];
 let avgBuf=[], snapCurve=null, lastV=[], lastBandDb=[];
 function buildBands(bpo){          // bpo = bands per octave: 3=1/3oct, 6=1/6, 12=1/12
+  curBpo=bpo;
   ISO=[];
-  const n=Math.round(Math.log2(FMAX/FMIN)*bpo);
-  for(let k=0;k<=n;k++) ISO.push(FMIN*Math.pow(2,k/bpo));
+  const n=Math.max(2,Math.round(Math.log2(viewMax/viewMin)*bpo));
+  for(let k=0;k<=n;k++) ISO.push(viewMin*Math.pow(2,k/bpo));
   BANDS=ISO.length;
   R=Math.pow(2,1/(2*bpo));         // fc/R .. fc*R spans one band
   peaks=new Array(BANDS).fill(0);
   avgBuf=new Array(BANDS).fill(0);
   lastV=new Array(BANDS).fill(0);
   lastBandDb=new Array(BANDS).fill(-120);
-  snapCurve=null;                  // capture no longer matches new resolution
+  snapCurve=null;                  // capture no longer matches new bands
   const clr=document.getElementById('freezeBtn'); if(clr){clr.classList.remove('on');clr.textContent='הקפא';}
 }
 buildBands(6);
@@ -185,6 +209,11 @@ let floorDb=-85, ceilDb=-15;
 let calib=0;              // dB offset for SPL calibration
 let fbProm=12;            // feedback prominence threshold (dB)
 let lvlPeak=-120, lvlPeakT=0;  // held level peak (dBFS) + timestamp
+let weightMode='Z';      // Z | A | C weighting for SPL stats
+let weightA=null, weightC=null;   // per-bin weighting (dB), built on start
+let leqSumP=0, leqN=0, splMax=-120;  // Leq accumulator + max hold
+let zMin=viewMin, zMax=viewMax;   // (unused placeholder, kept for clarity)
+let dragging=false, dragX0=0, dragX1=0;
 let specCanvas, specCtx;  // offscreen for waterfall
 
 // feedback tracking: key = rounded Hz, value = {frames, db, hz}
@@ -257,6 +286,48 @@ function exportCSV(){
   for(let b=0;b<BANDS;b++) rows+=Math.round(ISO[b])+','+lastBandDb[b].toFixed(1)+'\n';
   download('rta_'+stamp()+'.csv', URL.createObjectURL(new Blob([rows],{type:'text/csv'})));
 }
+
+// ---- weighting / Leq / input ----
+document.getElementById('wgtBtn').addEventListener('click',function(){
+  weightMode = weightMode==='Z'?'A':weightMode==='A'?'C':'Z';
+  this.textContent='שקלול '+weightMode;
+  this.classList.toggle('on', weightMode!=='Z');
+  document.getElementById('wLbl').textContent=weightMode;
+  leqSumP=0; leqN=0; splMax=-120;   // stats depend on weighting → reset
+});
+document.getElementById('leqBtn').addEventListener('click',()=>{ leqSumP=0; leqN=0; splMax=-120; });
+document.getElementById('inSel').addEventListener('change',e=>switchInput(e.target.value));
+
+// ---- drag-to-zoom on the graph ----
+function freqForX(px){
+  const W=cv.clientWidth;
+  const lmin=Math.log(ISO[0]), lmax=Math.log(ISO[BANDS-1]);
+  return Math.exp(lmin + Math.max(0,Math.min(1,px/W))*(lmax-lmin));
+}
+function applyZoom(xa,xb){
+  let fa=freqForX(Math.min(xa,xb)), fb=freqForX(Math.max(xa,xb));
+  if(fb/fa < 1.2) return;                 // ignore tiny selections
+  viewMin=Math.max(FMIN,fa); viewMax=Math.min(FMAX,fb);
+  buildBands(curBpo);
+  document.getElementById('zoomBtn').style.display='block';
+}
+function resetZoom(){
+  viewMin=FMIN; viewMax=FMAX; buildBands(curBpo);
+  document.getElementById('zoomBtn').style.display='none';
+}
+cv.addEventListener('pointerdown',e=>{
+  if(!running||mode!=='rta') return;
+  dragging=true; dragX0=dragX1=e.offsetX;
+  try{cv.setPointerCapture(e.pointerId);}catch(_){}
+});
+cv.addEventListener('pointermove',e=>{ if(dragging) dragX1=e.offsetX; });
+cv.addEventListener('pointerup',e=>{
+  if(!dragging) return; dragging=false;
+  if(Math.abs(dragX1-dragX0)>20) applyZoom(dragX0,dragX1);
+});
+cv.addEventListener('pointercancel',()=>{dragging=false;});
+cv.addEventListener('dblclick',()=>{ if(running) resetZoom(); });
+document.getElementById('zoomBtn').addEventListener('click',resetZoom);
 document.getElementById('res').addEventListener('input',e=>{
   const bpo=parseInt(e.target.value,10);
   document.getElementById('resVal').textContent='1/'+bpo+' אוקטבה';
@@ -274,10 +345,24 @@ function setMode(m){
   if(specCtx){specCtx.fillStyle='#0d1117';specCtx.fillRect(0,0,specCanvas.width,specCanvas.height);}
 }
 
-async function start(){
+function buildWeighting(nyquist,bins){
+  weightA=new Float32Array(bins); weightC=new Float32Array(bins);
+  for(let i=0;i<bins;i++){
+    const f=i*nyquist/bins, f2=f*f;
+    // A-weighting (IEC 61672)
+    const ra=(12194**2*f2*f2)/((f2+20.6**2)*Math.sqrt((f2+107.7**2)*(f2+737.9**2))*(f2+12194**2));
+    weightA[i]= f>0 ? 20*Math.log10(ra)+2.00 : -120;
+    // C-weighting
+    const rc=(12194**2*f2)/((f2+20.6**2)*(f2+12194**2));
+    weightC[i]= f>0 ? 20*Math.log10(rc)+0.06 : -120;
+  }
+}
+
+async function start(deviceId){
   try{
-    stream=await navigator.mediaDevices.getUserMedia({audio:{
-      echoCancellation:false,noiseSuppression:false,autoGainControl:false}});
+    const audio={echoCancellation:false,noiseSuppression:false,autoGainControl:false};
+    if(deviceId) audio.deviceId={exact:deviceId};
+    stream=await navigator.mediaDevices.getUserMedia({audio});
     audioCtx=new (window.AudioContext||window.webkitAudioContext)();
     if(audioCtx.state==='suspended') await audioCtx.resume();
     analyser=audioCtx.createAnalyser();
@@ -288,24 +373,52 @@ async function start(){
     source.connect(analyser);
     floatData=new Float32Array(analyser.frequencyBinCount);
     timeData=new Float32Array(analyser.fftSize);
+    buildWeighting(audioCtx.sampleRate/2, analyser.frequencyBinCount);
     resize();
     peaks.fill(0); fbTrack.clear(); fbPanel.innerHTML=''; lvlPeak=-120;
+    leqSumP=0; leqN=0; splMax=-120;
     running=true; idle.style.display='none'; dot.classList.add('live');
-    meterEl.style.display='flex';
+    meterEl.style.display='flex'; document.getElementById('stats').style.display='flex';
     document.getElementById('stopBtn').style.display='';
+    populateInputs();
     draw();
   }catch(e){
     errBox.style.display='block';
     errBox.textContent='לא ניתן לגשת למיקרופון: '+(e.message||e.name)+'. יש לאשר הרשאה ולהריץ מעל HTTPS.';
   }
 }
+
+async function populateInputs(){
+  try{
+    const devs=await navigator.mediaDevices.enumerateDevices();
+    const ins=devs.filter(d=>d.kind==='audioinput');
+    const sel=document.getElementById('inSel');
+    const cur=sel.value;
+    sel.innerHTML='';
+    ins.forEach((d,i)=>{
+      const o=document.createElement('option');
+      o.value=d.deviceId; o.textContent=d.label||('מיקרופון '+(i+1));
+      sel.appendChild(o);
+    });
+    if(cur) sel.value=cur;
+  }catch(e){}
+}
+
+async function switchInput(deviceId){
+  if(!running) return;
+  if(raf) cancelAnimationFrame(raf);
+  if(stream) stream.getTracks().forEach(t=>t.stop());
+  if(audioCtx) await audioCtx.close();
+  await start(deviceId);
+}
+
 function stop(){
   running=false; if(raf) cancelAnimationFrame(raf);
   if(stream) stream.getTracks().forEach(t=>t.stop());
   if(audioCtx) audioCtx.close();
   dot.classList.remove('live'); idle.style.display='flex';
   document.getElementById('stopBtn').style.display='none';
-  meterEl.style.display='none';
+  meterEl.style.display='none'; document.getElementById('stats').style.display='none';
   peakHzEl.textContent='—'; fbPanel.innerHTML='';
   ctx.clearRect(0,0,cv.clientWidth,cv.clientHeight);
 }
@@ -336,15 +449,31 @@ function updateLevel(){
   let sum=0;
   for(let i=0;i<timeData.length;i++){ const s=timeData[i]; sum+=s*s; }
   const rms=Math.sqrt(sum/timeData.length);
-  const dbfs=20*Math.log10(rms+1e-9);          // full-scale ref, ~ -inf..0
+  const dbfs=20*Math.log10(rms+1e-9);          // broadband full-scale, fast meter
   const now=performance.now();
   if(dbfs>lvlPeak || now-lvlPeakT>1500){ lvlPeak=dbfs; lvlPeakT=now; }
-  // display range -60..0 dBFS -> 0..100%
   const pct=v=>Math.max(0,Math.min(100,(v+60)/60*100));
   meterFill.style.width=pct(dbfs)+'%';
   meterPeak.style.insetInlineStart=pct(lvlPeak)+'%';
-  const shown=dbfs+calib;
-  meterVal.textContent = calib>0 ? (shown.toFixed(0)+' dB SPL≈') : (dbfs.toFixed(1)+' dBFS');
+  meterVal.textContent = calib>0 ? ((dbfs+calib).toFixed(0)+' dB SPL≈') : (dbfs.toFixed(1)+' dBFS');
+
+  // ---- weighted SPL from spectrum (Z/A/C) + Leq + Max ----
+  const w = weightMode==='A'?weightA : weightMode==='C'?weightC : null;
+  let p=0;
+  for(let i=1;i<floatData.length;i++){
+    const wdb = w ? w[i] : 0;
+    if(wdb<-100) continue;
+    p += Math.pow(10,(floatData[i]+wdb)/10);
+  }
+  const lvl = 10*Math.log10(p+1e-12) + calib;   // weighted level (+calibration)
+  leqSumP += p; leqN++;
+  const leq = 10*Math.log10(leqSumP/Math.max(1,leqN)+1e-12) + calib;
+  if(lvl>splMax) splMax=lvl;
+  const unit = calib>0 ? ' dB'+weightMode : '';
+  const fmt=x=>x.toFixed(1)+unit;
+  document.getElementById('splNow').textContent=fmt(lvl);
+  document.getElementById('splLeq').textContent=fmt(leq);
+  document.getElementById('splMax').textContent=fmt(splMax);
 }
 
 function draw(){
@@ -365,9 +494,10 @@ function draw(){
 function drawRta(W,H,nyquist,bins,xForFreq){
   ctx.clearRect(0,0,W,H);
   const plotH=H-18;
-  // grid
+  // grid — labels that fall inside the current view range
   ctx.strokeStyle='#1c2530'; ctx.fillStyle='#5b6673'; ctx.font='10px monospace'; ctx.textAlign='center';
-  [31.5,100,1000,10000].forEach(f=>{
+  const lo=ISO[0], hi=ISO[BANDS-1];
+  [20,31.5,50,100,200,500,1000,2000,5000,10000,20000].filter(f=>f>=lo&&f<=hi).forEach(f=>{
     const x=xForFreq(f);
     ctx.globalAlpha=.5; ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,plotH);ctx.stroke(); ctx.globalAlpha=1;
     ctx.fillText(fLabel(f)+'Hz',x,H-4);
@@ -404,6 +534,13 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     ctx.stroke();
     ctx.fillStyle='#ffb020'; ctx.font='10px monospace'; ctx.textAlign='start';
     ctx.fillText('הקפאה', 8, 12);
+  }
+  // drag-to-zoom selection rectangle
+  if(dragging && Math.abs(dragX1-dragX0)>4){
+    const xa=Math.min(dragX0,dragX1), xb=Math.max(dragX0,dragX1);
+    ctx.fillStyle='rgba(47,155,255,.15)'; ctx.fillRect(xa,0,xb-xa,plotH);
+    ctx.strokeStyle='rgba(47,155,255,.8)'; ctx.lineWidth=1;
+    ctx.strokeRect(xa,0,xb-xa,plotH);
   }
   const pf=peakBand>=0?ISO[peakBand]:0;
   peakHzEl.textContent = (peakBand>=0&&peakVal>0.05)
