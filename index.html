@@ -102,6 +102,15 @@
   #genOnBtn{border:1px solid var(--hot);background:rgba(255,59,107,.1);color:#ff8aa5;
     font-family:inherit;font-size:12px;font-weight:600;letter-spacing:1px;padding:9px 16px;border-radius:8px;cursor:pointer}
   #genOnBtn.on{border-color:var(--accent);background:rgba(47,155,255,.12);color:var(--accent)}
+  #rtPanel{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:6;display:none;
+    flex-direction:column;gap:10px;align-items:center;padding:18px 20px;border:1px solid var(--accent);
+    border-radius:14px;background:rgba(13,17,23,.96);backdrop-filter:blur(6px);box-shadow:0 8px 40px rgba(0,0,0,.6)}
+  #rtPanel.open{display:flex}
+  #rtStatus{font-size:15px;color:var(--text);letter-spacing:1px;text-align:center;min-height:20px}
+  #rtStatus b{color:var(--accent);font-size:22px}
+  #rtCanvas{background:#0b0f16;border:1px solid var(--line);border-radius:8px}
+  #rtClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
+    font-size:12px;padding:8px 20px;border-radius:8px;cursor:pointer}
   .err{position:absolute;bottom:14px;inset-inline:14px;z-index:5;background:rgba(255,59,107,.12);border:1px solid var(--hot);
     color:#ffb3c4;padding:10px 14px;border-radius:8px;font-size:12px;line-height:1.6;display:none}
 </style>
@@ -126,6 +135,11 @@
       <div>Max <b id="splMax">—</b></div>
     </div>
     <button class="zoomBtn" id="zoomBtn">⤢ טווח מלא</button>
+    <div id="rtPanel">
+      <div id="rtStatus">RT60</div>
+      <canvas id="rtCanvas" width="300" height="120"></canvas>
+      <button id="rtClose">סגור</button>
+    </div>
     <div class="meter" id="meter" style="display:none">
       <div class="meterFill" id="meterFill"></div>
       <div class="meterPeak" id="meterPeak" style="inset-inline-start:0"></div>
@@ -188,6 +202,8 @@
     <select class="inp" id="inSel" title="מקור קלט"><option>מיקרופון ברירת מחדל</option></select>
     <button class="toggle" id="genBtn">גנרטור</button>
     <button class="toggle" id="tgtBtn">יעד</button>
+    <button class="toggle" id="compBtn">תגובה pink</button>
+    <button class="toggle" id="rtBtn">RT60</button>
     <button class="toggle" id="stopBtn" style="display:none">עצור</button>
   </footer>
 
@@ -243,6 +259,8 @@ let zMin=viewMin, zMax=viewMax;   // (unused placeholder, kept for clarity)
 let dragging=false, dragX0=0, dragX1=0;
 let genType='pink', genOn=false, genGain=null, genSrc=null, genOsc=null;
 let genDb=-34, genHz=1000, targetMode='off';
+let pinkComp=false;
+let rt60State='idle', rt60Samples=[], rt60CutT=0;
 let specCanvas, specCtx;  // offscreen for waterfall
 
 // feedback tracking: key = rounded Hz, value = {frames, db, hz}
@@ -438,6 +456,91 @@ document.getElementById('tgtBtn').addEventListener('click',function(){
   this.textContent = targetMode==='off'?'יעד':targetMode==='flat'?'יעד: שטוח':'יעד: House';
   this.classList.toggle('on', targetMode!=='off');
 });
+
+// ---- pink-compensated response ----
+document.getElementById('compBtn').addEventListener('click',function(){
+  pinkComp=!pinkComp; this.classList.toggle('on',pinkComp);
+});
+
+// ---- RT60 (interrupted-noise method) ----
+const rtPanel=document.getElementById('rtPanel'), rtStatus=document.getElementById('rtStatus');
+document.getElementById('rtClose').addEventListener('click',()=>rtPanel.classList.remove('open'));
+document.getElementById('rtBtn').addEventListener('click',startRT60);
+
+function startRT60(){
+  if(!running||!audioCtx){ alert('קודם הפעל את המיקרופון.'); return; }
+  rtPanel.classList.add('open');
+  rtStatus.innerHTML='מכין… משמיע רעש ורוד';
+  // ensure pink noise is playing at a usable level for good SNR
+  const restoreType=genType; genType='pink';
+  if(!genOn){ genStart(); }
+  const boost=Math.max(genDb,-20);
+  if(genGain) genGain.gain.setTargetAtTime(Math.pow(10,boost/20),audioCtx.currentTime,0.1);
+
+  setTimeout(()=>{                    // let the room energize
+    rtStatus.innerHTML='מודד דעיכה…';
+    rt60Samples=[]; rt60State='capture';
+    setTimeout(()=>{                  // abrupt cut
+      const t=audioCtx.currentTime;
+      if(genGain){ try{ genGain.gain.cancelScheduledValues(t);
+        genGain.gain.setValueAtTime(genGain.gain.value,t);
+        genGain.gain.linearRampToValueAtTime(0,t+0.005);}catch(_){} }
+      rt60CutT=performance.now();
+      setTimeout(()=>{                // finish capture
+        rt60State='idle'; genStop(); genType=restoreType;
+        analyzeRT60();
+      },2500);
+    },400);                          // 400ms of steady level recorded before the cut
+  },1200);
+}
+
+function analyzeRT60(){
+  const s=rt60Samples;
+  if(s.length<20){ rtStatus.innerHTML='מדידה נכשלה — נסה שוב'; return; }
+  // steady level = average before the cut
+  const pre=s.filter(x=>x.t<rt60CutT);
+  const steady = pre.length? pre.reduce((a,x)=>a+x.db,0)/pre.length : s[0].db;
+  const post=s.filter(x=>x.t>=rt60CutT).map(x=>({t:(x.t-rt60CutT)/1000, db:x.db}));
+  // find crossing times below steady for -5 and -25 (T20) / -35 (T30)
+  const crossT=drop=>{
+    const th=steady-drop;
+    for(let i=1;i<post.length;i++){
+      if(post[i-1].db>=th && post[i].db<th){
+        const a=post[i-1], b=post[i];
+        return a.t + (b.t-a.t)*(a.db-th)/(a.db-b.db);
+      }
+    }
+    return null;
+  };
+  const t5=crossT(5), t25=crossT(25), t35=crossT(35);
+  let rt60=null, method='', tEnd=null, endDrop=0;
+  if(t5!=null && t35!=null){ rt60=(t35-t5)*(60/30); method='T30'; tEnd=t35; endDrop=35; }
+  else if(t5!=null && t25!=null){ rt60=(t25-t5)*(60/20); method='T20'; tEnd=t25; endDrop=25; }
+  drawRTPlot(post, steady, t5, tEnd, endDrop);
+  if(rt60 && rt60>0.05 && rt60<10)
+    rtStatus.innerHTML='RT60 ≈ <b>'+rt60.toFixed(2)+' ש\''+'</b> <small style="color:var(--dim)">('+method+')</small>';
+  else
+    rtStatus.innerHTML='לא הצלחתי למדוד — נסה עוצמה גבוהה יותר או חדר שקט יותר';
+}
+
+function drawRTPlot(post, steady, tStart, tEnd, endDrop){
+  const c=document.getElementById('rtCanvas'), x=c.getContext('2d');
+  const W=c.width,H=c.height; x.clearRect(0,0,W,H);
+  const tMax=Math.max(0.5, post.length?post[post.length-1].t:1);
+  const dbMin=steady-65, dbMax=steady+3;
+  const X=t=>t/tMax*W, Y=db=>H-(db-dbMin)/(dbMax-dbMin)*H;
+  x.strokeStyle='#1c2530'; x.fillStyle='#5b6673'; x.font='9px monospace';
+  for(let d=0;d>=-60;d-=10){ const yy=Y(steady+d); x.globalAlpha=.5;
+    x.beginPath();x.moveTo(0,yy);x.lineTo(W,yy);x.stroke(); x.globalAlpha=1;
+    x.fillText(d+'dB',2,yy-2); }
+  x.strokeStyle='#2f9bff'; x.lineWidth=1.5; x.beginPath();
+  post.forEach((p,i)=>{ i?x.lineTo(X(p.t),Y(p.db)):x.moveTo(X(p.t),Y(p.db)); }); x.stroke();
+  if(tStart!=null && tEnd!=null){
+    x.strokeStyle='#50e68c'; x.lineWidth=2; x.setLineDash([5,3]); x.beginPath();
+    x.moveTo(X(tStart),Y(steady-5)); x.lineTo(X(tEnd),Y(steady-endDrop)); x.stroke();
+    x.setLineDash([]);
+  }
+}
 document.getElementById('res').addEventListener('input',e=>{
   const bpo=parseInt(e.target.value,10);
   document.getElementById('resVal').textContent='1/'+bpo+' אוקטבה';
@@ -562,6 +665,7 @@ function updateLevel(){
   for(let i=0;i<timeData.length;i++){ const s=timeData[i]; sum+=s*s; }
   const rms=Math.sqrt(sum/timeData.length);
   const dbfs=20*Math.log10(rms+1e-9);          // broadband full-scale, fast meter
+  if(rt60State==='capture') rt60Samples.push({t:performance.now(), db:dbfs});
   const now=performance.now();
   if(dbfs>lvlPeak || now-lvlPeakT>1500){ lvlPeak=dbfs; lvlPeakT=now; }
   const pct=v=>Math.max(0,Math.min(100,(v+60)/60*100));
@@ -622,7 +726,8 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     const fc=ISO[b];
     const rawDb=bandDb(fc/R,fc*R,nyquist,bins);
     lastBandDb[b]=rawDb;
-    let v=norm(rawDb);
+    const compDb = pinkComp ? 3*Math.log2(ISO[b]/1000) : 0;  // +3dB/oct → flat system reads flat on pink
+    let v=norm(rawDb+compDb);
     if(avgOn){ avgBuf[b]=avgBuf[b]*0.9+v*0.1; v=avgBuf[b]; } else { avgBuf[b]=v; }
     lastV[b]=v;
     if(v>peakVal){peakVal=v;peakBand=b;}
