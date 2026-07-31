@@ -14,7 +14,8 @@
 <style>
   :root{
     --panel:#0d1117; --panel-2:#161b22; --line:#21262d; --grid:#1c2530;
-    --text:#c9d3df; --dim:#5b6673; --accent:#2f9bff; --warn:#ffd166; --hot:#ff3b6b;
+    --text:#e6ecf3; --dim:#9aa7b6; --accent:#2f9bff; --warn:#ffd166; --hot:#ff3b6b;
+    --line:#333d4c;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%}
@@ -79,17 +80,18 @@
   footer{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:11px 16px;border-top:1px solid var(--line);
     background:linear-gradient(0deg,var(--panel-2),transparent)}
   .ctrl{display:flex;flex-direction:column;gap:5px;flex:1;min-width:110px}
-  .ctrl label{font-size:10px;letter-spacing:1.5px;color:var(--dim);text-transform:uppercase;display:flex;justify-content:space-between}
+  .ctrl label{font-size:10px;letter-spacing:1.5px;color:#b3bece;text-transform:uppercase;display:flex;justify-content:space-between}
   .ctrl label b{color:var(--accent);font-variant-numeric:tabular-nums}
   input[type=range]{-webkit-appearance:none;appearance:none;height:4px;border-radius:4px;background:var(--line);outline:none}
   input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--accent);cursor:pointer}
   input[type=range]::-moz-range-thumb{width:18px;height:18px;border:none;border-radius:50%;background:var(--accent)}
-  .toggle{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;font-size:11px;
-    letter-spacing:1px;padding:9px 13px;border-radius:8px;cursor:pointer;text-transform:uppercase;transition:.15s;white-space:nowrap}
-  .toggle.on{border-color:var(--accent);color:var(--accent);background:rgba(47,155,255,.08)}
+  .toggle{border:1px solid var(--line);background:#1b2230;color:#cdd6e0;font-family:inherit;font-size:11px;
+    letter-spacing:1px;padding:9px 13px;border-radius:8px;cursor:pointer;text-transform:uppercase;transition:.15s;white-space:nowrap;font-weight:600}
+  .toggle:hover{border-color:#4a5768}
+  .toggle.on{border-color:var(--accent);color:var(--accent);background:rgba(47,155,255,.14)}
   .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
-  .seg button{border:none;background:var(--panel-2);color:var(--dim);font-family:inherit;font-size:11px;
-    letter-spacing:.5px;padding:9px 11px;cursor:pointer;transition:.15s;border-inline-start:1px solid var(--line)}
+  .seg button{border:none;background:#1b2230;color:#cdd6e0;font-family:inherit;font-size:11px;
+    letter-spacing:.5px;padding:9px 11px;cursor:pointer;transition:.15s;border-inline-start:1px solid var(--line);font-weight:600}
   .seg button:first-child{border-inline-start:none}
   .seg button.on{color:var(--accent);background:rgba(47,155,255,.12)}
   select.inp{border:1px solid var(--line);background:var(--panel-2);color:var(--text);font-family:inherit;
