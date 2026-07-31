@@ -94,6 +94,14 @@
   .seg button.on{color:var(--accent);background:rgba(47,155,255,.12)}
   select.inp{border:1px solid var(--line);background:var(--panel-2);color:var(--text);font-family:inherit;
     font-size:11px;padding:8px 10px;border-radius:8px;max-width:150px;outline:none}
+  /* signal generator panel */
+  #genPanel{flex-basis:100%;display:none;gap:14px;align-items:center;flex-wrap:wrap;
+    padding:10px 12px;margin-bottom:6px;border:1px solid var(--line);border-radius:10px;background:rgba(13,17,23,.6)}
+  #genPanel.open{display:flex}
+  #genPanel .warn{flex-basis:100%;font-size:10px;color:#ffb020;letter-spacing:.5px}
+  #genOnBtn{border:1px solid var(--hot);background:rgba(255,59,107,.1);color:#ff8aa5;
+    font-family:inherit;font-size:12px;font-weight:600;letter-spacing:1px;padding:9px 16px;border-radius:8px;cursor:pointer}
+  #genOnBtn.on{border-color:var(--accent);background:rgba(47,155,255,.12);color:var(--accent)}
   .err{position:absolute;bottom:14px;inset-inline:14px;z-index:5;background:rgba(255,59,107,.12);border:1px solid var(--hot);
     color:#ffb3c4;padding:10px 14px;border-radius:8px;font-size:12px;line-height:1.6;display:none}
 </style>
@@ -132,6 +140,23 @@
   </div>
 
   <footer>
+    <div id="genPanel">
+      <div class="seg" id="genType">
+        <button data-t="pink" class="on">ורוד</button>
+        <button data-t="white">לבן</button>
+        <button data-t="sine">סינוס</button>
+      </div>
+      <div class="ctrl" style="min-width:130px">
+        <label>עוצמה <b id="genLvlVal">-34dB</b></label>
+        <input type="range" id="genLvl" min="-46" max="-8" step="1" value="-34">
+      </div>
+      <div class="ctrl" id="genFreqWrap" style="min-width:130px;display:none">
+        <label>תדר סינוס <b id="genFreqVal">1000Hz</b></label>
+        <input type="range" id="genFreq" min="20" max="16000" step="1" value="1000">
+      </div>
+      <button id="genOnBtn">▶ הפעל אות</button>
+      <div class="warn">⚠ עוצמה גבוהה עלולה להזיק לרמקולים (בעיקר טוויטרים) ולאוזניים. התחל נמוך ועלה בהדרגה.</div>
+    </div>
     <div class="ctrl">
       <label>רצפת רעש <b id="floorVal">-85dB</b></label>
       <input type="range" id="floor" min="-100" max="-50" step="1" value="-85">
@@ -161,6 +186,8 @@
     <button class="toggle" id="wgtBtn">שקלול Z</button>
     <button class="toggle" id="leqBtn">אפס Leq</button>
     <select class="inp" id="inSel" title="מקור קלט"><option>מיקרופון ברירת מחדל</option></select>
+    <button class="toggle" id="genBtn">גנרטור</button>
+    <button class="toggle" id="tgtBtn">יעד</button>
     <button class="toggle" id="stopBtn" style="display:none">עצור</button>
   </footer>
 
@@ -214,6 +241,8 @@ let weightA=null, weightC=null;   // per-bin weighting (dB), built on start
 let leqSumP=0, leqN=0, splMax=-120;  // Leq accumulator + max hold
 let zMin=viewMin, zMax=viewMax;   // (unused placeholder, kept for clarity)
 let dragging=false, dragX0=0, dragX1=0;
+let genType='pink', genOn=false, genGain=null, genSrc=null, genOsc=null;
+let genDb=-34, genHz=1000, targetMode='off';
 let specCanvas, specCtx;  // offscreen for waterfall
 
 // feedback tracking: key = rounded Hz, value = {frames, db, hz}
@@ -328,6 +357,87 @@ cv.addEventListener('pointerup',e=>{
 cv.addEventListener('pointercancel',()=>{dragging=false;});
 cv.addEventListener('dblclick',()=>{ if(running) resetZoom(); });
 document.getElementById('zoomBtn').addEventListener('click',resetZoom);
+
+// ---- signal generator (pink / white / sine) ----
+function makeNoiseBuffer(type){
+  const len=Math.floor(audioCtx.sampleRate*2);
+  const buf=audioCtx.createBuffer(1,len,audioCtx.sampleRate);
+  const d=buf.getChannelData(0);
+  if(type==='white'){
+    for(let i=0;i<len;i++) d[i]=Math.random()*2-1;
+  } else { // pink — Paul Kellet filter
+    let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+    for(let i=0;i<len;i++){
+      const w=Math.random()*2-1;
+      b0=0.99886*b0+w*0.0555179; b1=0.99332*b1+w*0.0750759;
+      b2=0.96900*b2+w*0.1538520; b3=0.86650*b3+w*0.3104856;
+      b4=0.55000*b4+w*0.5329522; b5=-0.7616*b5-w*0.0168980;
+      d[i]=(b0+b1+b2+b3+b4+b5+b6+w*0.5362)*0.11; b6=w*0.115926;
+    }
+  }
+  return buf;
+}
+function genStop(){
+  if(genGain){ try{genGain.gain.cancelScheduledValues(audioCtx.currentTime);
+    genGain.gain.setTargetAtTime(0,audioCtx.currentTime,0.05);}catch(_){} }
+  const g=genGain, s=genSrc, o=genOsc;
+  setTimeout(()=>{
+    try{ if(s) s.stop(); }catch(_){}
+    try{ if(o) o.stop(); }catch(_){}
+    try{ if(g) g.disconnect(); }catch(_){}
+  },250);
+  genSrc=null; genOsc=null; genGain=null; genOn=false;
+  const btn=document.getElementById('genOnBtn'); btn.classList.remove('on'); btn.textContent='▶ הפעל אות';
+}
+function genStart(){
+  if(!running||!audioCtx){ alert('קודם הפעל את המיקרופון (כדי שהאודיו יהיה פעיל).'); return; }
+  genStop();
+  genGain=audioCtx.createGain(); genGain.gain.value=0;
+  if(genType==='sine'){
+    genOsc=audioCtx.createOscillator(); genOsc.type='sine'; genOsc.frequency.value=genHz;
+    genOsc.connect(genGain); genOsc.start();
+  } else {
+    genSrc=audioCtx.createBufferSource(); genSrc.buffer=makeNoiseBuffer(genType);
+    genSrc.loop=true; genSrc.connect(genGain); genSrc.start();
+  }
+  genGain.connect(audioCtx.destination);
+  const target=Math.pow(10,genDb/20);
+  genGain.gain.setTargetAtTime(target,audioCtx.currentTime,0.15);  // gentle ramp-up
+  genOn=true;
+  const btn=document.getElementById('genOnBtn'); btn.classList.add('on'); btn.textContent='⏹ עצור אות';
+}
+function genApplyLevel(){
+  if(genGain){ genGain.gain.setTargetAtTime(Math.pow(10,genDb/20),audioCtx.currentTime,0.1); }
+}
+document.getElementById('genBtn').addEventListener('click',function(){
+  const p=document.getElementById('genPanel'); const open=p.classList.toggle('open');
+  this.classList.toggle('on',open);
+});
+document.querySelectorAll('#genType button').forEach(b=>b.addEventListener('click',function(){
+  document.querySelectorAll('#genType button').forEach(x=>x.classList.remove('on'));
+  this.classList.add('on'); genType=this.dataset.t;
+  document.getElementById('genFreqWrap').style.display = genType==='sine'?'flex':'none';
+  if(genOn) genStart();  // restart with new type
+}));
+document.getElementById('genLvl').addEventListener('input',e=>{
+  genDb=parseFloat(e.target.value);
+  const el=document.getElementById('genLvlVal'); el.textContent=genDb+'dB';
+  el.style.color = genDb>=-16 ? '#ff3b6b' : (genDb>=-24?'#ffd166':'var(--accent)');
+  genApplyLevel();
+});
+document.getElementById('genFreq').addEventListener('input',e=>{
+  genHz=parseFloat(e.target.value);
+  document.getElementById('genFreqVal').textContent=(genHz>=1000?(genHz/1000).toFixed(1)+'k':genHz)+'Hz';
+  if(genOsc) genOsc.frequency.setTargetAtTime(genHz,audioCtx.currentTime,0.02);
+});
+document.getElementById('genOnBtn').addEventListener('click',()=>{ genOn?genStop():genStart(); });
+
+// ---- target curve ----
+document.getElementById('tgtBtn').addEventListener('click',function(){
+  targetMode = targetMode==='off'?'flat':targetMode==='flat'?'house':'off';
+  this.textContent = targetMode==='off'?'יעד':targetMode==='flat'?'יעד: שטוח':'יעד: House';
+  this.classList.toggle('on', targetMode!=='off');
+});
 document.getElementById('res').addEventListener('input',e=>{
   const bpo=parseInt(e.target.value,10);
   document.getElementById('resVal').textContent='1/'+bpo+' אוקטבה';
@@ -414,6 +524,8 @@ async function switchInput(deviceId){
 
 function stop(){
   running=false; if(raf) cancelAnimationFrame(raf);
+  genSrc=null; genOsc=null; genGain=null; genOn=false;
+  const gb=document.getElementById('genOnBtn'); if(gb){gb.classList.remove('on');gb.textContent='▶ הפעל אות';}
   if(stream) stream.getTracks().forEach(t=>t.stop());
   if(audioCtx) audioCtx.close();
   dot.classList.remove('live'); idle.style.display='flex';
@@ -542,6 +654,22 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     ctx.strokeStyle='rgba(47,155,255,.8)'; ctx.lineWidth=1;
     ctx.strokeRect(xa,0,xb-xa,plotH);
   }
+  // target reference curve
+  if(targetMode!=='off'){
+    ctx.strokeStyle='rgba(80,230,140,.8)'; ctx.setLineDash([6,5]); ctx.lineWidth=2; ctx.beginPath();
+    for(let b=0;b<BANDS;b++){
+      const t=b/(BANDS-1);           // 0=low .. 1=high across view
+      let ty=0.55;                   // flat reference (mid of plot)
+      if(targetMode==='house'){      // gentle bass-boost tilt (~+4dB low → -3dB high)
+        ty=0.68-0.22*t;
+      }
+      const x=b*bw+bw/2, yy=plotH-ty*plotH;
+      b===0?ctx.moveTo(x,yy):ctx.lineTo(x,yy);
+    }
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle='rgba(80,230,140,.9)'; ctx.font='10px monospace'; ctx.textAlign='end';
+    ctx.fillText(targetMode==='house'?'יעד House':'יעד שטוח', W-8, 12);
+  }
   const pf=peakBand>=0?ISO[peakBand]:0;
   peakHzEl.textContent = (peakBand>=0&&peakVal>0.05)
     ? (pf>=1000?(pf/1000).toFixed(2)+' kHz':Math.round(pf)+' Hz') : '—';
@@ -594,21 +722,29 @@ function detectFeedback(nyquist,bins){
     for(let j=i-win;j<=i+win;j++){ if(Math.abs(j-i)>2&&j>=0&&j<bins){sum+=floatData[j];n++;} }
     const avg=sum/Math.max(1,n);
     if(d-avg<PROM) continue;
+    const prom=d-avg;
+    // estimate bandwidth at -3dB from peak -> Q
+    let li=i, ri=i;
+    while(li>1 && floatData[li]>d-3) li--;
+    while(ri<bins-1 && floatData[ri]>d-3) ri++;
+    const bw3=Math.max(1,(ri-li))*nyquist/bins;
     const hz=Math.round(i*nyquist/bins);
+    const q=Math.max(2,Math.min(12, hz/bw3));
+    const cut=Math.max(3,Math.min(12, Math.round(prom*0.7)));
     const key=Math.round(hz/ (hz<300?5:hz<2000?15:60)); // cluster nearby bins
     seen.add(key);
-    const rec=fbTrack.get(key)||{frames:0,db:d,hz:hz};
+    const rec=fbTrack.get(key)||{frames:0,db:d,hz:hz,cut:cut,q:q};
     rec.frames=Math.min(HOLD+30,rec.frames+2);
-    rec.db=d; rec.hz=hz; fbTrack.set(key,rec);
+    rec.db=d; rec.hz=hz; rec.cut=cut; rec.q=q; fbTrack.set(key,rec);
   }
   // decay unseen
   for(const [k,rec] of fbTrack){ if(!seen.has(k)){ rec.frames-=1; if(rec.frames<=0) fbTrack.delete(k);} }
 
-  // render confirmed, top 4 by level
+  // render confirmed, top 4 by level — with suggested cut + Q
   const conf=[...fbTrack.values()].filter(r=>r.frames>=HOLD).sort((a,b)=>b.db-a.db).slice(0,4);
   fbPanel.innerHTML = conf.map(r=>{
     const hz=r.hz>=1000?(r.hz/1000).toFixed(2)+'kHz':r.hz+'Hz';
-    return '<div class="fbItem"><b>'+hz+'</b><small>פידבק · חתוך כאן</small></div>';
+    return '<div class="fbItem"><b>'+hz+'</b><small>חתוך −'+r.cut+'dB · Q≈'+r.q.toFixed(1)+'</small></div>';
   }).join('');
 }
 
