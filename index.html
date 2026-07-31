@@ -89,6 +89,12 @@
     letter-spacing:1px;padding:9px 13px;border-radius:8px;cursor:pointer;text-transform:uppercase;transition:.15s;white-space:nowrap;font-weight:600}
   .toggle:hover{border-color:#4a5768}
   .toggle.on{border-color:var(--accent);color:var(--accent);background:rgba(47,155,255,.14)}
+  .tabbar{flex-basis:100%;display:flex;gap:6px;align-items:center;margin-bottom:8px}
+  .tab{border:1px solid var(--line);background:#1b2230;color:#cdd6e0;font-family:inherit;font-size:12px;
+    font-weight:600;letter-spacing:1px;padding:8px 16px;border-radius:8px;cursor:pointer;transition:.15s}
+  .tab.on{border-color:var(--accent);color:#fff;background:rgba(47,155,255,.18)}
+  .tabpage{flex-basis:100%;display:none;gap:14px;align-items:center;flex-wrap:wrap}
+  .tabpage.active{display:flex}
   .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
   .seg button{border:none;background:#1b2230;color:#cdd6e0;font-family:inherit;font-size:11px;
     letter-spacing:.5px;padding:9px 11px;cursor:pointer;transition:.15s;border-inline-start:1px solid var(--line);font-weight:600}
@@ -202,41 +208,59 @@
       <button id="genOnBtn">▶ הפעל אות</button>
       <div class="warn">⚠ עוצמה גבוהה עלולה להזיק לרמקולים (בעיקר טוויטרים) ולאוזניים. התחל נמוך ועלה בהדרגה.</div>
     </div>
-    <div class="ctrl">
-      <label>רצפת רעש <b id="floorVal">-85dB</b></label>
-      <input type="range" id="floor" min="-100" max="-50" step="1" value="-85">
+    <div class="tabbar">
+      <button class="tab on" data-p="view">תצוגה</button>
+      <button class="tab" data-p="tune">כיוונון</button>
+      <button class="tab" data-p="spl">SPL</button>
+      <button class="tab" data-p="io">ייצוא/קלט</button>
+      <button class="toggle" id="stopBtn" style="display:none;margin-inline-start:auto">עצור</button>
     </div>
-    <div class="ctrl">
-      <label>החלקה <b id="smoothVal">0.7</b></label>
-      <input type="range" id="smooth" min="0" max="0.92" step="0.02" value="0.7">
+
+    <div class="tabpage active" data-page="view">
+      <div class="ctrl">
+        <label>רזולוציה <b id="resVal">1/6 אוקטבה</b></label>
+        <input type="range" id="res" min="1" max="48" step="1" value="6">
+      </div>
+      <div class="ctrl">
+        <label>החלקה <b id="smoothVal">0.7</b></label>
+        <input type="range" id="smooth" min="0" max="0.92" step="0.02" value="0.7">
+      </div>
+      <button class="toggle on" id="peakBtn">Peak Hold</button>
+      <button class="toggle" id="avgBtn">מיצוע</button>
+      <button class="toggle" id="freezeBtn">הקפא</button>
+      <button class="toggle on" id="fbBtn">גלאי פידבק</button>
+      <div class="ctrl">
+        <label>רגישות פידבק <b id="fbSensVal">בינונית</b></label>
+        <input type="range" id="fbSens" min="6" max="20" step="1" value="12">
+      </div>
     </div>
-    <div class="ctrl">
-      <label>כיול SPL <b id="calVal">+0dB</b></label>
-      <input type="range" id="cal" min="0" max="130" step="1" value="0">
+
+    <div class="tabpage" data-page="tune">
+      <button class="toggle" id="genBtn">גנרטור</button>
+      <button class="toggle" id="tgtBtn">יעד</button>
+      <button class="toggle" id="compBtn">תגובה pink</button>
+      <button class="toggle" id="eqBtn">הצע EQ</button>
+      <button class="toggle" id="rtBtn">RT60</button>
     </div>
-    <div class="ctrl">
-      <label>רגישות פידבק <b id="fbSensVal">בינונית</b></label>
-      <input type="range" id="fbSens" min="6" max="20" step="1" value="12">
+
+    <div class="tabpage" data-page="spl">
+      <div class="ctrl">
+        <label>רצפת רעש <b id="floorVal">-85dB</b></label>
+        <input type="range" id="floor" min="-100" max="-50" step="1" value="-85">
+      </div>
+      <div class="ctrl">
+        <label>כיול SPL <b id="calVal">+0dB</b></label>
+        <input type="range" id="cal" min="0" max="130" step="1" value="0">
+      </div>
+      <button class="toggle" id="wgtBtn">שקלול Z</button>
+      <button class="toggle" id="leqBtn">אפס Leq</button>
     </div>
-    <div class="ctrl">
-      <label>רזולוציה <b id="resVal">1/6 אוקטבה</b></label>
-      <input type="range" id="res" min="1" max="48" step="1" value="6">
+
+    <div class="tabpage" data-page="io">
+      <button class="toggle" id="pngBtn">PNG</button>
+      <button class="toggle" id="csvBtn">CSV</button>
+      <select class="inp" id="inSel" title="מקור קלט"><option>מיקרופון ברירת מחדל</option></select>
     </div>
-    <button class="toggle on" id="peakBtn">Peak Hold</button>
-    <button class="toggle on" id="fbBtn">גלאי פידבק</button>
-    <button class="toggle" id="avgBtn">מיצוע</button>
-    <button class="toggle" id="freezeBtn">הקפא</button>
-    <button class="toggle" id="pngBtn">PNG</button>
-    <button class="toggle" id="csvBtn">CSV</button>
-    <button class="toggle" id="wgtBtn">שקלול Z</button>
-    <button class="toggle" id="leqBtn">אפס Leq</button>
-    <select class="inp" id="inSel" title="מקור קלט"><option>מיקרופון ברירת מחדל</option></select>
-    <button class="toggle" id="genBtn">גנרטור</button>
-    <button class="toggle" id="tgtBtn">יעד</button>
-    <button class="toggle" id="compBtn">תגובה pink</button>
-    <button class="toggle" id="eqBtn">הצע EQ</button>
-    <button class="toggle" id="rtBtn">RT60</button>
-    <button class="toggle" id="stopBtn" style="display:none">עצור</button>
   </footer>
 
 <script>
@@ -492,6 +516,14 @@ document.getElementById('tgtBtn').addEventListener('click',function(){
   this.textContent = targetMode==='off'?'יעד':targetMode==='flat'?'יעד: שטוח':'יעד: House';
   this.classList.toggle('on', targetMode!=='off');
 });
+
+// ---- footer tabs ----
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',function(){
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+  this.classList.add('on');
+  const p=this.dataset.p;
+  document.querySelectorAll('.tabpage').forEach(pg=>pg.classList.toggle('active', pg.dataset.page===p));
+}));
 
 // ---- pink-compensated response ----
 document.getElementById('compBtn').addEventListener('click',function(){
