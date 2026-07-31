@@ -136,6 +136,10 @@
     </div>
     <button class="toggle on" id="peakBtn">Peak Hold</button>
     <button class="toggle on" id="fbBtn">גלאי פידבק</button>
+    <button class="toggle" id="avgBtn">מיצוע</button>
+    <button class="toggle" id="freezeBtn">הקפא</button>
+    <button class="toggle" id="pngBtn">PNG</button>
+    <button class="toggle" id="csvBtn">CSV</button>
     <button class="toggle" id="stopBtn" style="display:none">עצור</button>
   </footer>
 
@@ -144,6 +148,7 @@
 const FMIN=20, FMAX=20000;
 let ISO=[], BANDS=0, R=1;        // band centers, count, half-width factor
 let peaks=[];
+let avgBuf=[], snapCurve=null, lastV=[], lastBandDb=[];
 function buildBands(bpo){          // bpo = bands per octave: 3=1/3oct, 6=1/6, 12=1/12
   ISO=[];
   const n=Math.round(Math.log2(FMAX/FMIN)*bpo);
@@ -151,6 +156,11 @@ function buildBands(bpo){          // bpo = bands per octave: 3=1/3oct, 6=1/6, 1
   BANDS=ISO.length;
   R=Math.pow(2,1/(2*bpo));         // fc/R .. fc*R spans one band
   peaks=new Array(BANDS).fill(0);
+  avgBuf=new Array(BANDS).fill(0);
+  lastV=new Array(BANDS).fill(0);
+  lastBandDb=new Array(BANDS).fill(-120);
+  snapCurve=null;                  // capture no longer matches new resolution
+  const clr=document.getElementById('freezeBtn'); if(clr){clr.classList.remove('on');clr.textContent='הקפא';}
 }
 buildBands(6);
 
@@ -170,7 +180,7 @@ let audioCtx, analyser, source, stream, raf;
 let floatData;            // Float32 dB per bin
 let timeData;             // Float32 time-domain samples
 let running=false, mode='rta';
-let peakHold=true, fbOn=true;
+let peakHold=true, fbOn=true, avgOn=false;
 let floorDb=-85, ceilDb=-15;
 let calib=0;              // dB offset for SPL calibration
 let fbProm=12;            // feedback prominence threshold (dB)
@@ -218,6 +228,35 @@ document.getElementById('peakBtn').addEventListener('click',function(){
 document.getElementById('fbBtn').addEventListener('click',function(){
   fbOn=!fbOn; this.classList.toggle('on',fbOn); fbTrack.clear(); fbPanel.innerHTML='';
 });
+document.getElementById('avgBtn').addEventListener('click',function(){
+  avgOn=!avgOn; this.classList.toggle('on',avgOn); if(avgOn) avgBuf.fill(0);
+});
+document.getElementById('freezeBtn').addEventListener('click',function(){
+  if(snapCurve){ snapCurve=null; this.classList.remove('on'); this.textContent='הקפא'; }
+  else { snapCurve=lastV.slice(); this.classList.add('on'); this.textContent='נקה הקפאה'; }
+});
+document.getElementById('pngBtn').addEventListener('click',exportPNG);
+document.getElementById('csvBtn').addEventListener('click',exportCSV);
+
+function stamp(){ const d=new Date(); const p=n=>(''+n).padStart(2,'0');
+  return d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'_'+p(d.getHours())+p(d.getMinutes())+p(d.getSeconds()); }
+function download(name, blobUrl){
+  const a=document.createElement('a'); a.href=blobUrl; a.download=name;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+function exportPNG(){
+  const W=cv.clientWidth,H=cv.clientHeight,dpr=Math.min(window.devicePixelRatio||1,2);
+  const off=document.createElement('canvas'); off.width=W*dpr; off.height=H*dpr;
+  const o=off.getContext('2d'); o.scale(dpr,dpr);
+  o.fillStyle='#0d1117'; o.fillRect(0,0,W,H);
+  o.drawImage(cv,0,0,W,H);
+  download('rta_'+stamp()+'.png', off.toDataURL('image/png'));
+}
+function exportCSV(){
+  let rows='freq_hz,level_db\n';
+  for(let b=0;b<BANDS;b++) rows+=Math.round(ISO[b])+','+lastBandDb[b].toFixed(1)+'\n';
+  download('rta_'+stamp()+'.csv', URL.createObjectURL(new Blob([rows],{type:'text/csv'})));
+}
 document.getElementById('res').addEventListener('input',e=>{
   const bpo=parseInt(e.target.value,10);
   document.getElementById('resVal').textContent='1/'+bpo+' אוקטבה';
@@ -339,7 +378,11 @@ function drawRta(W,H,nyquist,bins,xForFreq){
   let peakBand=-1,peakVal=0;
   for(let b=0;b<BANDS;b++){
     const fc=ISO[b];
-    const v=norm(bandDb(fc/R,fc*R,nyquist,bins));
+    const rawDb=bandDb(fc/R,fc*R,nyquist,bins);
+    lastBandDb[b]=rawDb;
+    let v=norm(rawDb);
+    if(avgOn){ avgBuf[b]=avgBuf[b]*0.9+v*0.1; v=avgBuf[b]; } else { avgBuf[b]=v; }
+    lastV[b]=v;
     if(v>peakVal){peakVal=v;peakBand=b;}
     const x=b*bw+gap/2, barW=bw-gap;
     const barH=v*plotH, y=plotH-barH;
@@ -350,6 +393,17 @@ function drawRta(W,H,nyquist,bins,xForFreq){
       const py=plotH-peaks[b]*plotH;
       ctx.fillStyle='rgba(255,255,255,.85)'; ctx.fillRect(x,py-2,barW,2);
     }
+  }
+  // frozen snapshot overlay (A/B compare)
+  if(snapCurve && snapCurve.length===BANDS){
+    ctx.strokeStyle='#ffb020'; ctx.lineWidth=2; ctx.beginPath();
+    for(let b=0;b<BANDS;b++){
+      const x=b*bw+bw/2, yy=plotH-snapCurve[b]*plotH;
+      b===0?ctx.moveTo(x,yy):ctx.lineTo(x,yy);
+    }
+    ctx.stroke();
+    ctx.fillStyle='#ffb020'; ctx.font='10px monospace'; ctx.textAlign='start';
+    ctx.fillText('הקפאה', 8, 12);
   }
   const pf=peakBand>=0?ISO[peakBand]:0;
   peakHzEl.textContent = (peakBand>=0&&peakVal>0.05)
