@@ -335,7 +335,7 @@ document.getElementById('res').addEventListener('input',e=>{
 });
 document.getElementById('mRta').addEventListener('click',()=>setMode('rta'));
 document.getElementById('mSpec').addEventListener('click',()=>setMode('spec'));
-document.getElementById('startBtn').addEventListener('click',start);
+document.getElementById('startBtn').addEventListener('click',()=>start());
 document.getElementById('stopBtn').addEventListener('click',stop);
 
 function setMode(m){
@@ -361,7 +361,7 @@ function buildWeighting(nyquist,bins){
 async function start(deviceId){
   try{
     const audio={echoCancellation:false,noiseSuppression:false,autoGainControl:false};
-    if(deviceId) audio.deviceId={exact:deviceId};
+    if(deviceId && typeof deviceId==='string') audio.deviceId={exact:deviceId};
     stream=await navigator.mediaDevices.getUserMedia({audio});
     audioCtx=new (window.AudioContext||window.webkitAudioContext)();
     if(audioCtx.state==='suspended') await audioCtx.resume();
