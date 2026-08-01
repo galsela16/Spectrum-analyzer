@@ -136,6 +136,19 @@
   .eqRow .q{color:var(--dim);font-size:11px}
   #eqClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
     font-size:12px;padding:8px 20px;border-radius:8px;cursor:pointer;align-self:center}
+  #calPanel{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:6;display:none;
+    flex-direction:column;gap:10px;width:290px;max-height:80%;padding:16px 18px;border:1px solid var(--accent);
+    border-radius:14px;background:rgba(13,17,23,.97);backdrop-filter:blur(6px);box-shadow:0 8px 40px rgba(0,0,0,.6)}
+  #calPanel.open{display:flex}
+  #calPanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
+  #calList{display:flex;flex-direction:column;gap:6px;overflow:auto}
+  .calRow{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:8px;border:1px solid var(--line);
+    font-size:13px;cursor:pointer;color:var(--text)}
+  .calRow.on{border-color:var(--accent);background:rgba(47,155,255,.12);color:#fff}
+  .calRow .nm{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .calRow .del{color:#ff6b8b;font-size:16px;padding:0 4px;line-height:1}
+  #calClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
+    font-size:12px;padding:8px 20px;border-radius:8px;cursor:pointer;align-self:center}
   .err{position:absolute;bottom:14px;inset-inline:14px;z-index:5;background:rgba(255,59,107,.12);border:1px solid var(--hot);
     color:#ffb3c4;padding:10px 14px;border-radius:8px;font-size:12px;line-height:1.6;display:none}
 </style>
@@ -171,11 +184,17 @@
       <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
         <button id="eqMeasBtn" class="toggle">מדוד מיקום (5ש')</button>
         <button id="eqResetBtn" class="toggle">אפס</button>
-        <label class="toggle" style="cursor:pointer">טען כיול מיק'<input id="eqCal" type="file" accept=".txt,.cal,.frd,.csv" style="display:none"></label>
       </div>
       <div class="sub" id="eqCalName"></div>
       <div id="eqList"></div>
       <button id="eqClose">סגור</button>
+    </div>
+    <div id="calPanel">
+      <h3>כיולי מיקרופון</h3>
+      <div class="sub">בחר כיול פעיל, או הוסף קובץ (תדר+dB, פורמט REW/miniDSP). נשמר לפעם הבאה.</div>
+      <div id="calList"></div>
+      <label class="toggle" style="cursor:pointer;align-self:center">➕ הוסף קובץ כיול<input id="calAdd" type="file" accept=".txt,.cal,.frd,.csv" style="display:none"></label>
+      <button id="calClose">סגור</button>
     </div>
     <div class="meter" id="meter" style="display:none">
       <div class="meterFill" id="meterFill"></div>
@@ -240,6 +259,7 @@
       <button class="toggle" id="tgtBtn">יעד</button>
       <button class="toggle" id="compBtn">תגובה pink</button>
       <button class="toggle" id="eqBtn">הצע EQ</button>
+      <button class="toggle" id="calBtn">כיול מיק'</button>
       <button class="toggle" id="rtBtn">RT60</button>
     </div>
 
@@ -320,7 +340,8 @@ let rt60State='idle', rt60Samples=[], rt60CutT=0;
 let eqMarks=null;   // [{f,gain,q,type}] to draw on graph
 let measState='idle', measAccum=null, measFrames=0;
 let eqPositions=[];      // each: Float32Array of per-bin averaged dB
-let micCal=null;         // {f:[], g:[]} loaded calibration
+let micCalList=[], activeCalId=null, micCal=null;
+const CAL_KEY='rta_miccals';
 let specCanvas, specCtx;  // offscreen for waterfall
 
 // feedback tracking: key = rounded Hz, value = {frames, db, hz}
@@ -536,7 +557,6 @@ document.getElementById('eqClose').addEventListener('click',()=>{ eqPanel.classL
 document.getElementById('eqBtn').addEventListener('click',()=>{ eqPanel.classList.add('open'); updateEqUI(); });
 document.getElementById('eqMeasBtn').addEventListener('click',measurePosition);
 document.getElementById('eqResetBtn').addEventListener('click',()=>{ eqPositions=[]; eqMarks=null; document.getElementById('eqList').innerHTML=''; updateEqUI(); });
-document.getElementById('eqCal').addEventListener('change',loadMicCal);
 
 function updateEqUI(){
   const meas = measState==='measuring';
@@ -557,8 +577,43 @@ function micCalAt(f){
   const t=(Math.log(f)-Math.log(F[i-1]))/(Math.log(F[i])-Math.log(F[i-1]));
   return G[i-1]+(G[i]-G[i-1])*t;
 }
-function loadMicCal(e){
-  const file=e.target.files[0]; if(!file) return;
+function loadCalStore(){
+  try{
+    const raw=localStorage.getItem(CAL_KEY);
+    if(raw){ const o=JSON.parse(raw); micCalList=o.list||[]; activeCalId=o.active||null; }
+  }catch(_){ micCalList=[]; activeCalId=null; }
+  deriveActiveCal();
+}
+function saveCalStore(){
+  try{ localStorage.setItem(CAL_KEY, JSON.stringify({list:micCalList, active:activeCalId})); }catch(_){}
+}
+function deriveActiveCal(){
+  const c=micCalList.find(x=>x.id===activeCalId);
+  micCal = c ? {f:c.f, g:c.g} : null;
+  const nm = c ? ('כיול פעיל: '+c.name) : 'כיול פעיל: ללא';
+  const el=document.getElementById('eqCalName'); if(el) el.textContent=nm;
+}
+function renderCalList(){
+  const box=document.getElementById('calList');
+  let html='<div class="calRow'+(activeCalId===null?' on':'')+'" data-id=""><span class="nm">ללא כיול</span></div>';
+  html+=micCalList.map(c=>'<div class="calRow'+(c.id===activeCalId?' on':'')+'" data-id="'+c.id+'">'+
+    '<span class="nm">'+c.name+'</span><span class="sub">'+c.f.length+' נק\'</span><span class="del" data-del="'+c.id+'">🗑</span></div>').join('');
+  box.innerHTML=html;
+  box.querySelectorAll('.calRow').forEach(row=>row.addEventListener('click',e=>{
+    if(e.target.dataset.del!==undefined) return;   // handled below
+    activeCalId = row.dataset.id || null;
+    deriveActiveCal(); saveCalStore(); renderCalList();
+    if(eqPositions.length) computeAndShow();
+  }));
+  box.querySelectorAll('.del').forEach(d=>d.addEventListener('click',e=>{
+    e.stopPropagation();
+    const id=d.dataset.del;
+    micCalList=micCalList.filter(c=>c.id!==id);
+    if(activeCalId===id) activeCalId=null;
+    deriveActiveCal(); saveCalStore(); renderCalList();
+  }));
+}
+function addCalFromFile(file){
   const r=new FileReader();
   r.onload=()=>{
     const F=[],G=[];
@@ -566,12 +621,19 @@ function loadMicCal(e){
       const m=line.trim().match(/^([\d.]+)[\s,]+(-?[\d.]+)/);
       if(m){ F.push(parseFloat(m[1])); G.push(parseFloat(m[2])); }
     });
-    if(F.length>1){ micCal={f:F,g:G}; document.getElementById('eqCalName').textContent='כיול נטען: '+file.name+' ('+F.length+' נק\')'; }
-    else document.getElementById('eqCalName').textContent='קובץ כיול לא תקין';
-    if(eqPositions.length) computeAndShow();
+    if(F.length>1){
+      const id='c'+Date.now();
+      micCalList.push({id, name:file.name.replace(/\.[^.]+$/,''), f:F, g:G});
+      activeCalId=id; deriveActiveCal(); saveCalStore(); renderCalList();
+      if(eqPositions.length) computeAndShow();
+    } else alert('קובץ כיול לא תקין — צריך שורות של תדר ואז dB.');
   };
   r.readAsText(file);
 }
+const calPanel=document.getElementById('calPanel');
+document.getElementById('calBtn').addEventListener('click',()=>{ renderCalList(); calPanel.classList.add('open'); });
+document.getElementById('calClose').addEventListener('click',()=>calPanel.classList.remove('open'));
+document.getElementById('calAdd').addEventListener('change',e=>{ if(e.target.files[0]) addCalFromFile(e.target.files[0]); e.target.value=''; });
 function measurePosition(){
   if(!running){ alert('קודם הפעל את המיקרופון.'); return; }
   if(measState==='measuring') return;
@@ -1051,6 +1113,7 @@ function detectFeedback(nyquist,bins){
   }).join('');
 }
 
+loadCalStore();
 resize();
 // register service worker for offline / installable PWA
 if('serviceWorker' in navigator){
