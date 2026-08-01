@@ -149,6 +149,19 @@
   .calRow .del{color:#ff6b8b;font-size:16px;padding:0 4px;line-height:1}
   #calClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
     font-size:12px;padding:8px 20px;border-radius:8px;cursor:pointer;align-self:center}
+  #tfPanel{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:6;display:none;
+    flex-direction:column;gap:10px;width:min(92%,420px);max-height:88%;padding:16px 18px;border:1px solid var(--accent);
+    border-radius:14px;background:rgba(13,17,23,.97);backdrop-filter:blur(6px);box-shadow:0 8px 40px rgba(0,0,0,.6);overflow:auto}
+  #tfPanel.open{display:flex}
+  #tfPanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
+  #tfPanel .sub{font-size:10px;color:var(--dim);letter-spacing:.5px;line-height:1.5}
+  .chBar{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text)}
+  .chBar .track{flex:1;height:8px;border-radius:4px;background:var(--line);overflow:hidden}
+  .chBar .fill{height:100%;width:0%;background:var(--accent);transition:width .06s}
+  #tfCanvas{width:100%;height:150px;background:#0b0f16;border:1px solid var(--line);border-radius:8px}
+  #tfBtns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+  #tfClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
+    font-size:12px;padding:8px 20px;border-radius:8px;cursor:pointer;align-self:center}
   .err{position:absolute;bottom:14px;inset-inline:14px;z-index:5;background:rgba(255,59,107,.12);border:1px solid var(--hot);
     color:#ffb3c4;padding:10px 14px;border-radius:8px;font-size:12px;line-height:1.6;display:none}
 </style>
@@ -195,6 +208,20 @@
       <div id="calList"></div>
       <label class="toggle" style="cursor:pointer;align-self:center">➕ הוסף קובץ כיול<input id="calAdd" type="file" accept=".txt,.cal,.frd,.csv" style="display:none"></label>
       <button id="calClose">סגור</button>
+    </div>
+    <div id="tfPanel">
+      <h3>Transfer Function דו־ערוצי → תיקון גרפיק EQ</h3>
+      <div class="sub">ערוץ 1 = מיקרופון מדידה · ערוץ 2 = רפרנס מהמיקסר. שלח תוכן/רעש ורוד דרך המערכת, ומדוד.</div>
+      <div class="chBar">מיק' <div class="track"><div class="fill" id="tfMicFill"></div></div><span id="tfMicDb">—</span></div>
+      <div class="chBar">רפרנס <div class="track"><div class="fill" id="tfRefFill"></div></div><span id="tfRefDb">—</span></div>
+      <div id="tfBtns">
+        <button class="toggle" id="tfSwapBtn">החלף ערוצים</button>
+        <button class="toggle" id="tfMeasBtn">מדוד (6ש')</button>
+        <button class="toggle" id="tfCsvBtn">CSV</button>
+      </div>
+      <canvas id="tfCanvas" width="400" height="150"></canvas>
+      <div class="sub" id="tfInfo">התוצאה: כמה dB להזיז בכל פס בגרפיק־EQ (31 פסים). ירוק=הזז, אפור=לא אמין (רפרנס חלש).</div>
+      <button id="tfClose">סגור</button>
     </div>
     <div class="meter" id="meter" style="display:none">
       <div class="meterFill" id="meterFill"></div>
@@ -260,6 +287,7 @@
       <button class="toggle" id="compBtn">תגובה pink</button>
       <button class="toggle" id="eqBtn">הצע EQ</button>
       <button class="toggle" id="calBtn">כיול מיק'</button>
+      <button class="toggle" id="tfBtn">TF ‏2־ערוצי</button>
       <button class="toggle" id="rtBtn">RT60</button>
     </div>
 
@@ -327,8 +355,13 @@ const meterPeak = document.getElementById('meterPeak');
 const meterVal = document.getElementById('meterVal');
 
 let audioCtx, analyser, source, stream, raf;
+let analyserRef=null, floatDataRef=null;   // 2nd channel (reference) for dual-channel TF
 let floatData;            // Float32 dB per bin
 let timeData;             // Float32 time-domain samples
+// dual-channel transfer-function measurement
+const GEQ=[20,25,31.5,40,50,63,80,100,125,160,200,250,315,400,500,630,800,1000,
+           1250,1600,2000,2500,3150,4000,5000,6300,8000,10000,12500,16000,20000];
+let tfState='idle', tfSwap=false, tfMic=null, tfRef=null, tfFrames=0, tfResult=null;
 let running=false, mode='rta';
 let peakHold=true, fbOn=true, avgOn=false;
 let floorDb=-85, ceilDb=-15;
@@ -647,6 +680,88 @@ const calPanel=document.getElementById('calPanel');
 document.getElementById('calBtn').addEventListener('click',()=>{ renderCalList(); calPanel.classList.add('open'); });
 document.getElementById('calClose').addEventListener('click',()=>calPanel.classList.remove('open'));
 document.getElementById('calAdd').addEventListener('change',e=>{ if(e.target.files[0]) addCalFromFile(e.target.files[0]); e.target.value=''; });
+
+// ---- dual-channel Transfer Function → graphic-EQ correction ----
+const tfPanel=document.getElementById('tfPanel');
+document.getElementById('tfBtn').addEventListener('click',()=>{ tfPanel.classList.add('open'); });
+document.getElementById('tfClose').addEventListener('click',()=>tfPanel.classList.remove('open'));
+document.getElementById('tfSwapBtn').addEventListener('click',function(){ tfSwap=!tfSwap; this.classList.toggle('on',tfSwap); });
+document.getElementById('tfMeasBtn').addEventListener('click',tfMeasure);
+document.getElementById('tfCsvBtn').addEventListener('click',tfExportCsv);
+
+function chLevel(arr){ let p=0; for(let i=1;i<arr.length;i++) p+=Math.pow(10,arr[i]/10); return 10*Math.log10(p+1e-12); }
+function updateTfLevels(){
+  if(!floatDataRef) return;
+  const micArr=tfSwap?floatDataRef:floatData, refArr=tfSwap?floatData:floatDataRef;
+  const md=chLevel(micArr), rd=chLevel(refArr), pct=d=>Math.max(0,Math.min(100,(d+80)/70*100));
+  document.getElementById('tfMicFill').style.width=pct(md)+'%';
+  document.getElementById('tfRefFill').style.width=pct(rd)+'%';
+  document.getElementById('tfMicDb').textContent=isFinite(md)?md.toFixed(0):'—';
+  document.getElementById('tfRefDb').textContent=isFinite(rd)?rd.toFixed(0):'—';
+}
+function tfMeasure(){
+  if(!running||!analyserRef){ alert('הפעל מיקרופון עם כרטיס קול (input סטריאו).'); return; }
+  if(tfState==='measuring') return;
+  const bins=floatData.length;
+  tfMic=new Float64Array(bins); tfRef=new Float64Array(bins); tfFrames=0; tfState='measuring';
+  const btn=document.getElementById('tfMeasBtn'); btn.textContent='מודד…'; btn.style.opacity=.5;
+  setTimeout(()=>{
+    tfState='idle'; btn.textContent='מדוד שוב (6ש\')'; btn.style.opacity=1;
+    tfCompute();
+  },6000);
+}
+function tfCompute(){
+  if(!tfFrames){ return; }
+  const bins=tfMic.length, nyq=audioCtx.sampleRate/2, R6=Math.pow(2,1/6);
+  const H=[], refB=[]; let refMax=-999;
+  for(let k=0;k<GEQ.length;k++){
+    const fc=GEQ[k]; let lo=Math.floor((fc/R6)/nyq*bins), hi=Math.ceil((fc*R6)/nyq*bins);
+    lo=Math.max(0,lo);hi=Math.min(bins-1,hi);if(hi<lo)hi=lo;
+    let pm=0,pr=0; for(let i=lo;i<=hi;i++){ pm+=tfMic[i]; pr+=tfRef[i]; }
+    const micDb=10*Math.log10(pm/tfFrames+1e-12);
+    refB[k]=10*Math.log10(pr/tfFrames+1e-12);
+    H[k]=micDb-refB[k];                         // |H| per band (dB), delay-independent
+    refMax=Math.max(refMax,refB[k]);
+  }
+  if(micCal){ for(let k=0;k<GEQ.length;k++) H[k]-=micCalAt(GEQ[k]); }
+  const rel=GEQ.map((f,k)=> refB[k]>refMax-25 && f>=40 && f<=16000);
+  let os=0,on=0;
+  for(let k=0;k<GEQ.length;k++){ if(rel[k]&&GEQ[k]>=200&&GEQ[k]<=4000){ os+=H[k]-targetDb(GEQ[k]); on++; } }
+  const offset=on?os/on:0;
+  const corr=GEQ.map((f,k)=> rel[k]? Math.max(-6,Math.min(6, -(H[k]-targetDb(f)-offset))) : null);
+  tfResult={corr,H,rel};
+  document.getElementById('tfInfo').textContent = on? 'הזז בגרפיק־EQ לפי הערכים (±6dB מקס). אפור=רפרנס חלש, לא אמין.' :
+    'רפרנס חלש/חסר — ודא שערוץ 2 מקבל אות מהמיקסר, או לחץ "החלף ערוצים".';
+  drawTF();
+}
+function drawTF(){
+  const c=document.getElementById('tfCanvas'), x=c.getContext('2d');
+  const W=c.width=c.clientWidth||400, H=150; c.height=H;
+  x.clearRect(0,0,W,H);
+  const mid=H/2, scale=(H/2-16)/6;
+  x.font='9px monospace'; x.textAlign='left';
+  [-6,-3,0,3,6].forEach(d=>{ const yy=mid-d*scale; x.strokeStyle='#2b3646'; x.globalAlpha=d===0?.9:.4;
+    x.beginPath();x.moveTo(0,yy);x.lineTo(W,yy);x.stroke(); x.globalAlpha=1; x.fillStyle='#8b97a5'; x.fillText((d>0?'+':'')+d+'dB',2,yy-2); });
+  if(!tfResult){ return; }
+  const n=GEQ.length, bw=W/n;
+  for(let k=0;k<n;k++){
+    const cx=k*bw+bw*0.5, v=tfResult.corr[k];
+    if(v==null){ x.fillStyle='#39424f'; x.fillRect(cx-1,mid-1,2,2); continue; }
+    const y=mid - v*scale;
+    x.fillStyle = v>=0 ? '#50e68c' : '#ff6b8b';
+    x.fillRect(cx-bw*0.35, Math.min(mid,y), bw*0.7, Math.abs(mid-y));
+    if(Math.abs(v)>=1.5){ x.fillStyle='#e6ecf3'; x.textAlign='center'; x.fillText(v.toFixed(0), cx, v>=0? y-3 : y+9); }
+  }
+  // freq labels
+  x.fillStyle='#8b97a5'; x.textAlign='center';
+  [100,1000,10000].forEach(f=>{ const k=GEQ.indexOf(f); if(k>=0) x.fillText(f>=1000?(f/1000)+'k':f, k*bw+bw*0.5, H-3); });
+}
+function tfExportCsv(){
+  if(!tfResult){ alert('קודם מדוד.'); return; }
+  let rows='freq_hz,geq_correction_db,measured_db\n';
+  GEQ.forEach((f,k)=> rows+=f+','+(tfResult.corr[k]==null?'':tfResult.corr[k].toFixed(1))+','+tfResult.H[k].toFixed(1)+'\n');
+  download('tf_geq_'+stamp()+'.csv', URL.createObjectURL(new Blob([rows],{type:'text/csv'})));
+}
 function measurePosition(){
   if(!running){ alert('קודם הפעל את המיקרופון.'); return; }
   if(measState==='measuring') return;
@@ -828,7 +943,7 @@ function buildWeighting(nyquist,bins){
 
 async function start(deviceId){
   try{
-    const audio={echoCancellation:false,noiseSuppression:false,autoGainControl:false};
+    const audio={echoCancellation:false,noiseSuppression:false,autoGainControl:false,channelCount:2};
     if(deviceId && typeof deviceId==='string') audio.deviceId={exact:deviceId};
     stream=await navigator.mediaDevices.getUserMedia({audio});
     audioCtx=new (window.AudioContext||window.webkitAudioContext)();
@@ -838,8 +953,16 @@ async function start(deviceId){
     analyser.smoothingTimeConstant=parseFloat(document.getElementById('smooth').value);
     analyser.minDecibels=-100; analyser.maxDecibels=-10;
     source=audioCtx.createMediaStreamSource(stream);
-    source.connect(analyser);
+    // stereo split: ch0 → main (mic), ch1 → reference analyser (for 2-channel TF)
+    const splitter=audioCtx.createChannelSplitter(2);
+    source.connect(splitter);
+    analyserRef=audioCtx.createAnalyser();
+    analyserRef.fftSize=32768; analyserRef.smoothingTimeConstant=0.3;
+    analyserRef.minDecibels=-100; analyserRef.maxDecibels=-10;
+    try{ splitter.connect(analyser,0); splitter.connect(analyserRef,1); }
+    catch(_){ source.connect(analyser); }   // fallback: mono
     floatData=new Float32Array(analyser.frequencyBinCount);
+    floatDataRef=new Float32Array(analyserRef.frequencyBinCount);
     timeData=new Float32Array(analyser.fftSize);
     buildWeighting(audioCtx.sampleRate/2, analyser.frequencyBinCount);
     resize();
@@ -882,6 +1005,7 @@ async function switchInput(deviceId){
 
 function stop(){
   running=false; if(raf) cancelAnimationFrame(raf);
+  analyserRef=null; floatDataRef=null; tfState='idle';
   genSrc=null; genOsc=null; genGain=null; genOn=false;
   const gb=document.getElementById('genOnBtn'); if(gb){gb.classList.remove('on');gb.textContent='▶ הפעל אות';}
   if(stream) stream.getTracks().forEach(t=>t.stop());
@@ -954,6 +1078,17 @@ function draw(){
   if(measState==='measuring' && measAccum){
     for(let i=0;i<floatData.length;i++) measAccum[i]+=Math.pow(10,floatData[i]/10);
     measFrames++;
+  }
+  // dual-channel reference read + TF accumulation
+  if(analyserRef && floatDataRef && (tfState==='measuring' || tfPanel.classList.contains('open'))){
+    analyserRef.getFloatFrequencyData(floatDataRef);
+    if(tfState==='measuring' && tfMic){
+      const mic = tfSwap? floatDataRef : floatData;
+      const ref = tfSwap? floatData : floatDataRef;
+      for(let i=0;i<tfMic.length;i++){ tfMic[i]+=Math.pow(10,mic[i]/10); tfRef[i]+=Math.pow(10,ref[i]/10); }
+      tfFrames++;
+    }
+    if(tfPanel.classList.contains('open')) updateTfLevels();
   }
   updateLevel();
   const W=cv.clientWidth,H=cv.clientHeight;
