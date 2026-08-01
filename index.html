@@ -264,6 +264,13 @@
     </div>
 
     <div class="tabpage" data-page="spl">
+      <div class="ctrl" style="flex:0 0 auto">
+        <label>יחידת מד</label>
+        <div class="seg" id="unitSeg">
+          <button data-u="SPL" class="on">dB SPL</button>
+          <button data-u="dBFS">dBFS</button>
+        </div>
+      </div>
       <div class="ctrl">
         <label>רצפת רעש <b id="floorVal">-85dB</b></label>
         <input type="range" id="floor" min="-100" max="-50" step="1" value="-85">
@@ -329,6 +336,7 @@ let calib=0;              // dB offset for SPL calibration
 let fbProm=12;            // feedback prominence threshold (dB)
 let lvlPeak=-120, lvlPeakT=0;  // held level peak (dBFS) + timestamp
 let weightMode='Z';      // Z | A | C weighting for SPL stats
+let meterUnit='SPL';     // meter readout unit: SPL | dBFS
 let weightA=null, weightC=null;   // per-bin weighting (dB), built on start
 let leqSumP=0, leqN=0, splMax=-120;  // Leq accumulator + max hold
 let zMin=viewMin, zMax=viewMax;   // (unused placeholder, kept for clarity)
@@ -424,6 +432,10 @@ document.getElementById('wgtBtn').addEventListener('click',function(){
   leqSumP=0; leqN=0; splMax=-120;   // stats depend on weighting → reset
 });
 document.getElementById('leqBtn').addEventListener('click',()=>{ leqSumP=0; leqN=0; splMax=-120; });
+document.querySelectorAll('#unitSeg button').forEach(b=>b.addEventListener('click',function(){
+  document.querySelectorAll('#unitSeg button').forEach(x=>x.classList.remove('on'));
+  this.classList.add('on'); meterUnit=this.dataset.u;
+}));
 document.getElementById('inSel').addEventListener('change',e=>switchInput(e.target.value));
 
 // ---- drag-to-zoom on the graph ----
@@ -913,7 +925,8 @@ function updateLevel(){
   const pct=v=>Math.max(0,Math.min(100,(v+60)/60*100));
   meterFill.style.width=pct(dbfs)+'%';
   meterPeak.style.insetInlineStart=pct(lvlPeak)+'%';
-  meterVal.textContent = calib>0 ? ((dbfs+calib).toFixed(0)+' dB SPL≈') : (dbfs.toFixed(1)+' dBFS');
+  if(meterUnit==='SPL') meterVal.textContent=(dbfs+calib).toFixed(0)+' dB SPL≈';
+  else meterVal.textContent=dbfs.toFixed(1)+' dBFS';
 
   // ---- weighted SPL from spectrum (Z/A/C) + Leq + Max ----
   const w = weightMode==='A'?weightA : weightMode==='C'?weightC : null;
