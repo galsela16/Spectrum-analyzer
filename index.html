@@ -1325,6 +1325,12 @@ function detectFeedback(nyquist,bins){
 
 loadCalStore();
 resize();
+// keep the canvas backing store in sync with the stage size (panels opening,
+// tab changes, etc. resize the plot area) — prevents stale/duplicate drawing
+if('ResizeObserver' in window){
+  const _ro=new ResizeObserver(()=>{ resize(); });
+  _ro.observe(document.getElementById('stage'));
+}
 // register service worker for offline / installable PWA
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
