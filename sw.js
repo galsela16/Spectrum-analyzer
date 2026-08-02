@@ -1,39 +1,1453 @@
-// bump CACHE version whenever you change files
-const CACHE = 'rta-v29';
-const ASSETS = [
-  './',
-  './index.html',
-  './manifest.webmanifest',
-  './icons/icon-192.png',
-  './icons/icon-512.png',
-  './icons/icon-512-maskable.png'
-];
-
-self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting()));
-});
-
-self.addEventListener('activate', e => {
-  e.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
-          .then(() => self.clients.claim())
-  );
-});
-
-// HTML: network-first (so new deploys show up immediately, offline falls back to cache)
-// other assets: cache-first for speed
-self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
-  const isDoc = e.request.mode === 'navigate' || e.request.destination === 'document';
-  if (isDoc) {
-    e.respondWith(
-      fetch(e.request).then(r => {
-        const copy = r.clone();
-        caches.open(CACHE).then(c => c.put(e.request, copy));
-        return r;
-      }).catch(() => caches.match(e.request).then(h => h || caches.match('./index.html')))
-    );
-  } else {
-    e.respondWith(caches.match(e.request).then(h => h || fetch(e.request)));
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0d1117">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="RTA">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<title>אנלייזר ספקטרום · RTA</title>
+<style>
+  :root{
+    --panel:#0d1117; --panel-2:#161b22; --line:#21262d; --grid:#1c2530;
+    --text:#e6ecf3; --dim:#9aa7b6; --accent:#2f9bff; --warn:#ffd166; --hot:#ff3b6b;
+    --line:#333d4c;
   }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    background:radial-gradient(120% 80% at 50% -10%, #12222b 0%, var(--panel) 55%);
+    color:var(--text);
+    font-family:"SF Mono",ui-monospace,"Menlo",monospace;
+    display:flex;flex-direction:column;height:100dvh;overflow:hidden;
+    -webkit-user-select:none;user-select:none;
+    padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+  header{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,var(--panel-2),transparent)}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--dim);transition:.3s;flex:none}
+  .dot.live{background:var(--accent);animation:pulse 1.6s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(47,155,255,.45)}70%{box-shadow:0 0 0 7px rgba(47,155,255,0)}100%{box-shadow:0 0 0 0 rgba(47,155,255,0)}}
+  h1{font-size:13px;font-weight:600;letter-spacing:2px;text-transform:uppercase}
+  h1 span{color:var(--accent)}
+  .modes{margin-inline-start:auto;display:flex;gap:4px}
+  .modes button{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);
+    font-family:inherit;font-size:11px;letter-spacing:.5px;padding:7px 12px;border-radius:7px;cursor:pointer;transition:.15s}
+  .modes button.on{border-color:var(--accent);color:var(--accent);background:rgba(47,155,255,.08)}
+  #stage{flex:1;position:relative;min-height:0}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  .idle{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:16px;text-align:center;padding:24px;z-index:4}
+  .idle p{color:var(--dim);font-size:13px;line-height:1.7;max-width:300px}
+  .btn{appearance:none;border:1px solid var(--accent);cursor:pointer;background:rgba(47,155,255,.08);
+    color:var(--accent);font-family:inherit;font-size:14px;font-weight:600;letter-spacing:2px;
+    padding:14px 30px;border-radius:10px;text-transform:uppercase;transition:.15s}
+  .btn:active{transform:scale(.97)}
+  /* feedback alert list */
+  #fbPanel{position:absolute;top:10px;inset-inline-start:10px;z-index:3;display:flex;flex-direction:column;gap:6px;pointer-events:none}
+  .fbItem{background:rgba(255,59,107,.14);border:1px solid var(--hot);color:#ffd7e0;
+    padding:6px 11px;border-radius:8px;font-size:12px;letter-spacing:.5px;display:flex;gap:10px;align-items:baseline;
+    backdrop-filter:blur(4px);animation:fbin .2s ease}
+  @keyframes fbin{from{opacity:0;transform:translateY(-4px)}to{opacity:1}}
+  .fbItem b{color:#fff;font-size:13px;font-variant-numeric:tabular-nums}
+  .fbItem small{color:#ffb3c4}
+  .readout{position:absolute;top:10px;inset-inline-end:10px;z-index:3;text-align:end;font-size:11px;color:var(--dim);letter-spacing:1px;pointer-events:none}
+  .readout b{display:block;color:var(--text);font-size:15px;font-variant-numeric:tabular-nums}
+  /* SPL stats box */
+  .stats{position:absolute;top:52px;inset-inline-end:10px;z-index:3;pointer-events:none;
+    display:flex;flex-direction:column;gap:2px;text-align:end;font-size:10px;color:var(--dim);letter-spacing:1px}
+  .stats div{font-variant-numeric:tabular-nums}
+  .stats b{color:var(--text);font-size:13px}
+  .stats .big{color:var(--accent);font-size:16px}
+  /* zoom reset floating button */
+  .zoomBtn{position:absolute;top:10px;inset-inline-start:10px;z-index:4;display:none;
+    border:1px solid var(--accent);background:rgba(47,155,255,.12);color:var(--accent);
+    font-family:inherit;font-size:11px;letter-spacing:1px;padding:7px 12px;border-radius:8px;cursor:pointer}
+  #modalBg{position:absolute;inset:0;z-index:5;background:rgba(0,0,0,.5);display:none}
+  #modalBg.show{display:block}
+  #areaPanel{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:6;display:none;
+    flex-direction:column;gap:10px;width:min(92%,340px);max-height:calc(100% - 16px);overflow:auto;padding:16px 18px;
+    border:1px solid var(--accent);border-radius:14px;background:rgba(13,17,23,.97);backdrop-filter:blur(6px);box-shadow:0 8px 40px rgba(0,0,0,.6)}
+  #areaPanel.open{display:flex}
+  #areaPanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
+  #areaList{display:flex;flex-direction:column;gap:6px}
+  .areaRow{display:flex;align-items:center;gap:10px;padding:8px 11px;border-radius:8px;border:1px solid var(--line);font-size:13px;color:var(--text)}
+  .areaRow .dot{width:12px;height:12px;border-radius:50%;flex:none}
+  .areaRow .nm{flex:1}
+  .areaRow button{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;font-size:11px;padding:5px 9px;border-radius:6px;cursor:pointer}
+  .areaRow button.on{border-color:var(--accent);color:var(--accent)}
+  #areaClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;font-size:12px;padding:8px 20px;border-radius:8px;cursor:pointer;align-self:center}
+  /* level meter pinned to bottom of stage */
+  .meter{position:absolute;bottom:8px;inset-inline:10px;z-index:3;height:26px;border:1px solid var(--line);
+    border-radius:7px;background:rgba(13,17,23,.55);backdrop-filter:blur(4px);overflow:hidden;display:flex;align-items:center;pointer-events:none}
+  .meterFill{position:absolute;inset-inline-start:0;top:0;bottom:0;width:0%;
+    background:linear-gradient(90deg,var(--accent) 0%,var(--accent) 65%,#7cc4ff 82%,var(--hot) 100%);
+    opacity:.55;transition:width .05s linear}
+  .meterPeak{position:absolute;top:0;bottom:0;width:2px;background:#fff;opacity:.9}
+  .meterVal{position:relative;margin-inline-start:auto;padding-inline-end:10px;font-size:13px;font-weight:600;
+    color:var(--text);font-variant-numeric:tabular-nums;letter-spacing:.5px;z-index:1}
+  .meterLbl{position:relative;padding-inline-start:10px;font-size:10px;color:var(--dim);letter-spacing:1.5px;z-index:1}
+  footer{display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:11px 16px;border-top:1px solid var(--line);
+    background:linear-gradient(0deg,var(--panel-2),transparent)}
+  .ctrl{display:flex;flex-direction:column;gap:5px;flex:1;min-width:110px}
+  .ctrl label{font-size:10px;letter-spacing:1.5px;color:#b3bece;text-transform:uppercase;display:flex;justify-content:space-between}
+  .ctrl label b{color:var(--accent);font-variant-numeric:tabular-nums}
+  input[type=range]{-webkit-appearance:none;appearance:none;height:4px;border-radius:4px;background:var(--line);outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--accent);cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:18px;height:18px;border:none;border-radius:50%;background:var(--accent)}
+  .toggle{border:1px solid var(--line);background:#1b2230;color:#cdd6e0;font-family:inherit;font-size:11px;
+    letter-spacing:1px;padding:9px 13px;border-radius:8px;cursor:pointer;text-transform:uppercase;transition:.15s;white-space:nowrap;font-weight:600}
+  .toggle:hover{border-color:#4a5768}
+  .toggle.on{border-color:var(--accent);color:var(--accent);background:rgba(47,155,255,.14)}
+  .tabbar{flex-basis:100%;display:flex;gap:6px;align-items:center;margin-bottom:8px}
+  .tab{border:1px solid var(--line);background:#1b2230;color:#cdd6e0;font-family:inherit;font-size:12px;
+    font-weight:600;letter-spacing:1px;padding:8px 16px;border-radius:8px;cursor:pointer;transition:.15s}
+  .tab.on{border-color:var(--accent);color:#fff;background:rgba(47,155,255,.18)}
+  .tabpage{flex-basis:100%;display:none;gap:14px;align-items:center;flex-wrap:wrap}
+  .tabpage.active{display:flex}
+  .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+  .seg button{border:none;background:#1b2230;color:#cdd6e0;font-family:inherit;font-size:11px;
+    letter-spacing:.5px;padding:9px 11px;cursor:pointer;transition:.15s;border-inline-start:1px solid var(--line);font-weight:600}
+  .seg button:first-child{border-inline-start:none}
+  .seg button.on{color:var(--accent);background:rgba(47,155,255,.12)}
+  select.inp{border:1px solid var(--line);background:var(--panel-2);color:var(--text);font-family:inherit;
+    font-size:11px;padding:8px 10px;border-radius:8px;max-width:150px;outline:none}
+  /* signal generator panel */
+  #genPanel{flex-basis:100%;display:none;gap:14px;align-items:center;flex-wrap:wrap;
+    padding:10px 12px;margin-bottom:6px;border:1px solid var(--line);border-radius:10px;background:rgba(13,17,23,.6)}
+  #genPanel.open{display:flex}
+  #genPanel .warn{flex-basis:100%;font-size:10px;color:#ffb020;letter-spacing:.5px}
+  #genOnBtn{border:1px solid var(--hot);background:rgba(255,59,107,.1);color:#ff8aa5;
+    font-family:inherit;font-size:12px;font-weight:600;letter-spacing:1px;padding:9px 16px;border-radius:8px;cursor:pointer}
+  #genOnBtn.on{border-color:var(--accent);background:rgba(47,155,255,.12);color:var(--accent)}
+  #rtPanel{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:6;display:none;
+    flex-direction:column;gap:10px;align-items:center;max-height:calc(100% - 16px);overflow:auto;padding:18px 20px;border:1px solid var(--accent);
+    border-radius:14px;background:rgba(13,17,23,.96);backdrop-filter:blur(6px);box-shadow:0 8px 40px rgba(0,0,0,.6)}
+  #rtPanel.open{display:flex}
+  #rtStatus{font-size:15px;color:var(--text);letter-spacing:1px;text-align:center;min-height:20px}
+  #rtStatus b{color:var(--accent);font-size:22px}
+  #rtCanvas{background:#0b0f16;border:1px solid var(--line);border-radius:8px}
+  #rtClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
+    font-size:12px;padding:8px 20px;border-radius:8px;cursor:pointer}
+  #eqPanel{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:6;display:none;
+    flex-direction:column;gap:10px;width:280px;max-height:calc(100% - 16px);overflow:auto;padding:16px 18px;border:1px solid var(--accent);
+    border-radius:14px;background:rgba(13,17,23,.97);backdrop-filter:blur(6px);box-shadow:0 8px 40px rgba(0,0,0,.6)}
+  #eqPanel.open{display:flex}
+  #eqPanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
+  #eqPanel .sub{font-size:10px;color:var(--dim);letter-spacing:.5px;line-height:1.5}
+  #eqList{display:flex;flex-direction:column;gap:6px;overflow:auto}
+  .eqRow{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;border:1px solid var(--line);
+    font-variant-numeric:tabular-nums;font-size:13px}
+  .eqRow.cut{background:rgba(255,59,107,.08);border-color:rgba(255,59,107,.4)}
+  .eqRow.boost{background:rgba(47,155,255,.08);border-color:rgba(47,155,255,.4)}
+  .eqRow .f{font-weight:600;min-width:64px}
+  .eqRow .g{min-width:52px;color:var(--text)}
+  .eqRow.cut .g{color:#ff6b8b} .eqRow.boost .g{color:#7cc4ff}
+  .eqRow .q{color:var(--dim);font-size:11px}
+  #eqClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
+    font-size:12px;padding:8px 20px;border-radius:8px;cursor:pointer;align-self:center}
+  #calPanel{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:6;display:none;
+    flex-direction:column;gap:10px;width:290px;max-height:calc(100% - 16px);overflow:auto;padding:16px 18px;border:1px solid var(--accent);
+    border-radius:14px;background:rgba(13,17,23,.97);backdrop-filter:blur(6px);box-shadow:0 8px 40px rgba(0,0,0,.6)}
+  #calPanel.open{display:flex}
+  #calPanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
+  #calList{display:flex;flex-direction:column;gap:6px;overflow:auto}
+  .calRow{display:flex;align-items:center;gap:10px;padding:9px 11px;border-radius:8px;border:1px solid var(--line);
+    font-size:13px;cursor:pointer;color:var(--text)}
+  .calRow.on{border-color:var(--accent);background:rgba(47,155,255,.12);color:#fff}
+  .calRow .nm{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .calRow .del{color:#ff6b8b;font-size:16px;padding:0 4px;line-height:1}
+  #calClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
+    font-size:12px;padding:8px 20px;border-radius:8px;cursor:pointer;align-self:center}
+  #tfPanel{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:6;display:none;
+    flex-direction:column;gap:10px;width:min(92%,420px);max-height:calc(100% - 16px);padding:16px 18px;border:1px solid var(--accent);
+    border-radius:14px;background:rgba(13,17,23,.97);backdrop-filter:blur(6px);box-shadow:0 8px 40px rgba(0,0,0,.6);overflow:auto}
+  #tfPanel.open{display:flex}
+  #tfPanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
+  #tfPanel .sub{font-size:10px;color:var(--dim);letter-spacing:.5px;line-height:1.5}
+  .chBar{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text)}
+  .chBar .track{flex:1;height:8px;border-radius:4px;background:var(--line);overflow:hidden}
+  .chBar .fill{height:100%;width:0%;background:var(--accent);transition:width .06s}
+  #tfCanvas{width:100%;height:150px;background:#0b0f16;border:1px solid var(--line);border-radius:8px}
+  #tfGeqList{display:flex;flex-direction:column;gap:5px;max-height:230px;overflow:auto}
+  #tfBtns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+  #tfClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
+    font-size:12px;padding:8px 20px;border-radius:8px;cursor:pointer;align-self:center}
+  .err{position:absolute;bottom:14px;inset-inline:14px;z-index:5;background:rgba(255,59,107,.12);border:1px solid var(--hot);
+    color:#ffb3c4;padding:10px 14px;border-radius:8px;font-size:12px;line-height:1.6;display:none}
+</style>
+</head>
+<body>
+  <header>
+    <div class="dot" id="dot"></div>
+    <h1>RTA <span>אנלייזר</span> <small id="ver" style="font-size:10px;color:var(--dim);letter-spacing:1px"></small></h1>
+    <div class="modes">
+      <button id="mRta" class="on">ספקטרום</button>
+      <button id="mSpec">ווטרפול</button>
+    </div>
+  </header>
+
+  <div id="stage">
+    <canvas id="cv"></canvas>
+    <div id="fbPanel"></div>
+    <div class="readout"><span>PEAK</span><b id="peakHz">—</b></div>
+    <div class="stats" id="stats" style="display:none">
+      <div><span id="wLbl">Z</span> <b class="big" id="splNow">—</b></div>
+      <div>Leq <b id="splLeq">—</b></div>
+      <div>Max <b id="splMax">—</b></div>
+    </div>
+    <button class="zoomBtn" id="zoomBtn">⤢ טווח מלא</button>
+    <div id="modalBg"></div>
+    <div id="rtPanel">
+      <div id="rtStatus">RT60</div>
+      <canvas id="rtCanvas" width="300" height="120"></canvas>
+      <button id="rtClose">סגור</button>
+    </div>
+    <div id="eqPanel">
+      <h3>מדידת EQ למערכת</h3>
+      <div class="sub" id="eqSub">מיקומים שנמדדו: 0</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+        <button id="eqMeasBtn" class="toggle">מדוד מיקום (5ש')</button>
+        <button id="eqResetBtn" class="toggle">אפס</button>
+      </div>
+      <div class="sub" id="eqCalName"></div>
+      <div id="eqList"></div>
+      <button id="eqClose">סגור</button>
+    </div>
+    <div id="areaPanel">
+      <h3>אזורים · השוואת 360°</h3>
+      <div class="sub">מדוד בכל צד של המעגל (צפון/דרום/מזרח/מערב) והשווה. עד 4 אזורים על הגרף.</div>
+      <button id="areaMeasBtn" class="toggle" style="align-self:center">מדוד אזור חדש (5ש')</button>
+      <div id="areaList"></div>
+      <button id="areaClose">סגור</button>
+    </div>
+    <div id="calPanel">
+      <h3>כיולי מיקרופון</h3>
+      <div class="sub">בחר כיול פעיל, או הוסף קובץ (תדר+dB, פורמט REW/miniDSP). נשמר לפעם הבאה.</div>
+      <div id="calList"></div>
+      <label class="toggle" style="cursor:pointer;align-self:center">➕ הוסף קובץ כיול<input id="calAdd" type="file" accept=".txt,.cal,.frd,.csv" style="display:none"></label>
+      <button id="calClose">סגור</button>
+    </div>
+    <div id="tfPanel">
+      <h3>Transfer Function דו־ערוצי → תיקון גרפיק EQ</h3>
+      <div class="sub">ערוץ 1 = מיקרופון מדידה · ערוץ 2 = רפרנס מהמיקסר. שלח תוכן/רעש ורוד דרך המערכת, ומדוד.</div>
+      <div class="chBar"><span id="tfL1" style="min-width:96px">כניסה 1 → מיק'</span><div class="track"><div class="fill" id="tfMicFill"></div></div><span id="tfMicDb">—</span></div>
+      <div class="chBar"><span id="tfL2" style="min-width:96px">כניסה 2 → רפרנס</span><div class="track"><div class="fill" id="tfRefFill"></div></div><span id="tfRefDb">—</span></div>
+      <div id="tfBtns">
+        <button class="toggle" id="tfSwapBtn">החלף ערוצים</button>
+        <button class="toggle" id="tfMeasBtn">מדוד (6ש')</button>
+        <button class="toggle" id="tfCsvBtn">CSV</button>
+      </div>
+      <canvas id="tfCanvas" width="400" height="150" style="display:none"></canvas>
+      <div id="tfGeqList"></div>
+      <div class="sub" id="tfInfo">התוצאה: כמה dB להזיז בכל פס בגרפיק־EQ (31 פסים). ירוק=הזז, אפור=לא אמין (רפרנס חלש).</div>
+      <button id="tfClose">סגור</button>
+    </div>
+    <div class="meter" id="meter" style="display:none">
+      <div class="meterFill" id="meterFill"></div>
+      <div class="meterPeak" id="meterPeak" style="inset-inline-start:0"></div>
+      <span class="meterLbl">LEVEL</span>
+      <span class="meterVal" id="meterVal">—</span>
+    </div>
+    <div class="idle" id="idle">
+      <button class="btn" id="startBtn">הפעל מיקרופון</button>
+      <p>ניתוח 1/3 אוקטבה בתקן ISO, ווטרפול לאורך זמן, וגלאי פידבק בזמן אמת.</p>
+    </div>
+    <div class="err" id="err"></div>
+  </div>
+
+  <footer>
+    <div id="genPanel">
+      <div class="seg" id="genType">
+        <button data-t="pink" class="on">ורוד</button>
+        <button data-t="white">לבן</button>
+        <button data-t="sine">סינוס</button>
+        <button data-t="sweep">סוויפ</button>
+      </div>
+      <div class="ctrl" style="min-width:130px">
+        <label>עוצמה <b id="genLvlVal">-34dB</b></label>
+        <input type="range" id="genLvl" min="-46" max="-8" step="1" value="-34">
+      </div>
+      <div class="ctrl" id="genFreqWrap" style="min-width:130px;display:none">
+        <label>תדר סינוס <b id="genFreqVal">1000Hz</b></label>
+        <input type="range" id="genFreq" min="20" max="16000" step="1" value="1000">
+      </div>
+      <div class="ctrl" id="genSweepWrap" style="min-width:130px;display:none">
+        <label>משך סוויפ <b id="genSweepVal">4.0ש'</b></label>
+        <input type="range" id="genSweep" min="1" max="10" step="0.5" value="4">
+      </div>
+      <button id="genOnBtn">▶ הפעל אות</button>
+      <div class="warn">⚠ עוצמה גבוהה עלולה להזיק לרמקולים (בעיקר טוויטרים) ולאוזניים. התחל נמוך ועלה בהדרגה.</div>
+    </div>
+    <div class="tabbar">
+      <button class="tab on" data-p="view">תצוגה</button>
+      <button class="tab" data-p="tune">כיוונון</button>
+      <button class="tab" data-p="spl">SPL</button>
+      <button class="tab" data-p="io">ייצוא/קלט</button>
+      <button class="toggle" id="stopBtn" style="display:none;margin-inline-start:auto">עצור</button>
+    </div>
+
+    <div class="tabpage active" data-page="view">
+      <div class="ctrl">
+        <label>רזולוציה <b id="resVal">1/6 אוקטבה</b></label>
+        <input type="range" id="res" min="1" max="48" step="1" value="6">
+      </div>
+      <div class="ctrl">
+        <label>החלקה <b id="smoothVal">0.7</b></label>
+        <input type="range" id="smooth" min="0" max="0.92" step="0.02" value="0.7">
+      </div>
+      <button class="toggle on" id="peakBtn">Peak Hold</button>
+      <button class="toggle" id="avgBtn">מיצוע</button>
+      <button class="toggle" id="freezeBtn">הקפא</button>
+      <button class="toggle on" id="fbBtn">גלאי פידבק</button>
+      <div class="ctrl">
+        <label>רגישות פידבק <b id="fbSensVal">בינונית</b></label>
+        <input type="range" id="fbSens" min="6" max="20" step="1" value="12">
+      </div>
+    </div>
+
+    <div class="tabpage" data-page="tune">
+      <button class="toggle" id="genBtn">גנרטור</button>
+      <button class="toggle" id="tgtBtn">יעד</button>
+      <button class="toggle" id="compBtn">תגובה pink</button>
+      <button class="toggle" id="eqBtn">הצע EQ</button>
+      <button class="toggle" id="areaBtn">אזורים 360°</button>
+      <button class="toggle" id="calBtn">כיול מיק'</button>
+      <button class="toggle" id="tfBtn">TF ‏2־ערוצי</button>
+      <button class="toggle" id="rtBtn">RT60</button>
+    </div>
+
+    <div class="tabpage" data-page="spl">
+      <div class="ctrl" style="flex:0 0 auto">
+        <label>יחידת מד</label>
+        <div class="seg" id="unitSeg">
+          <button data-u="SPL" class="on">dB SPL</button>
+          <button data-u="dBFS">dBFS</button>
+        </div>
+      </div>
+      <div class="ctrl">
+        <label>רצפת רעש <b id="floorVal">-85dB</b></label>
+        <input type="range" id="floor" min="-100" max="-50" step="1" value="-85">
+      </div>
+      <div class="ctrl">
+        <label>כיול SPL <b id="calVal">+0dB</b></label>
+        <input type="range" id="cal" min="0" max="130" step="1" value="0">
+      </div>
+      <button class="toggle" id="wgtBtn">שקלול Z</button>
+      <button class="toggle" id="leqBtn">אפס Leq</button>
+    </div>
+
+    <div class="tabpage" data-page="io">
+      <button class="toggle" id="pngBtn">PNG</button>
+      <button class="toggle" id="csvBtn">CSV</button>
+      <select class="inp" id="inSel" title="מקור קלט"><option>מיקרופון ברירת מחדל</option></select>
+    </div>
+  </footer>
+
+<script>
+// ---------- fractional-octave bands (log-spaced across current view) ----------
+const FMIN=20, FMAX=20000;         // absolute limits
+let viewMin=20, viewMax=20000;     // current displayed range (zoom)
+let curBpo=6;                      // current bands-per-octave
+let ISO=[], BANDS=0, R=1;          // band centers, count, half-width factor
+let peaks=[];
+let avgBuf=[], snapCurve=null, lastV=[], lastBandDb=[];
+function buildBands(bpo){          // bpo = bands per octave: 3=1/3oct, 6=1/6, 12=1/12
+  curBpo=bpo;
+  ISO=[];
+  const n=Math.max(2,Math.round(Math.log2(viewMax/viewMin)*bpo));
+  for(let k=0;k<=n;k++) ISO.push(viewMin*Math.pow(2,k/bpo));
+  BANDS=ISO.length;
+  R=Math.pow(2,1/(2*bpo));         // fc/R .. fc*R spans one band
+  peaks=new Array(BANDS).fill(0);
+  avgBuf=new Array(BANDS).fill(0);
+  lastV=new Array(BANDS).fill(0);
+  lastBandDb=new Array(BANDS).fill(-120);
+  snapCurve=null;                  // capture no longer matches new bands
+  const clr=document.getElementById('freezeBtn'); if(clr){clr.classList.remove('on');clr.textContent='הקפא';}
+}
+buildBands(6);
+
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const dot = document.getElementById('dot');
+const idle = document.getElementById('idle');
+const errBox = document.getElementById('err');
+const peakHzEl = document.getElementById('peakHz');
+const fbPanel = document.getElementById('fbPanel');
+const meterEl = document.getElementById('meter');
+const meterFill = document.getElementById('meterFill');
+const meterPeak = document.getElementById('meterPeak');
+const meterVal = document.getElementById('meterVal');
+
+let audioCtx, analyser, source, stream, raf;
+let analyserRef=null, floatDataRef=null;   // 2nd channel (reference) for dual-channel TF
+let floatData;            // Float32 dB per bin
+let timeData;             // Float32 time-domain samples
+// dual-channel transfer-function measurement
+const GEQ=[20,25,31.5,40,50,63,80,100,125,160,200,250,315,400,500,630,800,1000,
+           1250,1600,2000,2500,3150,4000,5000,6300,8000,10000,12500,16000,20000];
+let tfState='idle', tfSwap=false, tfMic=null, tfRef=null, tfFrames=0, tfResult=null;
+let running=false, mode='rta';
+let peakHold=true, fbOn=true, avgOn=false;
+let floorDb=-85, ceilDb=-15;
+let calib=0;              // dB offset for SPL calibration
+let fbProm=12;            // feedback prominence threshold (dB)
+let lvlPeak=-120, lvlPeakT=0;  // held level peak (dBFS) + timestamp
+let weightMode='Z';      // Z | A | C weighting for SPL stats
+let meterUnit='SPL';     // meter readout unit: SPL | dBFS
+let weightA=null, weightC=null;   // per-bin weighting (dB), built on start
+let leqSumP=0, leqN=0, splMax=-120;  // Leq accumulator + max hold
+let zMin=viewMin, zMax=viewMax;   // (unused placeholder, kept for clarity)
+let dragging=false, dragX0=0, dragX1=0, cursorX=null;
+let genType='pink', genOn=false, genGain=null, genSrc=null, genOsc=null;
+let genDb=-34, genHz=1000, targetMode='off';
+let genSweepDur=4, sweepTimer=null;
+let pinkComp=false;
+let rt60State='idle', rt60Samples=[], rt60CutT=0;
+let eqMarks=null;   // [{f,gain,q,type}] to draw on graph
+const AREA_COLORS=['#2f9bff','#ffa53b','#ff5cc8','#50e68c'];
+const AREA_NAMES=['צפון','דרום','מזרח','מערב'];
+let areas=[];       // {name,color,db:[per-GEQ-band raw dB],show}
+let areaState='idle', areaAccum=null, areaFrames=0;
+let measState='idle', measAccum=null, measFrames=0;
+let eqPositions=[];      // each: Float32Array of per-bin averaged dB
+let micCalList=[], activeCalId=null, micCal=null;
+const CAL_KEY='rta_miccals';
+let specCanvas, specCtx;  // offscreen for waterfall
+
+// feedback tracking: key = rounded Hz, value = {frames, db, hz}
+let fbTrack=new Map();
+
+function resize(){
+  const r=cv.getBoundingClientRect();
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  cv.width=r.width*dpr; cv.height=r.height*dpr;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  // rebuild waterfall buffer at CSS pixel size
+  specCanvas=document.createElement('canvas');
+  specCanvas.width=Math.max(2,Math.floor(r.width));
+  specCanvas.height=Math.max(2,Math.floor(r.height));
+  specCtx=specCanvas.getContext('2d');
+  specCtx.fillStyle='#0d1117'; specCtx.fillRect(0,0,specCanvas.width,specCanvas.height);
+}
+window.addEventListener('resize',resize);
+
+// ---------- controls ----------
+document.getElementById('floor').addEventListener('input',e=>{
+  floorDb=parseFloat(e.target.value);
+  document.getElementById('floorVal').textContent=floorDb+'dB';
 });
+document.getElementById('smooth').addEventListener('input',e=>{
+  const v=parseFloat(e.target.value);
+  document.getElementById('smoothVal').textContent=v.toFixed(2);
+  if(analyser) analyser.smoothingTimeConstant=v;
+});
+document.getElementById('cal').addEventListener('input',e=>{
+  calib=parseFloat(e.target.value);
+  document.getElementById('calVal').textContent=(calib>=0?'+':'')+calib+'dB';
+});
+document.getElementById('fbSens').addEventListener('input',e=>{
+  fbProm=parseFloat(e.target.value);
+  document.getElementById('fbSensVal').textContent = fbProm>=15?'נמוכה':fbProm>=10?'בינונית':'גבוהה';
+});
+document.getElementById('peakBtn').addEventListener('click',function(){
+  peakHold=!peakHold; this.classList.toggle('on',peakHold); peaks.fill(0);
+});
+document.getElementById('fbBtn').addEventListener('click',function(){
+  fbOn=!fbOn; this.classList.toggle('on',fbOn); fbTrack.clear(); fbPanel.innerHTML='';
+});
+document.getElementById('avgBtn').addEventListener('click',function(){
+  avgOn=!avgOn; this.classList.toggle('on',avgOn); if(avgOn) avgBuf.fill(0);
+});
+document.getElementById('freezeBtn').addEventListener('click',function(){
+  if(snapCurve){ snapCurve=null; this.classList.remove('on'); this.textContent='הקפא'; }
+  else { snapCurve=lastV.slice(); this.classList.add('on'); this.textContent='נקה הקפאה'; }
+});
+document.getElementById('pngBtn').addEventListener('click',exportPNG);
+document.getElementById('csvBtn').addEventListener('click',exportCSV);
+
+function stamp(){ const d=new Date(); const p=n=>(''+n).padStart(2,'0');
+  return d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'_'+p(d.getHours())+p(d.getMinutes())+p(d.getSeconds()); }
+function download(name, blobUrl){
+  const a=document.createElement('a'); a.href=blobUrl; a.download=name;
+  document.body.appendChild(a); a.click(); a.remove();
+}
+function exportPNG(){
+  const W=cv.clientWidth,H=cv.clientHeight,dpr=Math.min(window.devicePixelRatio||1,2);
+  const off=document.createElement('canvas'); off.width=W*dpr; off.height=H*dpr;
+  const o=off.getContext('2d'); o.scale(dpr,dpr);
+  o.fillStyle='#0d1117'; o.fillRect(0,0,W,H);
+  o.drawImage(cv,0,0,W,H);
+  download('rta_'+stamp()+'.png', off.toDataURL('image/png'));
+}
+function exportCSV(){
+  let rows='freq_hz,level_db\n';
+  for(let b=0;b<BANDS;b++) rows+=Math.round(ISO[b])+','+lastBandDb[b].toFixed(1)+'\n';
+  download('rta_'+stamp()+'.csv', URL.createObjectURL(new Blob([rows],{type:'text/csv'})));
+}
+
+// ---- weighting / Leq / input ----
+document.getElementById('wgtBtn').addEventListener('click',function(){
+  weightMode = weightMode==='Z'?'A':weightMode==='A'?'C':'Z';
+  this.textContent='שקלול '+weightMode;
+  this.classList.toggle('on', weightMode!=='Z');
+  document.getElementById('wLbl').textContent=weightMode;
+  leqSumP=0; leqN=0; splMax=-120;   // stats depend on weighting → reset
+});
+document.getElementById('leqBtn').addEventListener('click',()=>{ leqSumP=0; leqN=0; splMax=-120; });
+document.querySelectorAll('#unitSeg button').forEach(b=>b.addEventListener('click',function(){
+  document.querySelectorAll('#unitSeg button').forEach(x=>x.classList.remove('on'));
+  this.classList.add('on'); meterUnit=this.dataset.u;
+}));
+document.getElementById('inSel').addEventListener('change',e=>switchInput(e.target.value));
+
+// ---- drag-to-zoom on the graph ----
+function freqForX(px){
+  const W=cv.clientWidth;
+  const lmin=Math.log(ISO[0]), lmax=Math.log(ISO[BANDS-1]);
+  return Math.exp(lmin + Math.max(0,Math.min(1,px/W))*(lmax-lmin));
+}
+function applyZoom(xa,xb){
+  let fa=freqForX(Math.min(xa,xb)), fb=freqForX(Math.max(xa,xb));
+  if(fb/fa < 1.2) return;                 // ignore tiny selections
+  viewMin=Math.max(FMIN,fa); viewMax=Math.min(FMAX,fb);
+  buildBands(curBpo);
+  document.getElementById('zoomBtn').style.display='block';
+}
+function resetZoom(){
+  viewMin=FMIN; viewMax=FMAX; buildBands(curBpo);
+  document.getElementById('zoomBtn').style.display='none';
+}
+cv.addEventListener('pointerdown',e=>{
+  if(!running||mode!=='rta') return;
+  dragging=true; dragX0=dragX1=e.offsetX;
+  try{cv.setPointerCapture(e.pointerId);}catch(_){}
+});
+cv.addEventListener('pointermove',e=>{ cursorX=e.offsetX; if(dragging) dragX1=e.offsetX; });
+cv.addEventListener('pointerleave',()=>{ cursorX=null; });
+cv.addEventListener('pointerup',e=>{
+  if(!dragging) return; dragging=false;
+  if(Math.abs(dragX1-dragX0)>20) applyZoom(dragX0,dragX1);
+});
+cv.addEventListener('pointercancel',()=>{dragging=false;});
+cv.addEventListener('dblclick',()=>{ if(running) resetZoom(); });
+document.getElementById('zoomBtn').addEventListener('click',resetZoom);
+
+// ---- signal generator (pink / white / sine) ----
+function makeNoiseBuffer(type){
+  const len=Math.floor(audioCtx.sampleRate*2);
+  const buf=audioCtx.createBuffer(1,len,audioCtx.sampleRate);
+  const d=buf.getChannelData(0);
+  if(type==='white'){
+    for(let i=0;i<len;i++) d[i]=Math.random()*2-1;
+  } else { // pink — Paul Kellet filter
+    let b0=0,b1=0,b2=0,b3=0,b4=0,b5=0,b6=0;
+    for(let i=0;i<len;i++){
+      const w=Math.random()*2-1;
+      b0=0.99886*b0+w*0.0555179; b1=0.99332*b1+w*0.0750759;
+      b2=0.96900*b2+w*0.1538520; b3=0.86650*b3+w*0.3104856;
+      b4=0.55000*b4+w*0.5329522; b5=-0.7616*b5-w*0.0168980;
+      d[i]=(b0+b1+b2+b3+b4+b5+b6+w*0.5362)*0.11; b6=w*0.115926;
+    }
+  }
+  return buf;
+}
+function genStop(){
+  if(genGain){ try{genGain.gain.cancelScheduledValues(audioCtx.currentTime);
+    genGain.gain.setTargetAtTime(0,audioCtx.currentTime,0.05);}catch(_){} }
+  if(sweepTimer){ clearTimeout(sweepTimer); sweepTimer=null; }
+  const g=genGain, s=genSrc, o=genOsc;
+  setTimeout(()=>{
+    try{ if(s) s.stop(); }catch(_){}
+    try{ if(o) o.stop(); }catch(_){}
+    try{ if(g) g.disconnect(); }catch(_){}
+  },250);
+  genSrc=null; genOsc=null; genGain=null; genOn=false;
+  const btn=document.getElementById('genOnBtn'); btn.classList.remove('on'); btn.textContent='▶ הפעל אות';
+}
+function scheduleSweepCycle(){
+  if(!genOn || genType!=='sweep' || !genOsc) return;
+  const t=audioCtx.currentTime;
+  try{
+    genOsc.frequency.cancelScheduledValues(t);
+    genOsc.frequency.setValueAtTime(20, t);
+    genOsc.frequency.exponentialRampToValueAtTime(20000, t+genSweepDur);   // log sweep
+  }catch(_){}
+  sweepTimer=setTimeout(scheduleSweepCycle, genSweepDur*1000);
+}
+function genStart(){
+  if(!running||!audioCtx){ alert('קודם הפעל את המיקרופון (כדי שהאודיו יהיה פעיל).'); return; }
+  genStop();
+  genGain=audioCtx.createGain(); genGain.gain.value=0;
+  if(genType==='sine' || genType==='sweep'){
+    genOsc=audioCtx.createOscillator(); genOsc.type='sine';
+    genOsc.frequency.value = genType==='sine'? genHz : 20;
+    genOsc.connect(genGain); genOsc.start();
+  } else {
+    genSrc=audioCtx.createBufferSource(); genSrc.buffer=makeNoiseBuffer(genType);
+    genSrc.loop=true; genSrc.connect(genGain); genSrc.start();
+  }
+  genGain.connect(audioCtx.destination);
+  const target=Math.pow(10,genDb/20);
+  genGain.gain.setTargetAtTime(target,audioCtx.currentTime,0.15);  // gentle ramp-up
+  genOn=true;
+  if(genType==='sweep') scheduleSweepCycle();   // start the sweep only after genOn=true
+  const btn=document.getElementById('genOnBtn'); btn.classList.add('on'); btn.textContent='⏹ עצור אות';
+}
+function genApplyLevel(){
+  if(genGain){ genGain.gain.setTargetAtTime(Math.pow(10,genDb/20),audioCtx.currentTime,0.1); }
+}
+document.getElementById('genBtn').addEventListener('click',function(){
+  const p=document.getElementById('genPanel'); const open=p.classList.toggle('open');
+  this.classList.toggle('on',open);
+});
+document.querySelectorAll('#genType button').forEach(b=>b.addEventListener('click',function(){
+  document.querySelectorAll('#genType button').forEach(x=>x.classList.remove('on'));
+  this.classList.add('on'); genType=this.dataset.t;
+  document.getElementById('genFreqWrap').style.display = genType==='sine'?'flex':'none';
+  document.getElementById('genSweepWrap').style.display = genType==='sweep'?'flex':'none';
+  if(genOn) genStart();  // restart with new type
+}));
+document.getElementById('genSweep').addEventListener('input',e=>{
+  genSweepDur=parseFloat(e.target.value);
+  document.getElementById('genSweepVal').textContent=genSweepDur.toFixed(1)+'ש\'';
+});
+document.getElementById('genLvl').addEventListener('input',e=>{
+  genDb=parseFloat(e.target.value);
+  const el=document.getElementById('genLvlVal'); el.textContent=genDb+'dB';
+  el.style.color = genDb>=-16 ? '#ff3b6b' : (genDb>=-24?'#ffd166':'var(--accent)');
+  genApplyLevel();
+});
+document.getElementById('genFreq').addEventListener('input',e=>{
+  genHz=parseFloat(e.target.value);
+  document.getElementById('genFreqVal').textContent=(genHz>=1000?(genHz/1000).toFixed(1)+'k':genHz)+'Hz';
+  if(genOsc) genOsc.frequency.setTargetAtTime(genHz,audioCtx.currentTime,0.02);
+});
+document.getElementById('genOnBtn').addEventListener('click',()=>{ genOn?genStop():genStart(); });
+
+// ---- target curve ----
+document.getElementById('tgtBtn').addEventListener('click',function(){
+  targetMode = targetMode==='off'?'flat':targetMode==='flat'?'house':'off';
+  this.textContent = targetMode==='off'?'יעד':targetMode==='flat'?'יעד: שטוח':'יעד: House';
+  this.classList.toggle('on', targetMode!=='off');
+});
+
+// ---- footer tabs ----
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',function(){
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+  this.classList.add('on');
+  const p=this.dataset.p;
+  document.querySelectorAll('.tabpage').forEach(pg=>pg.classList.toggle('active', pg.dataset.page===p));
+}));
+
+// ---- pink-compensated response ----
+document.getElementById('compBtn').addEventListener('click',function(){
+  pinkComp=!pinkComp; this.classList.toggle('on',pinkComp);
+});
+
+// ---- auto-EQ: measure → average positions → suggest ----
+const eqPanel=document.getElementById('eqPanel');
+document.getElementById('eqClose').addEventListener('click',closeModals);
+document.getElementById('eqBtn').addEventListener('click',()=>{ showModal(eqPanel); updateEqUI(); });
+document.getElementById('eqMeasBtn').addEventListener('click',measurePosition);
+document.getElementById('eqResetBtn').addEventListener('click',()=>{ eqPositions=[]; eqMarks=null; document.getElementById('eqList').innerHTML=''; updateEqUI(); });
+
+function updateEqUI(){
+  const meas = measState==='measuring';
+  document.getElementById('eqSub').textContent = meas ? 'מודד… החזק את המיק\' יציב' : ('מיקומים שנמדדו: '+eqPositions.length);
+  document.getElementById('eqMeasBtn').textContent = meas ? 'מודד…' : (eqPositions.length?'מדוד מיקום נוסף':'מדוד מיקום (5ש\')');
+  document.getElementById('eqMeasBtn').style.opacity = meas?0.5:1;
+}
+
+function targetDb(f){
+  if(targetMode==='house') return Math.max(-5,Math.min(6, -1.0*Math.log2(f/250)));
+  return 0;
+}
+function micCalAt(f){
+  if(!micCal||!micCal.f.length) return 0;
+  const F=micCal.f, G=micCal.g;
+  if(f<=F[0]) return G[0]; if(f>=F[F.length-1]) return G[G.length-1];
+  let i=1; while(i<F.length && F[i]<f) i++;
+  const t=(Math.log(f)-Math.log(F[i-1]))/(Math.log(F[i])-Math.log(F[i-1]));
+  return G[i-1]+(G[i]-G[i-1])*t;
+}
+function loadCalStore(){
+  try{
+    const raw=localStorage.getItem(CAL_KEY);
+    if(raw){ const o=JSON.parse(raw); micCalList=o.list||[]; activeCalId=o.active||null; }
+  }catch(_){ micCalList=[]; activeCalId=null; }
+  deriveActiveCal();
+}
+function saveCalStore(){
+  try{ localStorage.setItem(CAL_KEY, JSON.stringify({list:micCalList, active:activeCalId})); }catch(_){}
+}
+function deriveActiveCal(){
+  const c=micCalList.find(x=>x.id===activeCalId);
+  micCal = c ? {f:c.f, g:c.g} : null;
+  const nm = c ? ('כיול פעיל: '+c.name) : 'כיול פעיל: ללא';
+  const el=document.getElementById('eqCalName'); if(el) el.textContent=nm;
+}
+function renderCalList(){
+  const box=document.getElementById('calList');
+  let html='<div class="calRow'+(activeCalId===null?' on':'')+'" data-id=""><span class="nm">ללא כיול</span></div>';
+  html+=micCalList.map(c=>'<div class="calRow'+(c.id===activeCalId?' on':'')+'" data-id="'+c.id+'">'+
+    '<span class="nm">'+c.name+'</span><span class="sub">'+c.f.length+' נק\'</span><span class="del" data-del="'+c.id+'">🗑</span></div>').join('');
+  box.innerHTML=html;
+  box.querySelectorAll('.calRow').forEach(row=>row.addEventListener('click',e=>{
+    if(e.target.dataset.del!==undefined) return;   // handled below
+    activeCalId = row.dataset.id || null;
+    deriveActiveCal(); saveCalStore(); renderCalList();
+    if(eqPositions.length) computeAndShow();
+  }));
+  box.querySelectorAll('.del').forEach(d=>d.addEventListener('click',e=>{
+    e.stopPropagation();
+    const id=d.dataset.del;
+    micCalList=micCalList.filter(c=>c.id!==id);
+    if(activeCalId===id) activeCalId=null;
+    deriveActiveCal(); saveCalStore(); renderCalList();
+  }));
+}
+function addCalFromFile(file){
+  const r=new FileReader();
+  r.onload=()=>{
+    const F=[],G=[];
+    r.result.split(/\r?\n/).forEach(line=>{
+      const m=line.trim().match(/^([\d.]+)[\s,]+(-?[\d.]+)/);
+      if(m){ F.push(parseFloat(m[1])); G.push(parseFloat(m[2])); }
+    });
+    if(F.length>1){
+      const id='c'+Date.now();
+      micCalList.push({id, name:file.name.replace(/\.[^.]+$/,''), f:F, g:G});
+      activeCalId=id; deriveActiveCal(); saveCalStore(); renderCalList();
+      if(eqPositions.length) computeAndShow();
+    } else alert('קובץ כיול לא תקין — צריך שורות של תדר ואז dB.');
+  };
+  r.readAsText(file);
+}
+const calPanel=document.getElementById('calPanel');
+document.getElementById('calBtn').addEventListener('click',()=>{ renderCalList(); showModal(calPanel); });
+document.getElementById('calClose').addEventListener('click',closeModals);
+document.getElementById('calAdd').addEventListener('change',e=>{ if(e.target.files[0]) addCalFromFile(e.target.files[0]); e.target.value=''; });
+
+// ---- modal backdrop: dim + click-outside to close, for all popups ----
+const modalBg=document.getElementById('modalBg');
+function showModal(p){ closeModals(); p.classList.add('open'); modalBg.classList.add('show'); }
+function closeModals(){
+  ['rtPanel','eqPanel','calPanel','tfPanel','areaPanel'].forEach(id=>document.getElementById(id).classList.remove('open'));
+  modalBg.classList.remove('show'); eqMarks=null;
+}
+modalBg.addEventListener('click',closeModals);
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModals(); });
+
+// ---- 360° area comparison ----
+const areaPanel=document.getElementById('areaPanel');
+document.getElementById('areaBtn').addEventListener('click',()=>{ renderAreaList(); showModal(areaPanel); });
+document.getElementById('areaClose').addEventListener('click',closeModals);
+document.getElementById('areaMeasBtn').addEventListener('click',measureArea);
+function updateAreaMeasBtn(){
+  const b=document.getElementById('areaMeasBtn'), meas=areaState==='measuring';
+  b.textContent = meas?'מודד… החזק יציב':'מדוד אזור חדש (5ש\')'; b.style.opacity=meas?.5:1;
+}
+function measureArea(){
+  if(!running){ alert('קודם הפעל את המיקרופון.'); return; }
+  if(areas.length>=4){ alert('הגעת ל־4 אזורים — מחק אחד כדי להוסיף.'); return; }
+  if(areaState==='measuring') return;
+  areaAccum=new Float64Array(floatData.length); areaFrames=0; areaState='measuring';
+  updateAreaMeasBtn();
+  setTimeout(()=>{
+    const bins=areaAccum.length, nyq=audioCtx.sampleRate/2, R6=Math.pow(2,1/6);
+    const db=GEQ.map(fc=>{
+      let lo=Math.floor((fc/R6)/nyq*bins), hi=Math.ceil((fc*R6)/nyq*bins);
+      lo=Math.max(0,lo);hi=Math.min(bins-1,hi);if(hi<lo)hi=lo;
+      let p=0; for(let i=lo;i<=hi;i++) p+=areaAccum[i]/Math.max(1,areaFrames);
+      return 10*Math.log10(p+1e-12);
+    });
+    const idx=areas.length;
+    areas.push({name:AREA_NAMES[idx], color:AREA_COLORS[idx], db, show:true});
+    areaState='idle'; updateAreaMeasBtn(); renderAreaList();
+  },5000);
+}
+function renderAreaList(){
+  const box=document.getElementById('areaList');
+  if(!areas.length){ box.innerHTML='<div class="sub">אין אזורים עדיין — מדוד את הראשון.</div>'; return; }
+  box.innerHTML=areas.map((a,i)=>
+    '<div class="areaRow"><span class="dot" style="background:'+a.color+'"></span>'+
+    '<span class="nm">'+a.name+'</span>'+
+    '<button data-show="'+i+'" class="'+(a.show?'on':'')+'">'+(a.show?'מוצג':'מוסתר')+'</button>'+
+    '<button data-del="'+i+'">מחק</button></div>').join('');
+  box.querySelectorAll('[data-show]').forEach(b=>b.addEventListener('click',()=>{
+    const i=+b.dataset.show; areas[i].show=!areas[i].show; renderAreaList();
+  }));
+  box.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',()=>{
+    areas.splice(+b.dataset.del,1);
+    // reassign default colors/names by order
+    areas.forEach((a,i)=>{ a.color=AREA_COLORS[i]; if(AREA_NAMES.includes(a.name)) a.name=AREA_NAMES[i]; });
+    renderAreaList();
+  }));
+}
+
+// ---- dual-channel Transfer Function → graphic-EQ correction ----
+const tfPanel=document.getElementById('tfPanel');
+document.getElementById('tfBtn').addEventListener('click',()=>{ showModal(tfPanel); });
+document.getElementById('tfClose').addEventListener('click',closeModals);
+document.getElementById('tfSwapBtn').addEventListener('click',function(){ tfSwap=!tfSwap; this.classList.toggle('on',tfSwap); });
+document.getElementById('tfMeasBtn').addEventListener('click',tfMeasure);
+document.getElementById('tfCsvBtn').addEventListener('click',tfExportCsv);
+
+function chLevel(arr){ let p=0; for(let i=1;i<arr.length;i++) p+=Math.pow(10,arr[i]/10); return 10*Math.log10(p+1e-12); }
+function updateTfLevels(){
+  if(!floatDataRef) return;
+  const l1=chLevel(floatData), l2=chLevel(floatDataRef), pct=d=>Math.max(0,Math.min(100,(d+80)/70*100));
+  document.getElementById('tfMicFill').style.width=pct(l1)+'%';   // bar 1 = physical channel 1
+  document.getElementById('tfRefFill').style.width=pct(l2)+'%';   // bar 2 = physical channel 2
+  document.getElementById('tfMicDb').textContent=isFinite(l1)?l1.toFixed(0):'—';
+  document.getElementById('tfRefDb').textContent=isFinite(l2)?l2.toFixed(0):'—';
+  document.getElementById('tfL1').textContent = tfSwap?"כניסה 1 → רפרנס":"כניסה 1 → מיק'";
+  document.getElementById('tfL2').textContent = tfSwap?"כניסה 2 → מיק'":"כניסה 2 → רפרנס";
+}
+function tfMeasure(){
+  if(!running||!analyserRef){ alert('הפעל מיקרופון עם כרטיס קול (input סטריאו).'); return; }
+  if(tfState==='measuring') return;
+  const bins=floatData.length;
+  tfMic=new Float64Array(bins); tfRef=new Float64Array(bins); tfFrames=0; tfState='measuring';
+  const btn=document.getElementById('tfMeasBtn'); btn.textContent='מודד…'; btn.style.opacity=.5;
+  setTimeout(()=>{
+    tfState='idle'; btn.textContent='מדוד שוב (6ש\')'; btn.style.opacity=1;
+    tfCompute();
+  },6000);
+}
+function tfCompute(){
+  if(!tfFrames){ return; }
+  const bins=tfMic.length, nyq=audioCtx.sampleRate/2, R6=Math.pow(2,1/6);
+  const H=[], refB=[]; let refMax=-999;
+  for(let k=0;k<GEQ.length;k++){
+    const fc=GEQ[k]; let lo=Math.floor((fc/R6)/nyq*bins), hi=Math.ceil((fc*R6)/nyq*bins);
+    lo=Math.max(0,lo);hi=Math.min(bins-1,hi);if(hi<lo)hi=lo;
+    let pm=0,pr=0; for(let i=lo;i<=hi;i++){ pm+=tfMic[i]; pr+=tfRef[i]; }
+    const micDb=10*Math.log10(pm/tfFrames+1e-12);
+    refB[k]=10*Math.log10(pr/tfFrames+1e-12);
+    H[k]=micDb-refB[k];                         // |H| per band (dB), delay-independent
+    refMax=Math.max(refMax,refB[k]);
+  }
+  if(micCal){ for(let k=0;k<GEQ.length;k++) H[k]-=micCalAt(GEQ[k]); }
+  const rel=GEQ.map((f,k)=> refB[k]>refMax-25 && f>=40 && f<=16000);
+  let os=0,on=0;
+  for(let k=0;k<GEQ.length;k++){ if(rel[k]&&GEQ[k]>=200&&GEQ[k]<=4000){ os+=H[k]-targetDb(GEQ[k]); on++; } }
+  const offset=on?os/on:0;
+  const corr=GEQ.map((f,k)=> rel[k]? Math.max(-6,Math.min(6, -(H[k]-targetDb(f)-offset))) : null);
+  tfResult={corr,H,rel};
+  document.getElementById('tfInfo').textContent = on? 'הזז בגרפיק־EQ לפי הערכים (±6dB מקס). מוצגים רק פסים אמינים עם תיקון משמעותי.' :
+    'רפרנס חלש/חסר — ודא שערוץ 2 מקבל אות מהמיקסר, או לחץ "החלף ערוצים".';
+  renderTFList();
+}
+function renderTFList(){
+  const box=document.getElementById('tfGeqList');
+  if(!tfResult){ box.innerHTML=''; return; }
+  const rows=[];
+  for(let k=0;k<GEQ.length;k++){
+    const v=tfResult.corr[k];
+    if(v==null || Math.abs(v)<0.5) continue;
+    const f=GEQ[k]>=1000?(GEQ[k]/1000)+'k':GEQ[k];
+    rows.push('<div class="eqRow '+(v<0?'cut':'boost')+'"><span class="f">'+f+'Hz</span>'+
+              '<span class="g">'+(v>0?'+':'')+v.toFixed(1)+'dB</span></div>');
+  }
+  box.innerHTML = rows.length? rows.join('') : '<div class="sub">אין תיקונים משמעותיים, או שהמדידה לא תקינה.</div>';
+}
+function drawTF(){
+  const c=document.getElementById('tfCanvas'), x=c.getContext('2d');
+  const W=c.width=c.clientWidth||400, H=150; c.height=H;
+  x.clearRect(0,0,W,H);
+  const mid=H/2, scale=(H/2-16)/6;
+  x.font='9px monospace'; x.textAlign='left';
+  [-6,-3,0,3,6].forEach(d=>{ const yy=mid-d*scale; x.strokeStyle='#2b3646'; x.globalAlpha=d===0?.9:.4;
+    x.beginPath();x.moveTo(0,yy);x.lineTo(W,yy);x.stroke(); x.globalAlpha=1; x.fillStyle='#8b97a5'; x.fillText((d>0?'+':'')+d+'dB',2,yy-2); });
+  if(!tfResult){ return; }
+  const n=GEQ.length, bw=W/n;
+  for(let k=0;k<n;k++){
+    const cx=k*bw+bw*0.5, v=tfResult.corr[k];
+    if(v==null){ x.fillStyle='#39424f'; x.fillRect(cx-1,mid-1,2,2); continue; }
+    const y=mid - v*scale;
+    x.fillStyle = v>=0 ? '#50e68c' : '#ff6b8b';
+    x.fillRect(cx-bw*0.35, Math.min(mid,y), bw*0.7, Math.abs(mid-y));
+    if(Math.abs(v)>=1.5){ x.fillStyle='#e6ecf3'; x.textAlign='center'; x.fillText(v.toFixed(0), cx, v>=0? y-3 : y+9); }
+  }
+  // freq labels
+  x.fillStyle='#8b97a5'; x.textAlign='center';
+  [100,1000,10000].forEach(f=>{ const k=GEQ.indexOf(f); if(k>=0) x.fillText(f>=1000?(f/1000)+'k':f, k*bw+bw*0.5, H-3); });
+}
+function tfExportCsv(){
+  if(!tfResult){ alert('קודם מדוד.'); return; }
+  let rows='freq_hz,geq_correction_db,measured_db\n';
+  GEQ.forEach((f,k)=> rows+=f+','+(tfResult.corr[k]==null?'':tfResult.corr[k].toFixed(1))+','+tfResult.H[k].toFixed(1)+'\n');
+  download('tf_geq_'+stamp()+'.csv', URL.createObjectURL(new Blob([rows],{type:'text/csv'})));
+}
+function measurePosition(){
+  if(!running){ alert('קודם הפעל את המיקרופון.'); return; }
+  if(measState==='measuring') return;
+  measAccum=new Float64Array(floatData.length); measFrames=0; measState='measuring';
+  updateEqUI();
+  setTimeout(()=>{
+    const bins=measAccum.length, bd=new Float32Array(bins);
+    for(let i=0;i<bins;i++) bd[i]=10*Math.log10(measAccum[i]/Math.max(1,measFrames)+1e-12);
+    eqPositions.push(bd); measState='idle';
+    computeAndShow(); updateEqUI();
+  },5000);
+}
+function avgPositions(){
+  const bins=eqPositions[0].length, out=new Float32Array(bins);
+  for(let i=0;i<bins;i++){ let p=0; for(const pos of eqPositions) p+=Math.pow(10,pos[i]/10); out[i]=10*Math.log10(p/eqPositions.length+1e-12); }
+  return out;
+}
+function bandDbFromBins(bd,fLo,fHi,nyq,bins){
+  let lo=Math.floor(fLo/nyq*bins), hi=Math.ceil(fHi/nyq*bins);
+  lo=Math.max(0,lo);hi=Math.min(bins-1,hi);if(hi<lo)hi=lo;
+  let p=0; for(let i=lo;i<=hi;i++) p+=Math.pow(10,bd[i]/10);
+  return 10*Math.log10(p+1e-12);
+}
+function computeAndShow(){
+  if(!eqPositions.length){ alert('מדוד לפחות מיקום אחד.'); return; }
+  const binDb=avgPositions();
+  const nyq=audioCtx.sampleRate/2, bins=binDb.length;
+  if(micCal){ for(let i=0;i<bins;i++) binDb[i]-=micCalAt(i*nyq/bins); }  // remove mic coloration
+  // per-band response, pink-compensated
+  const resp=new Array(BANDS);
+  for(let b=0;b<BANDS;b++){ const fc=ISO[b]; resp[b]=bandDbFromBins(binDb,fc/R,fc*R,nyq,bins)+3*Math.log2(fc/1000); }
+  // smooth ~1/3 octave
+  const win=Math.max(1,Math.round(curBpo/3)); const sm=new Array(BANDS);
+  for(let b=0;b<BANDS;b++){ let s=0,n=0; for(let j=b-win;j<=b+win;j++){ if(j>=0&&j<BANDS){s+=resp[j];n++;} } sm[b]=s/n; }
+  // deviation from target, offset-aligned over 200Hz–4kHz
+  const dev=new Array(BANDS); let os=0,on=0;
+  for(let b=0;b<BANDS;b++){ dev[b]=sm[b]-targetDb(ISO[b]); if(ISO[b]>=200&&ISO[b]<=4000){os+=dev[b];on++;} }
+  const offset=on?os/on:0; for(let b=0;b<BANDS;b++) dev[b]-=offset;
+
+  const inRange=b=>ISO[b]>=40&&ISO[b]<=16000;
+  const PEAK=2.5, DIP=3.0, cand=[];
+  for(let b=1;b<BANDS-1;b++){
+    if(!inRange(b)) continue;
+    const isMax=dev[b]>dev[b-1]&&dev[b]>=dev[b+1]&&dev[b]>PEAK;
+    const isMin=dev[b]<dev[b-1]&&dev[b]<=dev[b+1]&&dev[b]<-DIP;
+    if(!isMax&&!isMin) continue;
+    const prom=Math.abs(dev[b]); let li=b, ri=b; const half=dev[b]/2;
+    if(isMax){ while(li>0&&dev[li]>half)li--; while(ri<BANDS-1&&dev[ri]>half)ri++; }
+    else     { while(li>0&&dev[li]<half)li--; while(ri<BANDS-1&&dev[ri]<half)ri++; }
+    const fl=ISO[Math.max(0,li)], fr=ISO[Math.min(BANDS-1,ri)];
+    const q=Math.max(0.7,Math.min(8, ISO[b]/Math.max(1,(fr-fl))));
+    const gain=isMax?-Math.min(9,prom):Math.min(4,prom);
+    cand.push({f:ISO[b],gain,q,type:isMax?'cut':'boost',prom});
+  }
+  cand.sort((a,b)=>b.prom-a.prom);
+  const picked=[]; cand.forEach(c=>{ if(!picked.some(p=>Math.abs(Math.log2(p.f/c.f))<0.66)) picked.push(c); });
+  const list=picked.slice(0,6).sort((a,b)=>a.f-b.f);
+  eqMarks=list;
+
+  const eqList=document.getElementById('eqList');
+  if(!list.length){ eqList.innerHTML='<div class="sub">המערכת מאוזנת מול היעד — אין תיקונים משמעותיים 👌</div>'; }
+  else eqList.innerHTML='<div class="sub">יעד '+(targetMode==='house'?'House':'שטוח')+
+    (micCal?' · כיול פעיל':'')+' · '+eqPositions.length+' מיקומים · אדום=חתוך, כחול=הגבר</div>'+
+    list.map(s=>{ const f=s.f>=1000?(s.f/1000).toFixed(2)+'kHz':Math.round(s.f)+'Hz';
+      const g=(s.gain>0?'+':'')+s.gain.toFixed(1)+'dB';
+      return '<div class="eqRow '+s.type+'"><span class="f">'+f+'</span><span class="g">'+g+'</span><span class="q">Q '+s.q.toFixed(1)+'</span></div>';
+    }).join('');
+  showModal(eqPanel);
+}
+
+// ---- RT60 (interrupted-noise method) ----
+const rtPanel=document.getElementById('rtPanel'), rtStatus=document.getElementById('rtStatus');
+document.getElementById('rtClose').addEventListener('click',closeModals);
+document.getElementById('rtBtn').addEventListener('click',startRT60);
+
+function startRT60(){
+  if(!running||!audioCtx){ alert('קודם הפעל את המיקרופון.'); return; }
+  showModal(rtPanel);
+  rtStatus.innerHTML='מכין… משמיע רעש ורוד';
+  // ensure pink noise is playing at a usable level for good SNR
+  const restoreType=genType; genType='pink';
+  if(!genOn){ genStart(); }
+  const boost=Math.max(genDb,-20);
+  if(genGain) genGain.gain.setTargetAtTime(Math.pow(10,boost/20),audioCtx.currentTime,0.1);
+
+  setTimeout(()=>{                    // let the room energize
+    rtStatus.innerHTML='מודד דעיכה…';
+    rt60Samples=[]; rt60State='capture';
+    setTimeout(()=>{                  // abrupt cut
+      const t=audioCtx.currentTime;
+      if(genGain){ try{ genGain.gain.cancelScheduledValues(t);
+        genGain.gain.setValueAtTime(genGain.gain.value,t);
+        genGain.gain.linearRampToValueAtTime(0,t+0.005);}catch(_){} }
+      rt60CutT=performance.now();
+      setTimeout(()=>{                // finish capture
+        rt60State='idle'; genStop(); genType=restoreType;
+        analyzeRT60();
+      },2500);
+    },400);                          // 400ms of steady level recorded before the cut
+  },1200);
+}
+
+function analyzeRT60(){
+  const s=rt60Samples;
+  if(s.length<20){ rtStatus.textContent='מדידה נכשלה — נסה שוב'; return; }
+  const pre=s.filter(x=>x.t<rt60CutT);
+  const steady = pre.length? pre.reduce((a,x)=>a+x.db,0)/pre.length : Math.max(...s.map(x=>x.db));
+  const post=s.filter(x=>x.t>=rt60CutT).map(x=>({t:(x.t-rt60CutT)/1000, db:x.db}));
+  if(post.length<10){ rtStatus.textContent='מדידה נכשלה — נסה שוב'; return; }
+  // noise floor from the tail
+  const tail=post.slice(-Math.max(5,Math.floor(post.length*0.25)));
+  const noise=tail.reduce((a,x)=>a+x.db,0)/tail.length;
+  // clean decay region: from 5dB below steady down to 5dB above the noise floor
+  const hi=steady-5, lo=noise+5;
+  const reg=post.filter(x=>x.db<=hi && x.db>=lo);
+  if(reg.length<5 || (hi-lo)<10){
+    rtStatus.innerHTML='לא הצלחתי למדוד — טווח דעיכה קטן מדי.<br><span style="font-size:11px;color:var(--dim)">נסה עוצמה גבוהה יותר או חדר שקט יותר.</span>';
+    drawRTPlot(post, steady, null, 0); return;
+  }
+  // least-squares slope of dB vs time
+  let n=reg.length, st=0,sd=0,std=0,stt=0;
+  reg.forEach(p=>{ st+=p.t; sd+=p.db; std+=p.t*p.db; stt+=p.t*p.t; });
+  const slope=(n*std - st*sd)/(n*stt - st*st);   // dB/s (negative)
+  const intercept=(sd - slope*st)/n;
+  const rt60 = -60/slope;
+  drawRTPlot(post, steady, slope, intercept);
+  if(slope<0 && rt60>0.05 && rt60<10)
+    rtStatus.innerHTML='RT60 ≈ <b>'+rt60.toFixed(2)+' ש\'</b>';
+  else
+    rtStatus.innerHTML='לא הצלחתי למדוד — נסה עוצמה גבוהה יותר או חדר שקט יותר';
+}
+function drawRTPlot(post, steady, slope, intercept){
+  const c=document.getElementById('rtCanvas'), x=c.getContext('2d');
+  const W=c.width, H=c.height; x.clearRect(0,0,W,H);
+  const tMax=Math.max(0.5, post.length?post[post.length-1].t:1);
+  const dbMin=steady-65, dbMax=steady+3;
+  const X=t=>t/tMax*W, Y=db=>H-(db-dbMin)/(dbMax-dbMin)*H;
+  x.strokeStyle='#2b3646'; x.fillStyle='#8b97a5'; x.font='9px monospace';
+  for(let d=0;d>=-60;d-=10){ const yy=Y(steady+d); x.globalAlpha=.5;
+    x.beginPath();x.moveTo(0,yy);x.lineTo(W,yy);x.stroke(); x.globalAlpha=1; x.fillText(d+'dB',2,yy-2); }
+  x.strokeStyle='#2f9bff'; x.lineWidth=1.5; x.beginPath();
+  post.forEach((p,i)=>{ i?x.lineTo(X(p.t),Y(p.db)):x.moveTo(X(p.t),Y(p.db)); }); x.stroke();
+  if(slope!=null){   // regression / fit line
+    x.strokeStyle='#50e68c'; x.lineWidth=2; x.setLineDash([5,3]); x.beginPath();
+    x.moveTo(X(0),Y(intercept)); x.lineTo(X(tMax),Y(intercept+slope*tMax)); x.stroke(); x.setLineDash([]);
+  }
+}
+document.getElementById('res').addEventListener('input',e=>{
+  const bpo=parseInt(e.target.value,10);
+  document.getElementById('resVal').textContent='1/'+bpo+' אוקטבה';
+  buildBands(bpo);
+});
+document.getElementById('mRta').addEventListener('click',()=>setMode('rta'));
+document.getElementById('mSpec').addEventListener('click',()=>setMode('spec'));
+document.getElementById('startBtn').addEventListener('click',()=>start());
+document.getElementById('stopBtn').addEventListener('click',stop);
+
+function setMode(m){
+  mode=m;
+  document.getElementById('mRta').classList.toggle('on',m==='rta');
+  document.getElementById('mSpec').classList.toggle('on',m==='spec');
+  if(specCtx){specCtx.fillStyle='#0d1117';specCtx.fillRect(0,0,specCanvas.width,specCanvas.height);}
+}
+
+function buildWeighting(nyquist,bins){
+  weightA=new Float32Array(bins); weightC=new Float32Array(bins);
+  for(let i=0;i<bins;i++){
+    const f=i*nyquist/bins, f2=f*f;
+    // A-weighting (IEC 61672)
+    const ra=(12194**2*f2*f2)/((f2+20.6**2)*Math.sqrt((f2+107.7**2)*(f2+737.9**2))*(f2+12194**2));
+    weightA[i]= f>0 ? 20*Math.log10(ra)+2.00 : -120;
+    // C-weighting
+    const rc=(12194**2*f2)/((f2+20.6**2)*(f2+12194**2));
+    weightC[i]= f>0 ? 20*Math.log10(rc)+0.06 : -120;
+  }
+}
+
+async function start(deviceId){
+  try{
+    const audio={echoCancellation:false,noiseSuppression:false,autoGainControl:false,channelCount:2};
+    if(deviceId && typeof deviceId==='string') audio.deviceId={exact:deviceId};
+    stream=await navigator.mediaDevices.getUserMedia({audio});
+    audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    if(audioCtx.state==='suspended') await audioCtx.resume();
+    analyser=audioCtx.createAnalyser();
+    analyser.fftSize=32768;                 // ~1.5Hz bins @48k — supports 1/24-octave detail
+    analyser.smoothingTimeConstant=parseFloat(document.getElementById('smooth').value);
+    analyser.minDecibels=-100; analyser.maxDecibels=-10;
+    source=audioCtx.createMediaStreamSource(stream);
+    // stereo split: ch0 → main (mic), ch1 → reference analyser (for 2-channel TF)
+    const splitter=audioCtx.createChannelSplitter(2);
+    source.connect(splitter);
+    analyserRef=audioCtx.createAnalyser();
+    analyserRef.fftSize=32768; analyserRef.smoothingTimeConstant=0.3;
+    analyserRef.minDecibels=-100; analyserRef.maxDecibels=-10;
+    try{ splitter.connect(analyser,0); splitter.connect(analyserRef,1); }
+    catch(_){ source.connect(analyser); }   // fallback: mono
+    floatData=new Float32Array(analyser.frequencyBinCount);
+    floatDataRef=new Float32Array(analyserRef.frequencyBinCount);
+    timeData=new Float32Array(analyser.fftSize);
+    buildWeighting(audioCtx.sampleRate/2, analyser.frequencyBinCount);
+    resize();
+    peaks.fill(0); fbTrack.clear(); fbPanel.innerHTML=''; lvlPeak=-120;
+    leqSumP=0; leqN=0; splMax=-120;
+    running=true; idle.style.display='none'; dot.classList.add('live');
+    meterEl.style.display='flex'; document.getElementById('stats').style.display='flex';
+    document.getElementById('stopBtn').style.display='';
+    populateInputs();
+    draw();
+  }catch(e){
+    errBox.style.display='block';
+    errBox.textContent='לא ניתן לגשת למיקרופון: '+(e.message||e.name)+'. יש לאשר הרשאה ולהריץ מעל HTTPS.';
+  }
+}
+
+async function populateInputs(){
+  try{
+    const devs=await navigator.mediaDevices.enumerateDevices();
+    const ins=devs.filter(d=>d.kind==='audioinput');
+    const sel=document.getElementById('inSel');
+    const cur=sel.value;
+    sel.innerHTML='';
+    ins.forEach((d,i)=>{
+      const o=document.createElement('option');
+      o.value=d.deviceId; o.textContent=d.label||('מיקרופון '+(i+1));
+      sel.appendChild(o);
+    });
+    if(cur) sel.value=cur;
+  }catch(e){}
+}
+
+async function switchInput(deviceId){
+  if(!running) return;
+  if(raf) cancelAnimationFrame(raf);
+  if(stream) stream.getTracks().forEach(t=>t.stop());
+  if(audioCtx) await audioCtx.close();
+  await start(deviceId);
+}
+
+function stop(){
+  running=false; if(raf) cancelAnimationFrame(raf);
+  analyserRef=null; floatDataRef=null; tfState='idle';
+  genSrc=null; genOsc=null; genGain=null; genOn=false;
+  const gb=document.getElementById('genOnBtn'); if(gb){gb.classList.remove('on');gb.textContent='▶ הפעל אות';}
+  if(stream) stream.getTracks().forEach(t=>t.stop());
+  if(audioCtx) audioCtx.close();
+  dot.classList.remove('live'); idle.style.display='flex';
+  document.getElementById('stopBtn').style.display='none';
+  meterEl.style.display='none'; document.getElementById('stats').style.display='none';
+  peakHzEl.textContent='—'; fbPanel.innerHTML='';
+  ctx.clearRect(0,0,cv.clientWidth,cv.clientHeight);
+}
+
+// map a dB value to 0..1 using floor..ceil
+function norm(db){ return Math.max(0,Math.min(1,(db-floorDb)/(ceilDb-floorDb))); }
+// blue -> white intensity ramp 0..1
+function heat(t){
+  t=Math.max(0,Math.min(1,t));
+  const r=Math.round(255*Math.max(0,Math.min(1,1.3*t-0.35)));
+  const g=Math.round(255*Math.max(0,Math.min(1,1.1*t-0.05)));
+  const b=Math.round(255*Math.max(0,Math.min(1,0.30+0.70*t)));
+  return 'rgb('+r+','+g+','+b+')';
+}
+function fLabel(f){return f>=1000?(f%1000?(f/1000).toFixed(1):f/1000)+'k':''+f;}
+
+// integrate power across an ISO band -> dB
+function bandDb(fLo,fHi,nyquist,bins){
+  let lo=Math.floor(fLo/nyquist*bins), hi=Math.ceil(fHi/nyquist*bins);
+  lo=Math.max(0,lo); hi=Math.min(bins-1,hi); if(hi<lo) hi=lo;
+  let p=0;
+  for(let i=lo;i<=hi;i++){ p+=Math.pow(10,floatData[i]/10); }
+  return 10*Math.log10(p+1e-12);
+}
+
+function updateLevel(){
+  analyser.getFloatTimeDomainData(timeData);
+  let sum=0;
+  for(let i=0;i<timeData.length;i++){ const s=timeData[i]; sum+=s*s; }
+  const rms=Math.sqrt(sum/timeData.length);
+  const dbfs=20*Math.log10(rms+1e-9);          // broadband full-scale, fast meter
+  if(rt60State==='capture'){
+    // fast RMS over ~last 2048 samples (~43ms) so the decay isn't smeared
+    let s2=0, N=Math.min(2048,timeData.length);
+    for(let i=timeData.length-N;i<timeData.length;i++){ const v=timeData[i]; s2+=v*v; }
+    rt60Samples.push({t:performance.now(), db:20*Math.log10(Math.sqrt(s2/N)+1e-9)});
+  }
+  const now=performance.now();
+  if(dbfs>lvlPeak || now-lvlPeakT>1500){ lvlPeak=dbfs; lvlPeakT=now; }
+  const pct=v=>Math.max(0,Math.min(100,(v+60)/60*100));
+  meterFill.style.width=pct(dbfs)+'%';
+  meterPeak.style.insetInlineStart=pct(lvlPeak)+'%';
+  if(meterUnit==='SPL') meterVal.textContent=(dbfs+calib).toFixed(0)+' dB SPL≈';
+  else meterVal.textContent=dbfs.toFixed(1)+' dBFS';
+
+  // ---- weighted SPL from spectrum (Z/A/C) + Leq + Max ----
+  const w = weightMode==='A'?weightA : weightMode==='C'?weightC : null;
+  let p=0;
+  for(let i=1;i<floatData.length;i++){
+    const wdb = w ? w[i] : 0;
+    if(wdb<-100) continue;
+    p += Math.pow(10,(floatData[i]+wdb)/10);
+  }
+  const lvl = 10*Math.log10(p+1e-12) + calib;   // weighted level (+calibration)
+  leqSumP += p; leqN++;
+  const leq = 10*Math.log10(leqSumP/Math.max(1,leqN)+1e-12) + calib;
+  if(lvl>splMax) splMax=lvl;
+  const unit = calib>0 ? ' dB'+weightMode : '';
+  const fmt=x=>x.toFixed(1)+unit;
+  document.getElementById('splNow').textContent=fmt(lvl);
+  document.getElementById('splLeq').textContent=fmt(leq);
+  document.getElementById('splMax').textContent=fmt(splMax);
+}
+
+function draw(){
+  raf=requestAnimationFrame(draw);
+  analyser.getFloatFrequencyData(floatData);
+  if(measState==='measuring' && measAccum){
+    for(let i=0;i<floatData.length;i++) measAccum[i]+=Math.pow(10,floatData[i]/10);
+    measFrames++;
+  }
+  if(areaState==='measuring' && areaAccum){
+    for(let i=0;i<floatData.length;i++) areaAccum[i]+=Math.pow(10,floatData[i]/10);
+    areaFrames++;
+  }
+  // dual-channel reference read + TF accumulation
+  if(analyserRef && floatDataRef && (tfState==='measuring' || tfPanel.classList.contains('open'))){
+    analyserRef.getFloatFrequencyData(floatDataRef);
+    if(tfState==='measuring' && tfMic){
+      const mic = tfSwap? floatDataRef : floatData;
+      const ref = tfSwap? floatData : floatDataRef;
+      for(let i=0;i<tfMic.length;i++){ tfMic[i]+=Math.pow(10,mic[i]/10); tfRef[i]+=Math.pow(10,ref[i]/10); }
+      tfFrames++;
+    }
+    if(tfPanel.classList.contains('open')) updateTfLevels();
+  }
+  updateLevel();
+  const W=cv.clientWidth,H=cv.clientHeight;
+  const nyquist=audioCtx.sampleRate/2, bins=floatData.length;
+  const logMin=Math.log(ISO[0]), logMax=Math.log(ISO[BANDS-1]);
+  const xForFreq=f=>((Math.log(f)-logMin)/(logMax-logMin))*W; // low freq LEFT (audio standard)
+
+  if(mode==='rta') drawRta(W,H,nyquist,bins,xForFreq);
+  else drawSpec(W,H,nyquist,bins,xForFreq);
+
+  if(fbOn) detectFeedback(nyquist,bins);
+}
+
+function drawRta(W,H,nyquist,bins,xForFreq){
+  ctx.clearRect(0,0,W,H);
+  const meterH = (meterEl && meterEl.style.display!=='none') ? 40 : 6;
+  const plotH = H - meterH - 16;      // bars end above the frequency labels
+  const labelY = H - meterH - 4;      // labels sit just above the meter
+  // grid — labels that fall inside the current view range
+  ctx.strokeStyle='#2b3646'; ctx.fillStyle='#aeb9c7'; ctx.font='11px monospace'; ctx.textAlign='center';
+  const lo=ISO[0], hi=ISO[BANDS-1];
+  [20,31.5,50,100,200,500,1000,2000,5000,10000,20000].filter(f=>f>=lo&&f<=hi).forEach(f=>{
+    const x=xForFreq(f);
+    ctx.globalAlpha=.6; ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,plotH);ctx.stroke(); ctx.globalAlpha=1;
+    ctx.fillText(fLabel(f)+'Hz',x,labelY);
+  });
+  [0.25,0.5,0.75].forEach(p=>{ctx.globalAlpha=.3;ctx.strokeStyle='#2b3646';ctx.beginPath();ctx.moveTo(0,plotH*p);ctx.lineTo(W,plotH*p);ctx.stroke();ctx.globalAlpha=1;});
+
+  const bw=W/BANDS, gap=Math.max(0.5,bw*0.12);
+  let peakBand=-1,peakVal=0;
+  for(let b=0;b<BANDS;b++){
+    const fc=ISO[b];
+    const rawDb=bandDb(fc/R,fc*R,nyquist,bins);
+    lastBandDb[b]=rawDb;
+    const compDb = pinkComp ? 3*Math.log2(ISO[b]/1000) : 0;  // +3dB/oct → flat system reads flat on pink
+    let v=norm(rawDb+compDb);
+    if(avgOn){ avgBuf[b]=avgBuf[b]*0.9+v*0.1; v=avgBuf[b]; } else { avgBuf[b]=v; }
+    lastV[b]=v;
+    if(v>peakVal){peakVal=v;peakBand=b;}
+    const x=b*bw+gap/2, barW=bw-gap;
+    const barH=v*plotH, y=plotH-barH;
+    let col= v<0.85?'rgba(47,155,255,'+(0.4+v).toFixed(2)+')' : '#ff3b6b';
+    ctx.fillStyle=col; ctx.fillRect(x,y,barW,barH);
+    if(peakHold){
+      if(v>=peaks[b]) peaks[b]=v; else peaks[b]=Math.max(0,peaks[b]-0.005);
+      const py=plotH-peaks[b]*plotH;
+      ctx.fillStyle='rgba(255,255,255,.85)'; ctx.fillRect(x,py-2,barW,2);
+    }
+  }
+  // frozen snapshot overlay (A/B compare)
+  if(snapCurve && snapCurve.length===BANDS){
+    ctx.strokeStyle='#ffb020'; ctx.lineWidth=2; ctx.beginPath();
+    for(let b=0;b<BANDS;b++){
+      const x=b*bw+bw/2, yy=plotH-snapCurve[b]*plotH;
+      b===0?ctx.moveTo(x,yy):ctx.lineTo(x,yy);
+    }
+    ctx.stroke();
+    ctx.fillStyle='#ffb020'; ctx.font='10px monospace'; ctx.textAlign='start';
+    ctx.fillText('הקפאה', 8, 12);
+  }
+  // drag-to-zoom selection rectangle
+  if(dragging && Math.abs(dragX1-dragX0)>4){
+    const xa=Math.min(dragX0,dragX1), xb=Math.max(dragX0,dragX1);
+    ctx.fillStyle='rgba(47,155,255,.15)'; ctx.fillRect(xa,0,xb-xa,plotH);
+    ctx.strokeStyle='rgba(47,155,255,.8)'; ctx.lineWidth=1;
+    ctx.strokeRect(xa,0,xb-xa,plotH);
+  }
+  // target reference curve
+  if(targetMode!=='off'){
+    ctx.strokeStyle='rgba(80,230,140,.8)'; ctx.setLineDash([6,5]); ctx.lineWidth=2; ctx.beginPath();
+    for(let b=0;b<BANDS;b++){
+      const t=b/(BANDS-1);           // 0=low .. 1=high across view
+      let ty=0.55;                   // flat reference (mid of plot)
+      if(targetMode==='house'){      // gentle bass-boost tilt (~+4dB low → -3dB high)
+        ty=0.68-0.22*t;
+      }
+      const x=b*bw+bw/2, yy=plotH-ty*plotH;
+      b===0?ctx.moveTo(x,yy):ctx.lineTo(x,yy);
+    }
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle='rgba(80,230,140,.9)'; ctx.font='10px monospace'; ctx.textAlign='end';
+    ctx.fillText(targetMode==='house'?'יעד House':'יעד שטוח', W-8, 12);
+  }
+  // EQ suggestion markers
+  if(eqMarks && eqMarks.length){
+    ctx.textAlign='center'; ctx.font='9px monospace';
+    eqMarks.forEach(m=>{
+      if(m.f<ISO[0]||m.f>ISO[BANDS-1]) return;
+      const x=xForFreq(m.f);
+      const col=m.type==='cut'?'#ff3b6b':'#2f9bff';
+      ctx.strokeStyle=col; ctx.globalAlpha=.5; ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(x,14);ctx.lineTo(x,plotH);ctx.stroke(); ctx.globalAlpha=1;
+      ctx.fillStyle=col;
+      ctx.beginPath();ctx.moveTo(x,8);ctx.lineTo(x-4,14);ctx.lineTo(x+4,14);ctx.closePath();ctx.fill();
+      ctx.fillText((m.gain>0?'+':'')+m.gain.toFixed(0), x, 26);
+    });
+  }
+  // frequency cursor (hover / touch) — shows exactly where you are
+  if(cursorX!=null && cursorX>=0 && cursorX<=W){
+    const cf=freqForX(cursorX);
+    const bi=Math.max(0,Math.min(BANDS-1,Math.floor(cursorX/bw)));
+    ctx.strokeStyle='rgba(255,255,255,.55)'; ctx.setLineDash([3,3]); ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(cursorX,0);ctx.lineTo(cursorX,plotH);ctx.stroke(); ctx.setLineDash([]);
+    const fl=cf>=1000?(cf/1000).toFixed(2)+'kHz':Math.round(cf)+'Hz';
+    const lvl=(lastBandDb[bi]!=null&&lastBandDb[bi]>-119)?('  '+Math.round(lastBandDb[bi])+'dB'):'';
+    const label=fl+lvl;
+    ctx.font='12px monospace'; ctx.textAlign='left';
+    const tw=ctx.measureText(label).width+12;
+    let tx=Math.max(2,Math.min(W-tw-2, cursorX-tw/2));
+    ctx.fillStyle='rgba(13,17,23,.92)'; ctx.fillRect(tx,plotH-22,tw,18);
+    ctx.strokeStyle='rgba(47,155,255,.7)'; ctx.strokeRect(tx,plotH-22,tw,18);
+    ctx.fillStyle='#e6ecf3'; ctx.fillText(label,tx+6,plotH-9);
+  }
+  // saved 360° area curves (overlay for comparison)
+  const visAreas=areas.filter(a=>a.show);
+  if(visAreas.length){
+    visAreas.forEach(a=>{
+      ctx.strokeStyle=a.color; ctx.lineWidth=2; ctx.beginPath(); let started=false;
+      for(let k=0;k<GEQ.length;k++){
+        const f=GEQ[k]; if(f<ISO[0]||f>ISO[BANDS-1]) continue;
+        const comp = pinkComp?3*Math.log2(f/1000):0;
+        const x=xForFreq(f), yy=plotH-norm(a.db[k]+comp)*plotH;
+        started?ctx.lineTo(x,yy):ctx.moveTo(x,yy); started=true;
+      }
+      ctx.stroke();
+    });
+    // legend (top-inline-start, stacked)
+    ctx.textAlign='start'; ctx.font='11px monospace';
+    visAreas.forEach((a,i)=>{
+      const y=30+i*16;
+      ctx.fillStyle=a.color; ctx.fillRect(8,y-8,16,3);
+      ctx.fillStyle='#e6ecf3'; ctx.fillText(a.name,28,y-2);
+    });
+  }
+  const pf=peakBand>=0?ISO[peakBand]:0;
+  peakHzEl.textContent = (peakBand>=0&&peakVal>0.05)
+    ? (pf>=1000?(pf/1000).toFixed(2)+' kHz':Math.round(pf)+' Hz') : '—';
+}
+
+function drawSpec(W,H,nyquist,bins,xForFreq){
+  // scroll existing buffer up by 1px, draw newest row at bottom
+  specCtx.drawImage(specCanvas,0,-1);
+  const y=specCanvas.height-1;
+  // draw across width using log-frequency mapping
+  for(let px=0;px<specCanvas.width;px++){
+    const f=Math.exp(((px/specCanvas.width))*(Math.log(ISO[BANDS-1])-Math.log(ISO[0]))+Math.log(ISO[0]));
+    const bin=Math.min(bins-1,Math.round(f/nyquist*bins));
+    specCtx.fillStyle=heat(norm(floatData[bin]));
+    specCtx.fillRect(px,y,1,1);
+  }
+  const meterH = (meterEl && meterEl.style.display!=='none') ? 40 : 6;
+  const specH = H - meterH;
+  ctx.clearRect(0,0,W,H);
+  ctx.drawImage(specCanvas,0,0,W,specH);
+  // freq gridlines + labels overlay
+  ctx.fillStyle='#c2cbd6'; ctx.font='11px monospace'; ctx.textAlign='center';
+  const lo=ISO[0], hi=ISO[BANDS-1];
+  [20,31.5,50,100,200,500,1000,2000,5000,10000,20000].filter(f=>f>=lo&&f<=hi).forEach(f=>{
+    const x=xForFreq(f);
+    ctx.strokeStyle='rgba(255,255,255,.14)';ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,specH);ctx.stroke();
+    ctx.fillText(fLabel(f)+'Hz',x,12);
+  });
+  // peak freq
+  let pk=-Infinity,pkf=0;
+  for(let i=1;i<bins;i++){ if(floatData[i]>pk){pk=floatData[i]; pkf=i*nyquist/bins;} }
+  peakHzEl.textContent= pk>floorDb ? (pkf>=1000?(pkf/1000).toFixed(1)+' kHz':Math.round(pkf)+' Hz') : '—';
+}
+
+// ---------- feedback detector ----------
+// a feedback tone is a narrow, prominent, sustained peak above the local spectral floor
+function detectFeedback(nyquist,bins){
+  const PROM=fbProm;  // dB above local average to count as a tonal peak (from slider)
+  const MINDB=-58;    // must be reasonably loud
+  const HOLD=14;      // frames of persistence to confirm (~0.23s @60fps)
+  const win=24;       // local-average half window (bins)
+  const seen=new Set();
+
+  // scan meaningful range 60Hz–12kHz
+  const iLo=Math.max(2,Math.floor(60/nyquist*bins));
+  const iHi=Math.min(bins-2,Math.floor(12000/nyquist*bins));
+  for(let i=iLo;i<=iHi;i++){
+    const d=floatData[i];
+    if(d<MINDB) continue;
+    if(!(d>floatData[i-1]&&d>=floatData[i+1])) continue; // local max
+    // local average excluding immediate neighbours
+    let sum=0,n=0;
+    for(let j=i-win;j<=i+win;j++){ if(Math.abs(j-i)>2&&j>=0&&j<bins){sum+=floatData[j];n++;} }
+    const avg=sum/Math.max(1,n);
+    if(d-avg<PROM) continue;
+    const prom=d-avg;
+    // estimate bandwidth at -3dB from peak -> Q
+    let li=i, ri=i;
+    while(li>1 && floatData[li]>d-3) li--;
+    while(ri<bins-1 && floatData[ri]>d-3) ri++;
+    const bw3=Math.max(1,(ri-li))*nyquist/bins;
+    const hz=Math.round(i*nyquist/bins);
+    const q=Math.max(2,Math.min(12, hz/bw3));
+    const cut=Math.max(3,Math.min(12, Math.round(prom*0.7)));
+    const key=Math.round(hz/ (hz<300?5:hz<2000?15:60)); // cluster nearby bins
+    seen.add(key);
+    const rec=fbTrack.get(key)||{frames:0,db:d,hz:hz,cut:cut,q:q};
+    rec.frames=Math.min(HOLD+30,rec.frames+2);
+    rec.db=d; rec.hz=hz; rec.cut=cut; rec.q=q; fbTrack.set(key,rec);
+  }
+  // decay unseen
+  for(const [k,rec] of fbTrack){ if(!seen.has(k)){ rec.frames-=1; if(rec.frames<=0) fbTrack.delete(k);} }
+
+  // render confirmed, top 4 by level — with suggested cut + Q
+  const conf=[...fbTrack.values()].filter(r=>r.frames>=HOLD).sort((a,b)=>b.db-a.db).slice(0,4);
+  fbPanel.innerHTML = conf.map(r=>{
+    const hz=r.hz>=1000?(r.hz/1000).toFixed(2)+'kHz':r.hz+'Hz';
+    return '<div class="fbItem"><b>'+hz+'</b><small>חתוך −'+r.cut+'dB · Q≈'+r.q.toFixed(1)+'</small></div>';
+  }).join('');
+}
+
+loadCalStore();
+document.getElementById('ver').textContent='v30';
+resize();
+// keep the canvas backing store in sync with the stage size (panels opening,
+// tab changes, etc. resize the plot area) — prevents stale/duplicate drawing
+if('ResizeObserver' in window){
+  const _ro=new ResizeObserver(()=>{ resize(); });
+  _ro.observe(document.getElementById('stage'));
+}
+// register service worker for offline / installable PWA
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+}
+</script>
+</body>
+</html>
