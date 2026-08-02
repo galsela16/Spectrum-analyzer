@@ -215,6 +215,10 @@
         <button id="eqMeasBtn" class="toggle">מדוד מיקום (5ש')</button>
         <button id="eqResetBtn" class="toggle">אפס</button>
       </div>
+      <div class="seg" id="eqModeSeg" style="align-self:center">
+        <button data-m="graphic" class="on">גרפיק</button>
+        <button data-m="param">פרמטרי</button>
+      </div>
       <div class="sub" id="eqCalName"></div>
       <canvas id="eqCurveCanvas" style="width:100%;height:160px;background:#0b0f16;border:1px solid var(--line);border-radius:8px;display:none"></canvas>
       <div id="eqList"></div>
@@ -417,6 +421,7 @@ let pinkComp=false;
 let rt60State='idle', rt60Samples=[], rt60CutT=0;
 let eqMarks=null;   // legacy
 let eqCurveData=null;   // {freqs,corr} drawn on the main graph
+let eqMode='graphic', lastEqCorr=null;   // graphic | param
 const AREA_COLORS=['#2f9bff','#ffa53b','#ff5cc8','#50e68c'];
 const AREA_NAMES=['צפון','דרום','מזרח','מערב'];
 let areas=[];       // {name,color,db:[per-GEQ-band raw dB],show}
@@ -662,6 +667,10 @@ const eqPanel=document.getElementById('eqPanel');
 document.getElementById('eqClose').addEventListener('click',closeModals);
 document.getElementById('eqBtn').addEventListener('click',()=>{ showModal(eqPanel); updateEqUI(); });
 document.getElementById('eqMeasBtn').addEventListener('click',measurePosition);
+document.querySelectorAll('#eqModeSeg button').forEach(b=>b.addEventListener('click',function(){
+  document.querySelectorAll('#eqModeSeg button').forEach(x=>x.classList.remove('on'));
+  this.classList.add('on'); eqMode=this.dataset.m; renderEqResult();
+}));
 document.getElementById('eqResetBtn').addEventListener('click',()=>{ eqPositions=[]; eqMarks=null; document.getElementById('eqList').innerHTML=''; updateEqUI(); });
 
 function updateEqUI(){
@@ -974,15 +983,43 @@ function computeAndShow(){
   const corr=GEQ.map((f,k)=> rel[k]? Math.max(-6,Math.min(6,-(resp[k]-targetDb(f)-off))):null);
   eqCurveData={freqs:GEQ.slice(), corr:corr.slice()};
   document.getElementById('eqCurveCanvas').style.display='none';
-  // graphic-EQ move list: which fader to move and by how much
-  const rows=[];
-  for(let k=0;k<GEQ.length;k++){ const v=corr[k]; if(v==null||Math.abs(v)<1) continue;
-    const f=GEQ[k]>=1000?(GEQ[k]/1000)+'kHz':GEQ[k]+'Hz';
-    rows.push('<div class="eqRow '+(v<0?'cut':'boost')+'"><span class="f">'+f+'</span><span class="g">'+(v>0?'+':'')+v.toFixed(1)+'dB</span></div>'); }
-  document.getElementById('eqList').innerHTML='<div class="sub">גרפיק־EQ · יעד '+(targetMode==='house'?'House':'שטוח')+
-    (micCal?' · כיול פעיל':' · ללא כיול')+' · '+eqPositions.length+' מיקומים · הזז את הפסים האלה:</div>'+
-    (rows.length? rows.join('') : '<div class="sub">מאוזן — אין פסים לתקן 👌</div>');
+  lastEqCorr=corr;
+  renderEqResult();
   showModal(eqPanel);
+}
+function paramFromCorr(corr){
+  const cand=[];
+  for(let k=1;k<GEQ.length-1;k++){ const v=corr[k], pv=corr[k-1], nv=corr[k+1];
+    if(v==null||pv==null||nv==null) continue;
+    const isMax=v>=pv&&v>nv&&v>1, isMin=v<=pv&&v<nv&&v<-1; if(!isMax&&!isMin) continue;
+    const half=v/2; let li=k,ri=k;
+    if(isMax){ while(li>0&&corr[li]!=null&&corr[li]>half)li--; while(ri<GEQ.length-1&&corr[ri]!=null&&corr[ri]>half)ri++; }
+    else     { while(li>0&&corr[li]!=null&&corr[li]<half)li--; while(ri<GEQ.length-1&&corr[ri]!=null&&corr[ri]<half)ri++; }
+    const q=Math.max(0.7,Math.min(8, GEQ[k]/Math.max(1,(GEQ[Math.min(GEQ.length-1,ri)]-GEQ[Math.max(0,li)]))));
+    cand.push({f:GEQ[k],gain:v,q,type:v<0?'cut':'boost',prom:Math.abs(v)});
+  }
+  cand.sort((a,b)=>b.prom-a.prom);
+  const picked=[]; cand.forEach(c=>{ if(!picked.some(p=>Math.abs(Math.log2(p.f/c.f))<0.66)) picked.push(c); });
+  return picked.slice(0,6).sort((a,b)=>a.f-b.f);
+}
+function renderEqResult(){
+  if(!lastEqCorr){ return; }
+  const head='<div class="sub">יעד '+(targetMode==='house'?'House':'שטוח')+
+    (micCal?' · כיול פעיל':' · ללא כיול')+' · '+eqPositions.length+' מיקומים · ';
+  const box=document.getElementById('eqList');
+  if(eqMode==='graphic'){
+    const rows=[];
+    for(let k=0;k<GEQ.length;k++){ const v=lastEqCorr[k]; if(v==null||Math.abs(v)<1) continue;
+      const f=GEQ[k]>=1000?(GEQ[k]/1000)+'kHz':GEQ[k]+'Hz';
+      rows.push('<div class="eqRow '+(v<0?'cut':'boost')+'"><span class="f">'+f+'</span><span class="g">'+(v>0?'+':'')+v.toFixed(1)+'dB</span></div>'); }
+    box.innerHTML=head+'הזז את הפסים:</div>'+(rows.length?rows.join(''):'<div class="sub">מאוזן 👌</div>');
+  } else {
+    const list=paramFromCorr(lastEqCorr);
+    box.innerHTML=head+'פילטרים פרמטריים:</div>'+(list.length? list.map(s=>{
+      const f=s.f>=1000?(s.f/1000).toFixed(2)+'kHz':Math.round(s.f)+'Hz'; const g=(s.gain>0?'+':'')+s.gain.toFixed(1)+'dB';
+      return '<div class="eqRow '+s.type+'"><span class="f">'+f+'</span><span class="g">'+g+'</span><span class="q">Q '+s.q.toFixed(1)+'</span></div>';
+    }).join('') : '<div class="sub">מאוזן 👌</div>');
+  }
 }
 
 // ---- RT60 (interrupted-noise method) ----
@@ -1483,7 +1520,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v37';
+document.getElementById('ver').textContent='v38';
 resize();
 // keep the canvas backing store in sync with the stage size (panels opening,
 // tab changes, etc. resize the plot area) — prevents stale/duplicate drawing
