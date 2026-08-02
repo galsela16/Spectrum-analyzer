@@ -67,6 +67,8 @@
   .zoomBtn{position:absolute;top:10px;inset-inline-start:10px;z-index:4;display:none;
     border:1px solid var(--accent);background:rgba(47,155,255,.12);color:var(--accent);
     font-family:inherit;font-size:11px;letter-spacing:1px;padding:7px 12px;border-radius:8px;cursor:pointer}
+  #modalBg{position:absolute;inset:0;z-index:5;background:rgba(0,0,0,.5);display:none}
+  #modalBg.show{display:block}
   /* level meter pinned to bottom of stage */
   .meter{position:absolute;bottom:8px;inset-inline:10px;z-index:3;height:26px;border:1px solid var(--line);
     border-radius:7px;background:rgba(13,17,23,.55);backdrop-filter:blur(4px);overflow:hidden;display:flex;align-items:center;pointer-events:none}
@@ -187,6 +189,7 @@
       <div>Max <b id="splMax">—</b></div>
     </div>
     <button class="zoomBtn" id="zoomBtn">⤢ טווח מלא</button>
+    <div id="modalBg"></div>
     <div id="rtPanel">
       <div id="rtStatus">RT60</div>
       <canvas id="rtCanvas" width="300" height="120"></canvas>
@@ -625,8 +628,8 @@ document.getElementById('compBtn').addEventListener('click',function(){
 
 // ---- auto-EQ: measure → average positions → suggest ----
 const eqPanel=document.getElementById('eqPanel');
-document.getElementById('eqClose').addEventListener('click',()=>{ eqPanel.classList.remove('open'); eqMarks=null; });
-document.getElementById('eqBtn').addEventListener('click',()=>{ eqPanel.classList.add('open'); updateEqUI(); });
+document.getElementById('eqClose').addEventListener('click',closeModals);
+document.getElementById('eqBtn').addEventListener('click',()=>{ showModal(eqPanel); updateEqUI(); });
 document.getElementById('eqMeasBtn').addEventListener('click',measurePosition);
 document.getElementById('eqResetBtn').addEventListener('click',()=>{ eqPositions=[]; eqMarks=null; document.getElementById('eqList').innerHTML=''; updateEqUI(); });
 
@@ -703,14 +706,24 @@ function addCalFromFile(file){
   r.readAsText(file);
 }
 const calPanel=document.getElementById('calPanel');
-document.getElementById('calBtn').addEventListener('click',()=>{ renderCalList(); calPanel.classList.add('open'); });
-document.getElementById('calClose').addEventListener('click',()=>calPanel.classList.remove('open'));
+document.getElementById('calBtn').addEventListener('click',()=>{ renderCalList(); showModal(calPanel); });
+document.getElementById('calClose').addEventListener('click',closeModals);
 document.getElementById('calAdd').addEventListener('change',e=>{ if(e.target.files[0]) addCalFromFile(e.target.files[0]); e.target.value=''; });
+
+// ---- modal backdrop: dim + click-outside to close, for all popups ----
+const modalBg=document.getElementById('modalBg');
+function showModal(p){ closeModals(); p.classList.add('open'); modalBg.classList.add('show'); }
+function closeModals(){
+  ['rtPanel','eqPanel','calPanel','tfPanel'].forEach(id=>document.getElementById(id).classList.remove('open'));
+  modalBg.classList.remove('show'); eqMarks=null;
+}
+modalBg.addEventListener('click',closeModals);
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModals(); });
 
 // ---- dual-channel Transfer Function → graphic-EQ correction ----
 const tfPanel=document.getElementById('tfPanel');
-document.getElementById('tfBtn').addEventListener('click',()=>{ tfPanel.classList.add('open'); });
-document.getElementById('tfClose').addEventListener('click',()=>tfPanel.classList.remove('open'));
+document.getElementById('tfBtn').addEventListener('click',()=>{ showModal(tfPanel); });
+document.getElementById('tfClose').addEventListener('click',closeModals);
 document.getElementById('tfSwapBtn').addEventListener('click',function(){ tfSwap=!tfSwap; this.classList.toggle('on',tfSwap); });
 document.getElementById('tfMeasBtn').addEventListener('click',tfMeasure);
 document.getElementById('tfCsvBtn').addEventListener('click',tfExportCsv);
@@ -869,17 +882,17 @@ function computeAndShow(){
       const g=(s.gain>0?'+':'')+s.gain.toFixed(1)+'dB';
       return '<div class="eqRow '+s.type+'"><span class="f">'+f+'</span><span class="g">'+g+'</span><span class="q">Q '+s.q.toFixed(1)+'</span></div>';
     }).join('');
-  eqPanel.classList.add('open');
+  showModal(eqPanel);
 }
 
 // ---- RT60 (interrupted-noise method) ----
 const rtPanel=document.getElementById('rtPanel'), rtStatus=document.getElementById('rtStatus');
-document.getElementById('rtClose').addEventListener('click',()=>rtPanel.classList.remove('open'));
+document.getElementById('rtClose').addEventListener('click',closeModals);
 document.getElementById('rtBtn').addEventListener('click',startRT60);
 
 function startRT60(){
   if(!running||!audioCtx){ alert('קודם הפעל את המיקרופון.'); return; }
-  rtPanel.classList.add('open');
+  showModal(rtPanel);
   rtStatus.innerHTML='מכין… משמיע רעש ורוד';
   // ensure pink noise is playing at a usable level for good SNR
   const restoreType=genType; genType='pink';
