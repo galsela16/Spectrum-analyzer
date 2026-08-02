@@ -963,40 +963,25 @@ function bandDbFromBins(bd,fLo,fHi,nyq,bins){
 function computeAndShow(){
   if(!eqPositions.length){ alert('מדוד לפחות מיקום אחד.'); return; }
   const binDb=avgPositions();
-  const nyq=audioCtx.sampleRate/2, bins=binDb.length;
+  const nyq=audioCtx.sampleRate/2, bins=binDb.length, R6=Math.pow(2,1/6);
   if(micCal){ for(let i=0;i<bins;i++) binDb[i]-=micCalAt(i*nyq/bins); }
-  // per-band response, pink-compensated
-  const resp=new Array(BANDS);
-  for(let b=0;b<BANDS;b++){ const fc=ISO[b]; resp[b]=bandDbFromBins(binDb,fc/R,fc*R,nyq,bins)+3*Math.log2(fc/1000); }
-  const win=Math.max(1,Math.round(curBpo/3)); const sm=new Array(BANDS);
-  for(let b=0;b<BANDS;b++){ let s=0,n=0; for(let j=b-win;j<=b+win;j++){ if(j>=0&&j<BANDS){s+=resp[j];n++;} } sm[b]=s/n; }
-  const dev=new Array(BANDS); let os=0,on=0;
-  for(let b=0;b<BANDS;b++){ dev[b]=sm[b]-targetDb(ISO[b]); if(ISO[b]>=200&&ISO[b]<=4000){os+=dev[b];on++;} }
-  const offset=on?os/on:0; for(let b=0;b<BANDS;b++) dev[b]-=offset;
-  // parametric filters from peaks/dips
-  const inRange=b=>ISO[b]>=40&&ISO[b]<=16000, PEAK=2.5, DIP=3.0, cand=[];
-  for(let b=1;b<BANDS-1;b++){ if(!inRange(b)) continue;
-    const isMax=dev[b]>dev[b-1]&&dev[b]>=dev[b+1]&&dev[b]>PEAK, isMin=dev[b]<dev[b-1]&&dev[b]<=dev[b+1]&&dev[b]<-DIP;
-    if(!isMax&&!isMin) continue;
-    const prom=Math.abs(dev[b]); let li=b, ri=b; const half=dev[b]/2;
-    if(isMax){ while(li>0&&dev[li]>half)li--; while(ri<BANDS-1&&dev[ri]>half)ri++; }
-    else     { while(li>0&&dev[li]<half)li--; while(ri<BANDS-1&&dev[ri]<half)ri++; }
-    const q=Math.max(0.7,Math.min(8, ISO[b]/Math.max(1,(ISO[Math.min(BANDS-1,ri)]-ISO[Math.max(0,li)]))));
-    cand.push({f:ISO[b],gain:isMax?-Math.min(9,prom):Math.min(4,prom),q,type:isMax?'cut':'boost',prom});
-  }
-  cand.sort((a,b)=>b.prom-a.prom);
-  const picked=[]; cand.forEach(c=>{ if(!picked.some(p=>Math.abs(Math.log2(p.f/c.f))<0.66)) picked.push(c); });
-  const list=picked.slice(0,6).sort((a,b)=>a.f-b.f);
-  // correction curve on the main graph (context)
-  eqCurveData={freqs:ISO.slice(), corr:ISO.map((f,b)=> inRange(b)? Math.max(-9,Math.min(9,-dev[b])):null)};
-  const eqList=document.getElementById('eqList');
+  // 31-band graphic response, pink-compensated
+  const resp=GEQ.map(fc=> bandDbFromBins(binDb,fc/R6,fc*R6,nyq,bins)+3*Math.log2(fc/1000));
+  const maxR=Math.max(...resp);
+  const rel=GEQ.map((f,k)=> resp[k]>maxR-30 && f>=40 && f<=16000);
+  let os=0,on=0; for(let k=0;k<GEQ.length;k++){ if(rel[k]&&GEQ[k]>=200&&GEQ[k]<=4000){ os+=resp[k]-targetDb(GEQ[k]); on++; } }
+  const off=on?os/on:0;
+  const corr=GEQ.map((f,k)=> rel[k]? Math.max(-6,Math.min(6,-(resp[k]-targetDb(f)-off))):null);
+  eqCurveData={freqs:GEQ.slice(), corr:corr.slice()};
   document.getElementById('eqCurveCanvas').style.display='none';
-  if(!list.length){ eqList.innerHTML='<div class="sub">המערכת מאוזנת מול היעד — אין תיקונים משמעותיים 👌</div>'; }
-  else eqList.innerHTML='<div class="sub">יעד '+(targetMode==='house'?'House':'שטוח')+
-    (micCal?' · כיול פעיל':' · ללא כיול')+' · '+eqPositions.length+' מיקומים · פילטרים מומלצים:</div>'+
-    list.map(s=>{ const f=s.f>=1000?(s.f/1000).toFixed(2)+'kHz':Math.round(s.f)+'Hz'; const g=(s.gain>0?'+':'')+s.gain.toFixed(1)+'dB';
-      return '<div class="eqRow '+s.type+'"><span class="f">'+f+'</span><span class="g">'+g+'</span><span class="q">Q '+s.q.toFixed(1)+'</span></div>';
-    }).join('');
+  // graphic-EQ move list: which fader to move and by how much
+  const rows=[];
+  for(let k=0;k<GEQ.length;k++){ const v=corr[k]; if(v==null||Math.abs(v)<1) continue;
+    const f=GEQ[k]>=1000?(GEQ[k]/1000)+'kHz':GEQ[k]+'Hz';
+    rows.push('<div class="eqRow '+(v<0?'cut':'boost')+'"><span class="f">'+f+'</span><span class="g">'+(v>0?'+':'')+v.toFixed(1)+'dB</span></div>'); }
+  document.getElementById('eqList').innerHTML='<div class="sub">גרפיק־EQ · יעד '+(targetMode==='house'?'House':'שטוח')+
+    (micCal?' · כיול פעיל':' · ללא כיול')+' · '+eqPositions.length+' מיקומים · הזז את הפסים האלה:</div>'+
+    (rows.length? rows.join('') : '<div class="sub">מאוזן — אין פסים לתקן 👌</div>');
   showModal(eqPanel);
 }
 
@@ -1498,7 +1483,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v36';
+document.getElementById('ver').textContent='v37';
 resize();
 // keep the canvas backing store in sync with the stage size (panels opening,
 // tab changes, etc. resize the plot area) — prevents stale/duplicate drawing
