@@ -415,7 +415,8 @@ let genDb=-34, genHz=1000, targetMode='off';
 let genSweepDur=4, sweepTimer=null;
 let pinkComp=false;
 let rt60State='idle', rt60Samples=[], rt60CutT=0;
-let eqMarks=null;   // [{f,gain,q,type}] to draw on graph
+let eqMarks=null;   // legacy
+let eqCurveData=null;   // {freqs,corr} drawn on the main graph
 const AREA_COLORS=['#2f9bff','#ffa53b','#ff5cc8','#50e68c'];
 const AREA_NAMES=['צפון','דרום','מזרח','מערב'];
 let areas=[];       // {name,color,db:[per-GEQ-band raw dB],show}
@@ -772,7 +773,7 @@ const modalBg=document.getElementById('modalBg');
 function showModal(p){ closeModals(); p.classList.add('open'); modalBg.classList.add('show'); }
 function closeModals(){
   ['rtPanel','eqPanel','calPanel','tfPanel','areaPanel'].forEach(id=>document.getElementById(id).classList.remove('open'));
-  modalBg.classList.remove('show'); eqMarks=null;
+  modalBg.classList.remove('show');
 }
 modalBg.addEventListener('click',closeModals);
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModals(); });
@@ -798,6 +799,7 @@ function suggestAreaEQ(){
   const corr=GEQ.map((f,k)=> rel[k]? Math.max(-6,Math.min(6,-(resp[k]-targetDb(f)-off))):null);
   // markers on graph
   eqMarks=[]; for(let k=0;k<n;k++){ if(corr[k]!=null && Math.abs(corr[k])>=1.0) eqMarks.push({f:GEQ[k],gain:corr[k],type:corr[k]<0?'cut':'boost'}); }
+  eqCurveData={freqs:GEQ.slice(), corr:corr.slice()};
   // visual graphic-EQ faceplate
   const cv2=document.getElementById('areaEqCanvas'); cv2.style.display='block'; drawGEQ(cv2,GEQ,corr);
   document.getElementById('areaEqList').innerHTML='<div class="sub">ממוצע '+areas.length+' אזורים · יעד '+
@@ -904,6 +906,7 @@ function renderTFList(){
   const cv2=document.getElementById('tfCanvas');
   if(!tfResult){ box.innerHTML=''; cv2.style.display='none'; return; }
   cv2.style.display='block'; drawGEQ(cv2, GEQ, tfResult.corr);
+  eqCurveData={freqs:GEQ.slice(), corr:tfResult.corr.slice()};
   box.innerHTML='<div class="sub">ירוק=הגבר, אדום=חתוך, אפור=לא אמין. שכפל את הפיידרים לגרפיק־EQ.</div>';
 }
 function drawTF(){
@@ -995,6 +998,7 @@ function computeAndShow(){
 
   // smooth correction curve (per band, -deviation)
   const curveCorr=ISO.map((f,b)=> (f>=40&&f<=16000)? Math.max(-9,Math.min(9,-dev[b])) : null);
+  eqCurveData={freqs:ISO.slice(), corr:curveCorr};
   const cc=document.getElementById('eqCurveCanvas'); cc.style.display='block'; drawGEQ(cc, ISO, curveCorr);
 
   const eqList=document.getElementById('eqList');
@@ -1179,7 +1183,7 @@ async function switchInput(deviceId){
 
 function stop(){
   running=false; if(raf) cancelAnimationFrame(raf);
-  analyserRef=null; floatDataRef=null; tfState='idle';
+  analyserRef=null; floatDataRef=null; tfState='idle'; eqCurveData=null;
   genSrc=null; genOsc=null; genGain=null; genOn=false;
   const gb=document.getElementById('genOnBtn'); if(gb){gb.classList.remove('on');gb.textContent='▶ הפעל אות';}
   if(stream) stream.getTracks().forEach(t=>t.stop());
@@ -1355,19 +1359,37 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     ctx.fillStyle='rgba(80,230,140,.9)'; ctx.font='10px monospace'; ctx.textAlign='end';
     ctx.fillText(targetMode==='house'?'יעד House':'יעד שטוח', W-8, 12);
   }
-  // EQ suggestion markers
-  if(eqMarks && eqMarks.length){
-    ctx.textAlign='center'; ctx.font='9px monospace';
-    eqMarks.forEach(m=>{
-      if(m.f<ISO[0]||m.f>ISO[BANDS-1]) return;
-      const x=xForFreq(m.f);
-      const col=m.type==='cut'?'#ff3b6b':'#2f9bff';
-      ctx.strokeStyle=col; ctx.globalAlpha=.5; ctx.lineWidth=1;
-      ctx.beginPath();ctx.moveTo(x,14);ctx.lineTo(x,plotH);ctx.stroke(); ctx.globalAlpha=1;
-      ctx.fillStyle=col;
-      ctx.beginPath();ctx.moveTo(x,8);ctx.lineTo(x-4,14);ctx.lineTo(x+4,14);ctx.closePath();ctx.fill();
-      ctx.fillText((m.gain>0?'+':'')+m.gain.toFixed(0), x, 26);
-    });
+  // EQ correction curve drawn over the main graph (measured bars = context)
+  if(eqCurveData){
+    const {freqs,corr}=eqCurveData;
+    const z=plotH*0.34, sc=(plotH*0.22)/12;   // 0-line at 34% height, ±12dB span
+    // dB reference lines + right-side labels
+    ctx.textAlign='end'; ctx.font='9px monospace';
+    [12,6,0,-6,-12].forEach(d=>{ const yy=z-d*sc;
+      ctx.strokeStyle=d===0?'rgba(80,230,140,.55)':'rgba(80,230,140,.16)';
+      ctx.setLineDash(d===0?[]:[2,3]); ctx.beginPath();ctx.moveTo(0,yy);ctx.lineTo(W,yy);ctx.stroke();
+      ctx.fillStyle='rgba(120,220,160,.9)'; ctx.fillText((d>0?'+':'')+d, W-4, yy-2); });
+    ctx.setLineDash([]);
+    // the curve
+    const lo=ISO[0], hi=ISO[BANDS-1];
+    ctx.strokeStyle='#50e68c'; ctx.lineWidth=2.5; ctx.beginPath(); let started=false;
+    for(let k=0;k<freqs.length;k++){ if(corr[k]==null) continue; const f=freqs[k]; if(f<lo||f>hi) continue;
+      const x=xForFreq(f), yy=z-Math.max(-12,Math.min(12,corr[k]))*sc;
+      started?ctx.lineTo(x,yy):ctx.moveTo(x,yy); started=true; }
+    ctx.stroke();
+    // label significant peaks/dips with freq + dB
+    ctx.font='10px monospace'; ctx.textAlign='center';
+    for(let k=1;k<freqs.length-1;k++){ const v=corr[k]; if(v==null) continue;
+      const pv=corr[k-1], nv=corr[k+1]; if(pv==null||nv==null) continue;
+      const isExt=(v>=pv&&v>nv)||(v<=pv&&v<nv);
+      if(!isExt||Math.abs(v)<2) continue; const f=freqs[k]; if(f<lo||f>hi) continue;
+      const x=xForFreq(f), yy=z-Math.max(-12,Math.min(12,v))*sc;
+      const lbl=(f>=1000?(f/1000).toFixed(1)+'k':Math.round(f))+' '+(v>0?'+':'')+v.toFixed(0);
+      ctx.fillStyle='#0d1117'; const tw=ctx.measureText(lbl).width+6;
+      ctx.fillRect(x-tw/2, v>0?yy-16:yy+4, tw, 13);
+      ctx.fillStyle='#8ff0b8'; ctx.fillText(lbl, x, v>0?yy-6:yy+14); }
+    ctx.fillStyle='rgba(120,220,160,.9)'; ctx.textAlign='start'; ctx.font='10px monospace';
+    ctx.fillText('תיקון EQ', 8, z-12*sc-4);
   }
   // frequency cursor (hover / touch) — shows exactly where you are
   if(cursorX!=null && cursorX>=0 && cursorX<=W){
@@ -1488,7 +1510,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v33';
+document.getElementById('ver').textContent='v34';
 resize();
 // keep the canvas backing store in sync with the stage size (panels opening,
 // tab changes, etc. resize the plot area) — prevents stale/duplicate drawing
