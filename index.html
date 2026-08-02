@@ -919,49 +919,47 @@ function startRT60(){
 
 function analyzeRT60(){
   const s=rt60Samples;
-  if(s.length<20){ rtStatus.innerHTML='מדידה נכשלה — נסה שוב'; return; }
-  // steady level = average before the cut
+  if(s.length<20){ rtStatus.textContent='מדידה נכשלה — נסה שוב'; return; }
   const pre=s.filter(x=>x.t<rt60CutT);
-  const steady = pre.length? pre.reduce((a,x)=>a+x.db,0)/pre.length : s[0].db;
+  const steady = pre.length? pre.reduce((a,x)=>a+x.db,0)/pre.length : Math.max(...s.map(x=>x.db));
   const post=s.filter(x=>x.t>=rt60CutT).map(x=>({t:(x.t-rt60CutT)/1000, db:x.db}));
-  // find crossing times below steady for -5 and -25 (T20) / -35 (T30)
-  const crossT=drop=>{
-    const th=steady-drop;
-    for(let i=1;i<post.length;i++){
-      if(post[i-1].db>=th && post[i].db<th){
-        const a=post[i-1], b=post[i];
-        return a.t + (b.t-a.t)*(a.db-th)/(a.db-b.db);
-      }
-    }
-    return null;
-  };
-  const t5=crossT(5), t25=crossT(25), t35=crossT(35);
-  let rt60=null, method='', tEnd=null, endDrop=0;
-  if(t5!=null && t35!=null){ rt60=(t35-t5)*(60/30); method='T30'; tEnd=t35; endDrop=35; }
-  else if(t5!=null && t25!=null){ rt60=(t25-t5)*(60/20); method='T20'; tEnd=t25; endDrop=25; }
-  drawRTPlot(post, steady, t5, tEnd, endDrop);
-  if(rt60 && rt60>0.05 && rt60<10)
-    rtStatus.innerHTML='RT60 ≈ <b>'+rt60.toFixed(2)+' ש\''+'</b> <small style="color:var(--dim)">('+method+')</small>';
+  if(post.length<10){ rtStatus.textContent='מדידה נכשלה — נסה שוב'; return; }
+  // noise floor from the tail
+  const tail=post.slice(-Math.max(5,Math.floor(post.length*0.25)));
+  const noise=tail.reduce((a,x)=>a+x.db,0)/tail.length;
+  // clean decay region: from 5dB below steady down to 5dB above the noise floor
+  const hi=steady-5, lo=noise+5;
+  const reg=post.filter(x=>x.db<=hi && x.db>=lo);
+  if(reg.length<5 || (hi-lo)<10){
+    rtStatus.innerHTML='לא הצלחתי למדוד — טווח דעיכה קטן מדי.<br><span style="font-size:11px;color:var(--dim)">נסה עוצמה גבוהה יותר או חדר שקט יותר.</span>';
+    drawRTPlot(post, steady, null, 0); return;
+  }
+  // least-squares slope of dB vs time
+  let n=reg.length, st=0,sd=0,std=0,stt=0;
+  reg.forEach(p=>{ st+=p.t; sd+=p.db; std+=p.t*p.db; stt+=p.t*p.t; });
+  const slope=(n*std - st*sd)/(n*stt - st*st);   // dB/s (negative)
+  const intercept=(sd - slope*st)/n;
+  const rt60 = -60/slope;
+  drawRTPlot(post, steady, slope, intercept);
+  if(slope<0 && rt60>0.05 && rt60<10)
+    rtStatus.innerHTML='RT60 ≈ <b>'+rt60.toFixed(2)+' ש\'</b>';
   else
     rtStatus.innerHTML='לא הצלחתי למדוד — נסה עוצמה גבוהה יותר או חדר שקט יותר';
 }
-
-function drawRTPlot(post, steady, tStart, tEnd, endDrop){
+function drawRTPlot(post, steady, slope, intercept){
   const c=document.getElementById('rtCanvas'), x=c.getContext('2d');
-  const W=c.width,H=c.height; x.clearRect(0,0,W,H);
+  const W=c.width, H=c.height; x.clearRect(0,0,W,H);
   const tMax=Math.max(0.5, post.length?post[post.length-1].t:1);
   const dbMin=steady-65, dbMax=steady+3;
   const X=t=>t/tMax*W, Y=db=>H-(db-dbMin)/(dbMax-dbMin)*H;
-  x.strokeStyle='#1c2530'; x.fillStyle='#5b6673'; x.font='9px monospace';
+  x.strokeStyle='#2b3646'; x.fillStyle='#8b97a5'; x.font='9px monospace';
   for(let d=0;d>=-60;d-=10){ const yy=Y(steady+d); x.globalAlpha=.5;
-    x.beginPath();x.moveTo(0,yy);x.lineTo(W,yy);x.stroke(); x.globalAlpha=1;
-    x.fillText(d+'dB',2,yy-2); }
+    x.beginPath();x.moveTo(0,yy);x.lineTo(W,yy);x.stroke(); x.globalAlpha=1; x.fillText(d+'dB',2,yy-2); }
   x.strokeStyle='#2f9bff'; x.lineWidth=1.5; x.beginPath();
   post.forEach((p,i)=>{ i?x.lineTo(X(p.t),Y(p.db)):x.moveTo(X(p.t),Y(p.db)); }); x.stroke();
-  if(tStart!=null && tEnd!=null){
+  if(slope!=null){   // regression / fit line
     x.strokeStyle='#50e68c'; x.lineWidth=2; x.setLineDash([5,3]); x.beginPath();
-    x.moveTo(X(tStart),Y(steady-5)); x.lineTo(X(tEnd),Y(steady-endDrop)); x.stroke();
-    x.setLineDash([]);
+    x.moveTo(X(0),Y(intercept)); x.lineTo(X(tMax),Y(intercept+slope*tMax)); x.stroke(); x.setLineDash([]);
   }
 }
 document.getElementById('res').addEventListener('input',e=>{
@@ -1097,7 +1095,12 @@ function updateLevel(){
   for(let i=0;i<timeData.length;i++){ const s=timeData[i]; sum+=s*s; }
   const rms=Math.sqrt(sum/timeData.length);
   const dbfs=20*Math.log10(rms+1e-9);          // broadband full-scale, fast meter
-  if(rt60State==='capture') rt60Samples.push({t:performance.now(), db:dbfs});
+  if(rt60State==='capture'){
+    // fast RMS over ~last 2048 samples (~43ms) so the decay isn't smeared
+    let s2=0, N=Math.min(2048,timeData.length);
+    for(let i=timeData.length-N;i<timeData.length;i++){ const v=timeData[i]; s2+=v*v; }
+    rt60Samples.push({t:performance.now(), db:20*Math.log10(Math.sqrt(s2/N)+1e-9)});
+  }
   const now=performance.now();
   if(dbfs>lvlPeak || now-lvlPeakT>1500){ lvlPeak=dbfs; lvlPeakT=now; }
   const pct=v=>Math.max(0,Math.min(100,(v+60)/60*100));
