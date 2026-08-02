@@ -216,6 +216,7 @@
         <button id="eqResetBtn" class="toggle">אפס</button>
       </div>
       <div class="sub" id="eqCalName"></div>
+      <canvas id="eqCurveCanvas" style="width:100%;height:160px;background:#0b0f16;border:1px solid var(--line);border-radius:8px;display:none"></canvas>
       <div id="eqList"></div>
       <button id="eqClose">סגור</button>
     </div>
@@ -673,26 +674,27 @@ function targetDb(f){
   if(targetMode==='house') return Math.max(-5,Math.min(6, -1.0*Math.log2(f/250)));
   return 0;
 }
-// draw a graphic-EQ "faceplate": 31 faders showing the correction per band
-function drawGEQ(c, corr){
+// draw a smooth EQ correction curve (like an EQ plugin) from freq→gain points
+function drawGEQ(c, freqs, corr){
   const x=c.getContext('2d');
-  const W=c.width=c.clientWidth||360, H=150; c.height=H;
+  const W=c.width=c.clientWidth||360, H=160; c.height=H;
   x.clearRect(0,0,W,H);
-  const mid=H/2, pad=16, scale=(H/2-pad)/6;   // ±6 dB
-  x.font='9px monospace'; x.textAlign='left';
-  [-6,-3,0,3,6].forEach(d=>{ const yy=mid-d*scale; x.strokeStyle='#2b3646'; x.globalAlpha=d===0?.9:.4;
-    x.beginPath();x.moveTo(0,yy);x.lineTo(W,yy);x.stroke(); x.globalAlpha=1; x.fillStyle='#8b97a5'; x.fillText((d>0?'+':'')+d,2,yy-2); });
-  const n=GEQ.length, bw=W/n;
-  for(let k=0;k<n;k++){ const v=corr[k], cx=k*bw+bw/2;
-    if(v==null){ x.fillStyle='#39424f'; x.fillRect(cx-1,mid-1,2,2); continue; }
-    const y=mid - v*scale;
-    x.fillStyle = v>=0?'#50e68c':'#ff6b8b';
-    x.fillRect(cx-bw*0.32, Math.min(mid,y), bw*0.64, Math.abs(mid-y));
-    x.fillStyle='#e6ecf3'; x.fillRect(cx-bw*0.42, y-1.5, bw*0.84, 3);   // fader cap
-    if(Math.abs(v)>=2){ x.fillStyle='#cdd6e0'; x.textAlign='center'; x.fillText(v.toFixed(0),cx,v>=0?y-4:y+11); x.textAlign='left'; }
+  const mid=H/2, pad=18, scale=(H/2-pad)/9;   // ±9 dB
+  const logMin=Math.log(20), logMax=Math.log(20000);
+  const X=f=>((Math.log(f)-logMin)/(logMax-logMin))*W;
+  x.font='9px monospace';
+  [-9,-6,-3,0,3,6,9].forEach(d=>{ const yy=mid-d*scale; x.strokeStyle=d===0?'#4a5768':'#212c38';
+    x.beginPath();x.moveTo(0,yy);x.lineTo(W,yy);x.stroke();
+    if(d%3===0){ x.fillStyle='#8b97a5'; x.textAlign='left'; x.fillText((d>0?'+':'')+d,2,yy-2); } });
+  const pts=[]; for(let k=0;k<freqs.length;k++){ if(corr[k]!=null) pts.push({x:X(freqs[k]), y:mid-corr[k]*scale}); }
+  if(pts.length){
+    x.beginPath(); x.moveTo(pts[0].x,mid); pts.forEach(p=>x.lineTo(p.x,p.y)); x.lineTo(pts[pts.length-1].x,mid); x.closePath();
+    x.fillStyle='rgba(80,230,140,.12)'; x.fill();
+    x.beginPath(); pts.forEach((p,i)=>i?x.lineTo(p.x,p.y):x.moveTo(p.x,p.y));
+    x.strokeStyle='#50e68c'; x.lineWidth=2.5; x.stroke();
   }
   x.fillStyle='#8b97a5'; x.textAlign='center';
-  [63,250,1000,4000,16000].forEach(f=>{ const k=GEQ.indexOf(f); if(k>=0) x.fillText(f>=1000?(f/1000)+'k':f, k*bw+bw/2, H-3); });
+  [31.5,100,500,1000,5000,10000].forEach(f=>{ x.fillText(f>=1000?(f/1000)+'k':f, X(f), H-3); });
 }
 function micCalAt(f){
   if(!micCal||!micCal.f.length) return 0;
@@ -797,7 +799,7 @@ function suggestAreaEQ(){
   // markers on graph
   eqMarks=[]; for(let k=0;k<n;k++){ if(corr[k]!=null && Math.abs(corr[k])>=1.0) eqMarks.push({f:GEQ[k],gain:corr[k],type:corr[k]<0?'cut':'boost'}); }
   // visual graphic-EQ faceplate
-  const cv2=document.getElementById('areaEqCanvas'); cv2.style.display='block'; drawGEQ(cv2,corr);
+  const cv2=document.getElementById('areaEqCanvas'); cv2.style.display='block'; drawGEQ(cv2,GEQ,corr);
   document.getElementById('areaEqList').innerHTML='<div class="sub">ממוצע '+areas.length+' אזורים · יעד '+
     (targetMode==='house'?'House':'שטוח')+' · ירוק=הגבר, אדום=חתוך. שכפל את הפיידרים לגרפיק־EQ.</div>';
 }
@@ -901,7 +903,7 @@ function renderTFList(){
   const box=document.getElementById('tfGeqList');
   const cv2=document.getElementById('tfCanvas');
   if(!tfResult){ box.innerHTML=''; cv2.style.display='none'; return; }
-  cv2.style.display='block'; drawGEQ(cv2, tfResult.corr);
+  cv2.style.display='block'; drawGEQ(cv2, GEQ, tfResult.corr);
   box.innerHTML='<div class="sub">ירוק=הגבר, אדום=חתוך, אפור=לא אמין. שכפל את הפיידרים לגרפיק־EQ.</div>';
 }
 function drawTF(){
@@ -991,10 +993,14 @@ function computeAndShow(){
   const list=picked.slice(0,6).sort((a,b)=>a.f-b.f);
   eqMarks=list;
 
+  // smooth correction curve (per band, -deviation)
+  const curveCorr=ISO.map((f,b)=> (f>=40&&f<=16000)? Math.max(-9,Math.min(9,-dev[b])) : null);
+  const cc=document.getElementById('eqCurveCanvas'); cc.style.display='block'; drawGEQ(cc, ISO, curveCorr);
+
   const eqList=document.getElementById('eqList');
   if(!list.length){ eqList.innerHTML='<div class="sub">המערכת מאוזנת מול היעד — אין תיקונים משמעותיים 👌</div>'; }
   else eqList.innerHTML='<div class="sub">יעד '+(targetMode==='house'?'House':'שטוח')+
-    (micCal?' · כיול פעיל':'')+' · '+eqPositions.length+' מיקומים · אדום=חתוך, כחול=הגבר</div>'+
+    (micCal?' · כיול פעיל':'')+' · '+eqPositions.length+' מיקומים · פילטרים מומלצים:</div>'+
     list.map(s=>{ const f=s.f>=1000?(s.f/1000).toFixed(2)+'kHz':Math.round(s.f)+'Hz';
       const g=(s.gain>0?'+':'')+s.gain.toFixed(1)+'dB';
       return '<div class="eqRow '+s.type+'"><span class="f">'+f+'</span><span class="g">'+g+'</span><span class="q">Q '+s.q.toFixed(1)+'</span></div>';
@@ -1482,7 +1488,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v32';
+document.getElementById('ver').textContent='v33';
 resize();
 // keep the canvas backing store in sync with the stage size (panels opening,
 // tab changes, etc. resize the plot area) — prevents stale/duplicate drawing
