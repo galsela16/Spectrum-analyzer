@@ -212,8 +212,8 @@
     <div id="tfPanel">
       <h3>Transfer Function דו־ערוצי → תיקון גרפיק EQ</h3>
       <div class="sub">ערוץ 1 = מיקרופון מדידה · ערוץ 2 = רפרנס מהמיקסר. שלח תוכן/רעש ורוד דרך המערכת, ומדוד.</div>
-      <div class="chBar">מיק' <div class="track"><div class="fill" id="tfMicFill"></div></div><span id="tfMicDb">—</span></div>
-      <div class="chBar">רפרנס <div class="track"><div class="fill" id="tfRefFill"></div></div><span id="tfRefDb">—</span></div>
+      <div class="chBar"><span id="tfL1" style="min-width:96px">כניסה 1 → מיק'</span><div class="track"><div class="fill" id="tfMicFill"></div></div><span id="tfMicDb">—</span></div>
+      <div class="chBar"><span id="tfL2" style="min-width:96px">כניסה 2 → רפרנס</span><div class="track"><div class="fill" id="tfRefFill"></div></div><span id="tfRefDb">—</span></div>
       <div id="tfBtns">
         <button class="toggle" id="tfSwapBtn">החלף ערוצים</button>
         <button class="toggle" id="tfMeasBtn">מדוד (6ש')</button>
@@ -242,6 +242,7 @@
         <button data-t="pink" class="on">ורוד</button>
         <button data-t="white">לבן</button>
         <button data-t="sine">סינוס</button>
+        <button data-t="sweep">סוויפ</button>
       </div>
       <div class="ctrl" style="min-width:130px">
         <label>עוצמה <b id="genLvlVal">-34dB</b></label>
@@ -250,6 +251,10 @@
       <div class="ctrl" id="genFreqWrap" style="min-width:130px;display:none">
         <label>תדר סינוס <b id="genFreqVal">1000Hz</b></label>
         <input type="range" id="genFreq" min="20" max="16000" step="1" value="1000">
+      </div>
+      <div class="ctrl" id="genSweepWrap" style="min-width:130px;display:none">
+        <label>משך סוויפ <b id="genSweepVal">4.0ש'</b></label>
+        <input type="range" id="genSweep" min="1" max="10" step="0.5" value="4">
       </div>
       <button id="genOnBtn">▶ הפעל אות</button>
       <div class="warn">⚠ עוצמה גבוהה עלולה להזיק לרמקולים (בעיקר טוויטרים) ולאוזניים. התחל נמוך ועלה בהדרגה.</div>
@@ -376,6 +381,7 @@ let zMin=viewMin, zMax=viewMax;   // (unused placeholder, kept for clarity)
 let dragging=false, dragX0=0, dragX1=0, cursorX=null;
 let genType='pink', genOn=false, genGain=null, genSrc=null, genOsc=null;
 let genDb=-34, genHz=1000, targetMode='off';
+let genSweepDur=4, sweepTimer=null;
 let pinkComp=false;
 let rt60State='idle', rt60Samples=[], rt60CutT=0;
 let eqMarks=null;   // [{f,gain,q,type}] to draw on graph
@@ -525,6 +531,7 @@ function makeNoiseBuffer(type){
 function genStop(){
   if(genGain){ try{genGain.gain.cancelScheduledValues(audioCtx.currentTime);
     genGain.gain.setTargetAtTime(0,audioCtx.currentTime,0.05);}catch(_){} }
+  if(sweepTimer){ clearTimeout(sweepTimer); sweepTimer=null; }
   const g=genGain, s=genSrc, o=genOsc;
   setTimeout(()=>{
     try{ if(s) s.stop(); }catch(_){}
@@ -534,13 +541,25 @@ function genStop(){
   genSrc=null; genOsc=null; genGain=null; genOn=false;
   const btn=document.getElementById('genOnBtn'); btn.classList.remove('on'); btn.textContent='▶ הפעל אות';
 }
+function scheduleSweepCycle(){
+  if(!genOn || genType!=='sweep' || !genOsc) return;
+  const t=audioCtx.currentTime;
+  try{
+    genOsc.frequency.cancelScheduledValues(t);
+    genOsc.frequency.setValueAtTime(20, t);
+    genOsc.frequency.exponentialRampToValueAtTime(20000, t+genSweepDur);   // log sweep
+  }catch(_){}
+  sweepTimer=setTimeout(scheduleSweepCycle, genSweepDur*1000);
+}
 function genStart(){
   if(!running||!audioCtx){ alert('קודם הפעל את המיקרופון (כדי שהאודיו יהיה פעיל).'); return; }
   genStop();
   genGain=audioCtx.createGain(); genGain.gain.value=0;
-  if(genType==='sine'){
-    genOsc=audioCtx.createOscillator(); genOsc.type='sine'; genOsc.frequency.value=genHz;
+  if(genType==='sine' || genType==='sweep'){
+    genOsc=audioCtx.createOscillator(); genOsc.type='sine';
+    genOsc.frequency.value = genType==='sine'? genHz : 20;
     genOsc.connect(genGain); genOsc.start();
+    if(genType==='sweep') scheduleSweepCycle();
   } else {
     genSrc=audioCtx.createBufferSource(); genSrc.buffer=makeNoiseBuffer(genType);
     genSrc.loop=true; genSrc.connect(genGain); genSrc.start();
@@ -562,8 +581,13 @@ document.querySelectorAll('#genType button').forEach(b=>b.addEventListener('clic
   document.querySelectorAll('#genType button').forEach(x=>x.classList.remove('on'));
   this.classList.add('on'); genType=this.dataset.t;
   document.getElementById('genFreqWrap').style.display = genType==='sine'?'flex':'none';
+  document.getElementById('genSweepWrap').style.display = genType==='sweep'?'flex':'none';
   if(genOn) genStart();  // restart with new type
 }));
+document.getElementById('genSweep').addEventListener('input',e=>{
+  genSweepDur=parseFloat(e.target.value);
+  document.getElementById('genSweepVal').textContent=genSweepDur.toFixed(1)+'ש\'';
+});
 document.getElementById('genLvl').addEventListener('input',e=>{
   genDb=parseFloat(e.target.value);
   const el=document.getElementById('genLvlVal'); el.textContent=genDb+'dB';
@@ -692,12 +716,13 @@ document.getElementById('tfCsvBtn').addEventListener('click',tfExportCsv);
 function chLevel(arr){ let p=0; for(let i=1;i<arr.length;i++) p+=Math.pow(10,arr[i]/10); return 10*Math.log10(p+1e-12); }
 function updateTfLevels(){
   if(!floatDataRef) return;
-  const micArr=tfSwap?floatDataRef:floatData, refArr=tfSwap?floatData:floatDataRef;
-  const md=chLevel(micArr), rd=chLevel(refArr), pct=d=>Math.max(0,Math.min(100,(d+80)/70*100));
-  document.getElementById('tfMicFill').style.width=pct(md)+'%';
-  document.getElementById('tfRefFill').style.width=pct(rd)+'%';
-  document.getElementById('tfMicDb').textContent=isFinite(md)?md.toFixed(0):'—';
-  document.getElementById('tfRefDb').textContent=isFinite(rd)?rd.toFixed(0):'—';
+  const l1=chLevel(floatData), l2=chLevel(floatDataRef), pct=d=>Math.max(0,Math.min(100,(d+80)/70*100));
+  document.getElementById('tfMicFill').style.width=pct(l1)+'%';   // bar 1 = physical channel 1
+  document.getElementById('tfRefFill').style.width=pct(l2)+'%';   // bar 2 = physical channel 2
+  document.getElementById('tfMicDb').textContent=isFinite(l1)?l1.toFixed(0):'—';
+  document.getElementById('tfRefDb').textContent=isFinite(l2)?l2.toFixed(0):'—';
+  document.getElementById('tfL1').textContent = tfSwap?"כניסה 1 → רפרנס":"כניסה 1 → מיק'";
+  document.getElementById('tfL2').textContent = tfSwap?"כניסה 2 → מיק'":"כניסה 2 → רפרנס";
 }
 function tfMeasure(){
   if(!running||!analyserRef){ alert('הפעל מיקרופון עם כרטיס קול (input סטריאו).'); return; }
