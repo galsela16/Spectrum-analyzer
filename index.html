@@ -110,8 +110,8 @@
   #genOnBtn{border:1px solid var(--hot);background:rgba(255,59,107,.1);color:#ff8aa5;
     font-family:inherit;font-size:12px;font-weight:600;letter-spacing:1px;padding:9px 16px;border-radius:8px;cursor:pointer}
   #genOnBtn.on{border-color:var(--accent);background:rgba(47,155,255,.12);color:var(--accent)}
-  #rtPanel{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:6;display:none;
-    flex-direction:column;gap:10px;align-items:center;padding:18px 20px;border:1px solid var(--accent);
+  #rtPanel{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:6;display:none;
+    flex-direction:column;gap:10px;align-items:center;max-height:calc(100% - 16px);overflow:auto;padding:18px 20px;border:1px solid var(--accent);
     border-radius:14px;background:rgba(13,17,23,.96);backdrop-filter:blur(6px);box-shadow:0 8px 40px rgba(0,0,0,.6)}
   #rtPanel.open{display:flex}
   #rtStatus{font-size:15px;color:var(--text);letter-spacing:1px;text-align:center;min-height:20px}
@@ -119,8 +119,8 @@
   #rtCanvas{background:#0b0f16;border:1px solid var(--line);border-radius:8px}
   #rtClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
     font-size:12px;padding:8px 20px;border-radius:8px;cursor:pointer}
-  #eqPanel{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:6;display:none;
-    flex-direction:column;gap:10px;width:280px;max-height:80%;padding:16px 18px;border:1px solid var(--accent);
+  #eqPanel{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:6;display:none;
+    flex-direction:column;gap:10px;width:280px;max-height:calc(100% - 16px);overflow:auto;padding:16px 18px;border:1px solid var(--accent);
     border-radius:14px;background:rgba(13,17,23,.97);backdrop-filter:blur(6px);box-shadow:0 8px 40px rgba(0,0,0,.6)}
   #eqPanel.open{display:flex}
   #eqPanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
@@ -136,8 +136,8 @@
   .eqRow .q{color:var(--dim);font-size:11px}
   #eqClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
     font-size:12px;padding:8px 20px;border-radius:8px;cursor:pointer;align-self:center}
-  #calPanel{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:6;display:none;
-    flex-direction:column;gap:10px;width:290px;max-height:80%;padding:16px 18px;border:1px solid var(--accent);
+  #calPanel{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:6;display:none;
+    flex-direction:column;gap:10px;width:290px;max-height:calc(100% - 16px);overflow:auto;padding:16px 18px;border:1px solid var(--accent);
     border-radius:14px;background:rgba(13,17,23,.97);backdrop-filter:blur(6px);box-shadow:0 8px 40px rgba(0,0,0,.6)}
   #calPanel.open{display:flex}
   #calPanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
@@ -149,8 +149,8 @@
   .calRow .del{color:#ff6b8b;font-size:16px;padding:0 4px;line-height:1}
   #calClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
     font-size:12px;padding:8px 20px;border-radius:8px;cursor:pointer;align-self:center}
-  #tfPanel{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:6;display:none;
-    flex-direction:column;gap:10px;width:min(92%,420px);max-height:88%;padding:16px 18px;border:1px solid var(--accent);
+  #tfPanel{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:6;display:none;
+    flex-direction:column;gap:10px;width:min(92%,420px);max-height:calc(100% - 16px);padding:16px 18px;border:1px solid var(--accent);
     border-radius:14px;background:rgba(13,17,23,.97);backdrop-filter:blur(6px);box-shadow:0 8px 40px rgba(0,0,0,.6);overflow:auto}
   #tfPanel.open{display:flex}
   #tfPanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
