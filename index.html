@@ -159,6 +159,7 @@
   .chBar .track{flex:1;height:8px;border-radius:4px;background:var(--line);overflow:hidden}
   .chBar .fill{height:100%;width:0%;background:var(--accent);transition:width .06s}
   #tfCanvas{width:100%;height:150px;background:#0b0f16;border:1px solid var(--line);border-radius:8px}
+  #tfGeqList{display:flex;flex-direction:column;gap:5px;max-height:230px;overflow:auto}
   #tfBtns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
   #tfClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
     font-size:12px;padding:8px 20px;border-radius:8px;cursor:pointer;align-self:center}
@@ -219,7 +220,8 @@
         <button class="toggle" id="tfMeasBtn">מדוד (6ש')</button>
         <button class="toggle" id="tfCsvBtn">CSV</button>
       </div>
-      <canvas id="tfCanvas" width="400" height="150"></canvas>
+      <canvas id="tfCanvas" width="400" height="150" style="display:none"></canvas>
+      <div id="tfGeqList"></div>
       <div class="sub" id="tfInfo">התוצאה: כמה dB להזיז בכל פס בגרפיק־EQ (31 פסים). ירוק=הזז, אפור=לא אמין (רפרנס חלש).</div>
       <button id="tfClose">סגור</button>
     </div>
@@ -755,9 +757,22 @@ function tfCompute(){
   const offset=on?os/on:0;
   const corr=GEQ.map((f,k)=> rel[k]? Math.max(-6,Math.min(6, -(H[k]-targetDb(f)-offset))) : null);
   tfResult={corr,H,rel};
-  document.getElementById('tfInfo').textContent = on? 'הזז בגרפיק־EQ לפי הערכים (±6dB מקס). אפור=רפרנס חלש, לא אמין.' :
+  document.getElementById('tfInfo').textContent = on? 'הזז בגרפיק־EQ לפי הערכים (±6dB מקס). מוצגים רק פסים אמינים עם תיקון משמעותי.' :
     'רפרנס חלש/חסר — ודא שערוץ 2 מקבל אות מהמיקסר, או לחץ "החלף ערוצים".';
-  drawTF();
+  renderTFList();
+}
+function renderTFList(){
+  const box=document.getElementById('tfGeqList');
+  if(!tfResult){ box.innerHTML=''; return; }
+  const rows=[];
+  for(let k=0;k<GEQ.length;k++){
+    const v=tfResult.corr[k];
+    if(v==null || Math.abs(v)<0.5) continue;
+    const f=GEQ[k]>=1000?(GEQ[k]/1000)+'k':GEQ[k];
+    rows.push('<div class="eqRow '+(v<0?'cut':'boost')+'"><span class="f">'+f+'Hz</span>'+
+              '<span class="g">'+(v>0?'+':'')+v.toFixed(1)+'dB</span></div>');
+  }
+  box.innerHTML = rows.length? rows.join('') : '<div class="sub">אין תיקונים משמעותיים, או שהמדידה לא תקינה.</div>';
 }
 function drawTF(){
   const c=document.getElementById('tfCanvas'), x=c.getContext('2d');
