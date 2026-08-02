@@ -172,7 +172,7 @@
 <body>
   <header>
     <div class="dot" id="dot"></div>
-    <h1>RTA <span>אנלייזר</span></h1>
+    <h1>RTA <span>אנלייזר</span> <small id="ver" style="font-size:10px;color:var(--dim);letter-spacing:1px"></small></h1>
     <div class="modes">
       <button id="mRta" class="on">ספקטרום</button>
       <button id="mSpec">ווטרפול</button>
@@ -1340,6 +1340,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
+document.getElementById('ver').textContent='v28';
 resize();
 // keep the canvas backing store in sync with the stage size (panels opening,
 // tab changes, etc. resize the plot area) — prevents stale/duplicate drawing
