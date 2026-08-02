@@ -564,7 +564,6 @@ function genStart(){
     genOsc=audioCtx.createOscillator(); genOsc.type='sine';
     genOsc.frequency.value = genType==='sine'? genHz : 20;
     genOsc.connect(genGain); genOsc.start();
-    if(genType==='sweep') scheduleSweepCycle();
   } else {
     genSrc=audioCtx.createBufferSource(); genSrc.buffer=makeNoiseBuffer(genType);
     genSrc.loop=true; genSrc.connect(genGain); genSrc.start();
@@ -573,6 +572,7 @@ function genStart(){
   const target=Math.pow(10,genDb/20);
   genGain.gain.setTargetAtTime(target,audioCtx.currentTime,0.15);  // gentle ramp-up
   genOn=true;
+  if(genType==='sweep') scheduleSweepCycle();   // start the sweep only after genOn=true
   const btn=document.getElementById('genOnBtn'); btn.classList.add('on'); btn.textContent='⏹ עצור אות';
 }
 function genApplyLevel(){
@@ -1340,7 +1340,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v28';
+document.getElementById('ver').textContent='v29';
 resize();
 // keep the canvas backing store in sync with the stage size (panels opening,
 // tab changes, etc. resize the plot area) — prevents stale/duplicate drawing
