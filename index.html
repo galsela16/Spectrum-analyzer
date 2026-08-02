@@ -75,6 +75,7 @@
   #areaPanel.open{display:flex}
   #areaPanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
   #areaList{display:flex;flex-direction:column;gap:6px}
+  #areaEqList{display:flex;flex-direction:column;gap:5px;max-height:200px;overflow:auto}
   .areaRow{display:flex;align-items:center;gap:10px;padding:8px 11px;border-radius:8px;border:1px solid var(--line);font-size:13px;color:var(--text)}
   .areaRow .dot{width:12px;height:12px;border-radius:50%;flex:none}
   .areaRow .nm{flex:1}
@@ -223,6 +224,8 @@
       <div class="sub">מדוד בכל צד של המעגל (צפון/דרום/מזרח/מערב) והשווה. עד 4 אזורים על הגרף.</div>
       <button id="areaMeasBtn" class="toggle" style="align-self:center">מדוד אזור חדש (5ש')</button>
       <div id="areaList"></div>
+      <button id="areaEqBtn" class="toggle" style="align-self:center">הצע EQ ממוצע לכל האזורים</button>
+      <div id="areaEqList"></div>
       <button id="areaClose">סגור</button>
     </div>
     <div id="calPanel">
@@ -749,6 +752,31 @@ const areaPanel=document.getElementById('areaPanel');
 document.getElementById('areaBtn').addEventListener('click',()=>{ renderAreaList(); showModal(areaPanel); });
 document.getElementById('areaClose').addEventListener('click',closeModals);
 document.getElementById('areaMeasBtn').addEventListener('click',measureArea);
+document.getElementById('areaEqBtn').addEventListener('click',suggestAreaEQ);
+function suggestAreaEQ(){
+  if(!areas.length){ alert('מדוד לפחות אזור אחד.'); return; }
+  const n=GEQ.length;
+  // spatial average across all areas (power domain)
+  const avg=new Array(n);
+  for(let k=0;k<n;k++){ let p=0; areas.forEach(a=>p+=Math.pow(10,a.db[k]/10)); avg[k]=10*Math.log10(p/areas.length+1e-12); }
+  // pink compensation + mic calibration → system magnitude shape
+  const resp=avg.map((d,k)=> d + 3*Math.log2(GEQ[k]/1000) - (micCal?micCalAt(GEQ[k]):0));
+  const maxR=Math.max(...resp);
+  const rel=GEQ.map((f,k)=> resp[k]>maxR-30 && f>=40 && f<=16000);
+  let os=0,on=0; for(let k=0;k<n;k++){ if(rel[k]&&GEQ[k]>=200&&GEQ[k]<=4000){ os+=resp[k]-targetDb(GEQ[k]); on++; } }
+  const off=on?os/on:0;
+  const corr=GEQ.map((f,k)=> rel[k]? Math.max(-6,Math.min(6,-(resp[k]-targetDb(f)-off))):null);
+  // markers on graph
+  eqMarks=[]; for(let k=0;k<n;k++){ if(corr[k]!=null && Math.abs(corr[k])>=1.0) eqMarks.push({f:GEQ[k],gain:corr[k],type:corr[k]<0?'cut':'boost'}); }
+  // list
+  const box=document.getElementById('areaEqList');
+  const rows=[];
+  for(let k=0;k<n;k++){ const v=corr[k]; if(v==null||Math.abs(v)<0.5) continue;
+    const f=GEQ[k]>=1000?(GEQ[k]/1000)+'k':GEQ[k];
+    rows.push('<div class="eqRow '+(v<0?'cut':'boost')+'"><span class="f">'+f+'Hz</span><span class="g">'+(v>0?'+':'')+v.toFixed(1)+'dB</span></div>'); }
+  box.innerHTML = '<div class="sub">ממוצע '+areas.length+' אזורים · יעד '+(targetMode==='house'?'House':'שטוח')+' · הזז בגרפיק־EQ:</div>'+
+                  (rows.length? rows.join('') : '<div class="sub">מאוזן — אין תיקונים משמעותיים 👌</div>');
+}
 function updateAreaMeasBtn(){
   const b=document.getElementById('areaMeasBtn'), meas=areaState==='measuring';
   b.textContent = meas?'מודד… החזק יציב':'מדוד אזור חדש (5ש\')'; b.style.opacity=meas?.5:1;
@@ -1436,7 +1464,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v30';
+document.getElementById('ver').textContent='v31';
 resize();
 // keep the canvas backing store in sync with the stage size (panels opening,
 // tab changes, etc. resize the plot area) — prevents stale/duplicate drawing
