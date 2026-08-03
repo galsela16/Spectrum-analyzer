@@ -306,7 +306,7 @@
         <label>משך סוויפ <b id="genSweepVal">4.0ש'</b></label>
         <input type="range" id="genSweep" min="1" max="10" step="0.5" value="4">
       </div>
-      <div class="ctrl" id="genCompWrap" style="min-width:150px">
+      <div class="ctrl" id="genCompWrap" style="flex:0 0 auto;align-items:flex-start;min-width:auto">
         <label>תצוגה מפוצה pink</label>
         <div class="seg" id="genCompSeg">
           <button data-c="on" class="on">מפוצה</button>
@@ -319,7 +319,7 @@
     <div class="tabbar">
       <button class="tab on" data-p="view">תצוגה</button>
       <button class="tab" data-p="tune">כיוונון</button>
-      <button class="tab" data-p="io">ייצוא/קלט</button>
+      <button class="tab" data-p="io">I/O</button>
       <button class="toggle" id="stopBtn" style="display:none;margin-inline-start:auto">אפס סשן</button>
     </div>
 
@@ -1653,7 +1653,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v55';
+document.getElementById('ver').textContent='v56';
 // keep audio alive: browsers suspend the AudioContext when the app is backgrounded
 function reviveAudio(){ if(running && audioCtx && audioCtx.state==='suspended') audioCtx.resume(); }
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) reviveAudio(); });
