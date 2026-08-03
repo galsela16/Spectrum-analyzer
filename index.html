@@ -1126,6 +1126,11 @@ function resetSession(){
   document.getElementById('tfCanvas').style.display='none';
   fbTrack.clear(); fbPanel.innerHTML='';
   leqSumP=0; leqN=0; splMax=-120; lvlPeak=-120;
+  // reset toggles to defaults
+  targetMode='off'; const tb=document.getElementById('tgtBtn'); tb.textContent='יעד'; tb.classList.remove('on');
+  pinkComp=false; document.getElementById('compBtn').classList.remove('on');
+  weightMode='Z'; const wb=document.getElementById('wgtBtn'); wb.textContent='שקלול Z'; wb.classList.remove('on'); document.getElementById('wLbl').textContent='Z';
+  if(viewMin!==FMIN||viewMax!==FMAX){ viewMin=FMIN; viewMax=FMAX; buildBands(curBpo); document.getElementById('zoomBtn').style.display='none'; }
   if(genOn) genStop();
   closeModals();
 }
@@ -1541,7 +1546,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v40';
+document.getElementById('ver').textContent='v41';
 // keep audio alive: browsers suspend the AudioContext when the app is backgrounded
 function reviveAudio(){ if(running && audioCtx && audioCtx.state==='suspended') audioCtx.resume(); }
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) reviveAudio(); });
