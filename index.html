@@ -306,6 +306,13 @@
         <label>משך סוויפ <b id="genSweepVal">4.0ש'</b></label>
         <input type="range" id="genSweep" min="1" max="10" step="0.5" value="4">
       </div>
+      <div class="ctrl" id="genCompWrap" style="min-width:150px">
+        <label>תצוגה מפוצה pink</label>
+        <div class="seg" id="genCompSeg">
+          <button data-c="on" class="on">מפוצה</button>
+          <button data-c="off">גולמי</button>
+        </div>
+      </div>
       <button id="genOnBtn">▶ הפעל אות</button>
       <div class="warn">⚠ עוצמה גבוהה עלולה להזיק לרמקולים (בעיקר טוויטרים) ולאוזניים. התחל נמוך ועלה בהדרגה.</div>
     </div>
@@ -338,7 +345,6 @@
     <div class="tabpage" data-page="tune">
       <button class="toggle" id="genBtn">גנרטור</button>
       <button class="toggle" id="tgtBtn">יעד</button>
-      <button class="toggle" id="compBtn">תגובה pink</button>
       <button class="toggle" id="eqBtn">מדידת EQ</button>
       <button class="toggle" id="calBtn">כיול מיק'</button>
       <button class="toggle" id="tfBtn">TF ‏2־ערוצי</button>
@@ -428,7 +434,7 @@ let dragging=false, dragX0=0, dragX1=0, cursorX=null;
 let genType='pink', genOn=false, genGain=null, genSrc=null, genOsc=null;
 let genDb=-34, genHz=1000, targetMode='off';
 let genSweepDur=4, sweepTimer=null;
-let pinkComp=false;
+let pinkComp=false, compChoice=true;   // compChoice = show compensated when pink plays
 let rt60State='idle', rt60Samples=[], rt60CutT=0, rtRange=10;
 let eqMarks=null;   // legacy
 let eqCurveData=null;   // {freqs,corr} drawn on the main graph
@@ -625,9 +631,10 @@ function genStart(){
   const btn=document.getElementById('genOnBtn'); btn.classList.add('on'); btn.textContent='⏹ עצור אות';
 }
 function syncPinkComp(){
-  // auto-toggle "תגובה pink" to match the generator (pink → on, else off)
-  pinkComp = (genOn && genType==='pink');
-  document.getElementById('compBtn').classList.toggle('on', pinkComp);
+  // "תצוגה מפוצה" lives inside the generator and applies when pink is playing
+  const wrap=document.getElementById('genCompWrap');
+  if(wrap) wrap.style.display = (genType==='pink') ? 'flex' : 'none';
+  pinkComp = (genOn && genType==='pink' && compChoice);
 }
 function genApplyLevel(){
   if(genGain){ genGain.gain.setTargetAtTime(Math.pow(10,genDb/20),audioCtx.currentTime,0.1); }
@@ -641,7 +648,9 @@ document.querySelectorAll('#genType button').forEach(b=>b.addEventListener('clic
   this.classList.add('on'); genType=this.dataset.t;
   document.getElementById('genFreqWrap').style.display = genType==='sine'?'flex':'none';
   document.getElementById('genSweepWrap').style.display = genType==='sweep'?'flex':'none';
+  document.getElementById('genCompWrap').style.display = genType==='pink'?'flex':'none';
   if(genOn) genStart();  // restart with new type
+  else syncPinkComp();
 }));
 document.getElementById('genSweep').addEventListener('input',e=>{
   genSweepDur=parseFloat(e.target.value);
@@ -676,9 +685,10 @@ document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',function
 }));
 
 // ---- pink-compensated response ----
-document.getElementById('compBtn').addEventListener('click',function(){
-  pinkComp=!pinkComp; this.classList.toggle('on',pinkComp);
-});
+document.querySelectorAll('#genCompSeg button').forEach(b=>b.addEventListener('click',function(){
+  document.querySelectorAll('#genCompSeg button').forEach(x=>x.classList.remove('on'));
+  this.classList.add('on'); compChoice=(this.dataset.c==='on'); syncPinkComp();
+}));
 
 // ---- auto-EQ: measure → average positions → suggest ----
 const eqPanel=document.getElementById('eqPanel');
@@ -1165,7 +1175,7 @@ function resetSession(){
   leqSumP=0; leqN=0; splMax=-120; lvlPeak=-120;
   // reset toggles to defaults
   targetMode='off'; const tb=document.getElementById('tgtBtn'); tb.textContent='יעד'; tb.classList.remove('on');
-  pinkComp=false; document.getElementById('compBtn').classList.remove('on');
+  pinkComp=false; compChoice=true; syncPinkComp();
   weightMode='Z'; const wb=document.getElementById('wgtBtn'); wb.textContent='שקלול Z'; wb.classList.remove('on'); document.getElementById('wLbl').textContent='Z';
   if(viewMin!==FMIN||viewMax!==FMAX){ viewMin=FMIN; viewMax=FMAX; buildBands(curBpo); document.getElementById('zoomBtn').style.display='none'; }
   if(genOn) genStop();
@@ -1617,7 +1627,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v53';
+document.getElementById('ver').textContent='v54';
 // keep audio alive: browsers suspend the AudioContext when the app is backgrounded
 function reviveAudio(){ if(running && audioCtx && audioCtx.state==='suspended') audioCtx.resume(); }
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) reviveAudio(); });
