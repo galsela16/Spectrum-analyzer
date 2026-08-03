@@ -67,9 +67,9 @@
   .zoomBtn{position:absolute;top:10px;inset-inline-start:10px;z-index:4;display:none;
     border:1px solid var(--accent);background:rgba(47,155,255,.12);color:var(--accent);
     font-family:inherit;font-size:11px;letter-spacing:1px;padding:7px 12px;border-radius:8px;cursor:pointer}
-  #modalBg{position:absolute;inset:0;z-index:5;background:rgba(0,0,0,.5);display:none}
-  #modalBg.show{display:block}
-  #areaPanel{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:6;display:none;
+  #modalBg{position:absolute;inset:0;z-index:5;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;padding:12px}
+  #modalBg.show{display:flex}
+  #areaPanel{position:relative;z-index:6;display:none;
     flex-direction:column;gap:10px;width:min(92%,280px);max-height:calc(100% - 16px);overflow:auto;padding:16px 18px;
     border:1px solid var(--accent);border-radius:14px;background:rgba(13,17,23,.97);backdrop-filter:blur(6px);box-shadow:0 8px 40px rgba(0,0,0,.6)}
   #areaPanel.open{display:flex}
@@ -129,7 +129,7 @@
   #genOnBtn{border:1px solid var(--hot);background:rgba(255,59,107,.1);color:#ff8aa5;
     font-family:inherit;font-size:12px;font-weight:600;letter-spacing:1px;padding:9px 16px;border-radius:8px;cursor:pointer}
   #genOnBtn.on{border-color:var(--accent);background:rgba(47,155,255,.12);color:var(--accent)}
-  #rtPanel{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:6;display:none;
+  #rtPanel{position:relative;z-index:6;display:none;
     flex-direction:column;gap:10px;align-items:stretch;width:min(92%,340px);max-height:calc(100% - 16px);overflow:auto;padding:16px 18px;border:1px solid var(--accent);
     border-radius:14px;background:rgba(13,17,23,.97);backdrop-filter:blur(6px);box-shadow:0 8px 40px rgba(0,0,0,.6)}
   #rtStatus{font-size:14px;color:var(--text);letter-spacing:.5px;text-align:center;min-height:20px}
@@ -138,7 +138,7 @@
   #rtPanel.open{display:flex}
   #rtClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
     font-size:12px;padding:8px 20px;border-radius:8px;cursor:pointer;align-self:center}
-  #eqPanel{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:6;display:none;
+  #eqPanel{position:relative;z-index:6;display:none;
     flex-direction:column;gap:10px;width:280px;max-height:calc(100% - 16px);overflow:auto;padding:16px 18px;border:1px solid var(--accent);
     border-radius:14px;background:rgba(13,17,23,.97);backdrop-filter:blur(6px);box-shadow:0 8px 40px rgba(0,0,0,.6)}
   #eqPanel.open{display:flex}
@@ -155,7 +155,7 @@
   .eqRow .q{color:var(--dim);font-size:11px}
   #eqClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
     font-size:12px;padding:8px 20px;border-radius:8px;cursor:pointer;align-self:center}
-  #calPanel{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:6;display:none;
+  #calPanel{position:relative;z-index:6;display:none;
     flex-direction:column;gap:10px;width:290px;max-height:calc(100% - 16px);overflow:auto;padding:16px 18px;border:1px solid var(--accent);
     border-radius:14px;background:rgba(13,17,23,.97);backdrop-filter:blur(6px);box-shadow:0 8px 40px rgba(0,0,0,.6)}
   #calPanel.open{display:flex}
@@ -168,7 +168,7 @@
   .calRow .del{color:#ff6b8b;font-size:16px;padding:0 4px;line-height:1}
   #calClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
     font-size:12px;padding:8px 20px;border-radius:8px;cursor:pointer;align-self:center}
-  #tfPanel{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:6;display:none;
+  #tfPanel{position:relative;z-index:6;display:none;
     flex-direction:column;gap:10px;width:min(92%,420px);max-height:calc(100% - 16px);padding:16px 18px;border:1px solid var(--accent);
     border-radius:14px;background:rgba(13,17,23,.97);backdrop-filter:blur(6px);box-shadow:0 8px 40px rgba(0,0,0,.6);overflow:auto}
   #tfPanel.open{display:flex}
@@ -793,12 +793,15 @@ document.getElementById('calResetBtn').addEventListener('click',()=>{
 
 // ---- modal backdrop: dim + click-outside to close, for all popups ----
 const modalBg=document.getElementById('modalBg');
+['rtPanel','eqPanel','calPanel','tfPanel','areaPanel'].forEach(id=>{
+  const p=document.getElementById(id); if(p) modalBg.appendChild(p);   // center via backdrop flexbox
+});
 function showModal(p){ closeModals(); p.classList.add('open'); modalBg.classList.add('show'); }
 function closeModals(){
   ['rtPanel','eqPanel','calPanel','tfPanel','areaPanel'].forEach(id=>document.getElementById(id).classList.remove('open'));
   modalBg.classList.remove('show');
 }
-modalBg.addEventListener('click',closeModals);
+modalBg.addEventListener('click',e=>{ if(e.target===modalBg) closeModals(); });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModals(); });
 
 // ---- 360° area comparison ----
@@ -1606,7 +1609,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v50';
+document.getElementById('ver').textContent='v51';
 // keep audio alive: browsers suspend the AudioContext when the app is backgrounded
 function reviveAudio(){ if(running && audioCtx && audioCtx.state==='suspended') audioCtx.resume(); }
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) reviveAudio(); });
