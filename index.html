@@ -1481,9 +1481,22 @@ function drawRta(W,H,nyquist,bins,xForFreq){
       ctx.fillStyle='#e6ecf3'; ctx.fillText(a.name,28,y-2);
     });
   }
-  const pf=peakBand>=0?ISO[peakBand]:0;
-  peakHzEl.textContent = (peakBand>=0&&peakVal>0.05)
-    ? (pf>=1000?(pf/1000).toFixed(2)+' kHz':Math.round(pf)+' Hz') : '—';
+  // exact peak frequency: find the strongest FFT bin inside the loudest band
+  let exactHz=0;
+  if(peakBand>=0 && peakVal>0.05){
+    const fc=ISO[peakBand];
+    let lo=Math.floor((fc/R)/nyquist*bins), hi=Math.ceil((fc*R)/nyquist*bins);
+    lo=Math.max(1,lo); hi=Math.min(bins-1,hi);
+    let bMax=-999, bi=lo;
+    for(let i=lo;i<=hi;i++){ if(floatData[i]>bMax){ bMax=floatData[i]; bi=i; } }
+    // parabolic interpolation around the peak bin for sub-bin accuracy
+    let idx=bi;
+    if(bi>0&&bi<bins-1){ const a=floatData[bi-1],b=floatData[bi],c=floatData[bi+1], d=a-2*b+c;
+      if(d!==0) idx=bi+0.5*(a-c)/d; }
+    exactHz=idx*nyquist/bins;
+  }
+  peakHzEl.textContent = exactHz>0
+    ? (exactHz>=1000?(exactHz/1000).toFixed(3)+' kHz':Math.round(exactHz)+' Hz') : '—';
 }
 
 function drawSpec(W,H,nyquist,bins,xForFreq){
@@ -1563,7 +1576,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v44';
+document.getElementById('ver').textContent='v45';
 // keep audio alive: browsers suspend the AudioContext when the app is backgrounded
 function reviveAudio(){ if(running && audioCtx && audioCtx.state==='suspended') audioCtx.resume(); }
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) reviveAudio(); });
