@@ -226,7 +226,7 @@
       <button id="rtClose">סגור</button>
     </div>
     <div id="eqPanel">
-      <h3>מדידת EQ</h3>
+      <h3>מדידת המרחב</h3>
       <div class="seg" id="eqModeSwitchA" style="align-self:center">
         <button class="on">ממוצע</button>
         <button data-go="area">אזורים</button>
@@ -246,7 +246,7 @@
       <button id="eqClose">סגור</button>
     </div>
     <div id="areaPanel">
-      <h3>מדידת EQ</h3>
+      <h3>מדידת המרחב</h3>
       <div class="seg" id="eqModeSwitchB" style="align-self:center">
         <button data-go="avg">ממוצע</button>
         <button class="on">אזורים</button>
@@ -363,7 +363,7 @@
     <div class="tabpage" data-page="tune">
       <button class="toggle" id="genBtn">גנרטור</button>
       <button class="toggle" id="tgtBtn">יעד</button>
-      <button class="toggle" id="eqBtn">מדידת EQ</button>
+      <button class="toggle" id="eqBtn">מדידת המרחב</button>
       <button class="toggle" id="calBtn">כיול מיק'</button>
       <button class="toggle" id="tfBtn">TF ‏2־ערוצי</button>
       <button class="toggle" id="rtBtn">RT60</button>
@@ -1671,7 +1671,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v66';
+document.getElementById('ver').textContent='v67';
 // procedurally draw non-repeating circuit traces behind the controls
 (function drawPCB(){
   const g=document.getElementById('pcbTraces'); if(!g) return;
