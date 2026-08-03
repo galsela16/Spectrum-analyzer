@@ -130,14 +130,14 @@
     font-family:inherit;font-size:12px;font-weight:600;letter-spacing:1px;padding:9px 16px;border-radius:8px;cursor:pointer}
   #genOnBtn.on{border-color:var(--accent);background:rgba(47,155,255,.12);color:var(--accent)}
   #rtPanel{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:6;display:none;
-    flex-direction:column;gap:10px;align-items:center;max-height:calc(100% - 16px);overflow:auto;padding:18px 20px;border:1px solid var(--accent);
-    border-radius:14px;background:rgba(13,17,23,.96);backdrop-filter:blur(6px);box-shadow:0 8px 40px rgba(0,0,0,.6)}
+    flex-direction:column;gap:10px;align-items:stretch;width:min(92%,340px);max-height:calc(100% - 16px);overflow:auto;padding:16px 18px;border:1px solid var(--accent);
+    border-radius:14px;background:rgba(13,17,23,.97);backdrop-filter:blur(6px);box-shadow:0 8px 40px rgba(0,0,0,.6)}
+  #rtStatus{font-size:14px;color:var(--text);letter-spacing:.5px;text-align:center;min-height:20px}
+  #rtStatus b{color:var(--accent);font-size:20px}
+  #rtCanvas{width:100%;height:120px;background:#0b0f16;border:1px solid var(--line);border-radius:8px}
   #rtPanel.open{display:flex}
-  #rtStatus{font-size:15px;color:var(--text);letter-spacing:1px;text-align:center;min-height:20px}
-  #rtStatus b{color:var(--accent);font-size:22px}
-  #rtCanvas{background:#0b0f16;border:1px solid var(--line);border-radius:8px}
   #rtClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
-    font-size:12px;padding:8px 20px;border-radius:8px;cursor:pointer}
+    font-size:12px;padding:8px 20px;border-radius:8px;cursor:pointer;align-self:center}
   #eqPanel{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:6;display:none;
     flex-direction:column;gap:10px;width:280px;max-height:calc(100% - 16px);overflow:auto;padding:16px 18px;border:1px solid var(--accent);
     border-radius:14px;background:rgba(13,17,23,.97);backdrop-filter:blur(6px);box-shadow:0 8px 40px rgba(0,0,0,.6)}
@@ -1606,7 +1606,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v49';
+document.getElementById('ver').textContent='v50';
 // keep audio alive: browsers suspend the AudioContext when the app is backgrounded
 function reviveAudio(){ if(running && audioCtx && audioCtx.state==='suspended') audioCtx.resume(); }
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) reviveAudio(); });
