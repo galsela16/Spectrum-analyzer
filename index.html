@@ -96,7 +96,7 @@
   .meterLbl{position:relative;padding-inline-start:10px;font-size:10px;color:var(--dim);letter-spacing:1.5px;z-index:1}
   footer{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:18px 18px 20px;border-top:1px solid var(--line);position:relative;overflow:hidden;
     background:radial-gradient(120% 140% at 50% 0%, #14202c 0%, #0e161e 55%, #0a0e13 100%)}
-  #pcb{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:.1;z-index:0}
+  #pcb{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:.35;z-index:0}
   footer::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
     background:radial-gradient(70% 130% at 50% -10%, rgba(62,166,255,.12), transparent 70%)}
   footer>*{position:relative;z-index:1}
@@ -1671,29 +1671,27 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v67';
-// procedurally draw non-repeating circuit traces behind the controls
-(function drawPCB(){
+document.getElementById('ver').textContent='v68';
+// procedural "plexus" network: glowing nodes connected by thin lines
+(function drawPlexus(){
   const g=document.getElementById('pcbTraces'); if(!g) return;
-  let s=1337; const rnd=()=>{ s=(s*1103515245+12345)&0x7fffffff; return s/0x7fffffff; };
-  const W=600,H=200, NS='http://www.w3.org/2000/svg', pads=[];
-  const line=(d,w)=>{ const p=document.createElementNS(NS,'path'); p.setAttribute('d',d);
-    p.setAttribute('fill','none'); p.setAttribute('stroke','#4aa8ff'); p.setAttribute('stroke-width',w); g.appendChild(p); };
-  for(let i=0;i<46;i++){
-    const horiz=rnd()<0.5; let x=horiz?0:Math.round(rnd()*W), y=horiz?Math.round(rnd()*H):0;
-    let d='M'+x+' '+y, segs=3+Math.floor(rnd()*4);
-    for(let k=0;k<segs;k++){
-      const step=30+rnd()*70, diag=rnd()<0.4;
-      if(horiz){ x+=step; if(diag){const dy=(rnd()<0.5?-1:1)*Math.min(step,26); y+=dy; d+=' L'+Math.round(x-Math.abs(dy))+' '+Math.round(y-dy)+' L'+Math.round(x)+' '+Math.round(y);} else d+=' H'+Math.round(x); }
-      else{ y+=step; if(diag){const dx=(rnd()<0.5?-1:1)*Math.min(step,26); x+=dx; d+=' L'+Math.round(x-dx)+' '+Math.round(y-Math.abs(dx))+' L'+Math.round(x)+' '+Math.round(y);} else d+=' V'+Math.round(y); }
-      if(rnd()<0.5) pads.push([x,y]);
-      if(x>W+40||y>H+40||x<-40||y<-40) break;
+  g.innerHTML='';
+  let s=90210; const rnd=()=>{ s=(s*1103515245+12345)&0x7fffffff; return s/0x7fffffff; };
+  const W=600,H=200, NS='http://www.w3.org/2000/svg', N=54, pts=[];
+  for(let i=0;i<N;i++) pts.push({x:rnd()*W, y:rnd()*H, r:0.6+rnd()*2.2});
+  for(let i=0;i<N;i++) for(let j=i+1;j<N;j++){
+    const dx=pts[i].x-pts[j].x, dy=pts[i].y-pts[j].y, d=Math.hypot(dx,dy);
+    if(d<64){
+      const ln=document.createElementNS(NS,'line');
+      ln.setAttribute('x1',pts[i].x.toFixed(1)); ln.setAttribute('y1',pts[i].y.toFixed(1));
+      ln.setAttribute('x2',pts[j].x.toFixed(1)); ln.setAttribute('y2',pts[j].y.toFixed(1));
+      ln.setAttribute('stroke','#5ab0ff'); ln.setAttribute('stroke-width','0.4');
+      ln.setAttribute('opacity',(0.55*(1-d/64)).toFixed(2)); g.appendChild(ln);
     }
-    line(d, rnd()<0.3?1:0.7);
   }
-  pads.slice(0,40).forEach(([x,y])=>{ const c=document.createElementNS(NS,'circle');
-    c.setAttribute('cx',x); c.setAttribute('cy',y); c.setAttribute('r',(1+rnd()*1.4).toFixed(1));
-    c.setAttribute('fill','#8fd0ff'); g.appendChild(c); });
+  pts.forEach(p=>{ const c=document.createElementNS(NS,'circle');
+    c.setAttribute('cx',p.x.toFixed(1)); c.setAttribute('cy',p.y.toFixed(1)); c.setAttribute('r',p.r.toFixed(1));
+    c.setAttribute('fill','#9fd4ff'); c.setAttribute('opacity',(0.5+rnd()*0.5).toFixed(2)); g.appendChild(c); });
 })();
 // keep audio alive: browsers suspend the AudioContext when the app is backgrounded
 function reviveAudio(){ if(running && audioCtx && audioCtx.state==='suspended') audioCtx.resume(); }
