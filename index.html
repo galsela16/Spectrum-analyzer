@@ -592,6 +592,7 @@ function genStop(){
   },250);
   genSrc=null; genOsc=null; genGain=null; genOn=false;
   const btn=document.getElementById('genOnBtn'); btn.classList.remove('on'); btn.textContent='▶ הפעל אות';
+  syncPinkComp();
 }
 function scheduleSweepCycle(){
   if(!genOn || genType!=='sweep' || !genOsc) return;
@@ -620,7 +621,13 @@ function genStart(){
   genGain.gain.setTargetAtTime(target,audioCtx.currentTime,0.15);  // gentle ramp-up
   genOn=true;
   if(genType==='sweep') scheduleSweepCycle();   // start the sweep only after genOn=true
+  syncPinkComp();
   const btn=document.getElementById('genOnBtn'); btn.classList.add('on'); btn.textContent='⏹ עצור אות';
+}
+function syncPinkComp(){
+  // auto-toggle "תגובה pink" to match the generator (pink → on, else off)
+  pinkComp = (genOn && genType==='pink');
+  document.getElementById('compBtn').classList.toggle('on', pinkComp);
 }
 function genApplyLevel(){
   if(genGain){ genGain.gain.setTargetAtTime(Math.pow(10,genDb/20),audioCtx.currentTime,0.1); }
@@ -1610,7 +1617,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v52';
+document.getElementById('ver').textContent='v53';
 // keep audio alive: browsers suspend the AudioContext when the app is backgrounded
 function reviveAudio(){ if(running && audioCtx && audioCtx.state==='suspended') audioCtx.resume(); }
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) reviveAudio(); });
