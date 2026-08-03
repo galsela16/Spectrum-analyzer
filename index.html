@@ -210,6 +210,10 @@
     <div id="rtPanel">
       <div id="rtStatus">RT60</div>
       <canvas id="rtCanvas" width="300" height="120"></canvas>
+      <div class="ctrl" style="width:100%">
+        <label>טווח דעיכה נדרש <b id="rtRangeVal">10dB</b></label>
+        <input type="range" id="rtRange" min="6" max="30" step="1" value="10">
+      </div>
       <button id="rtClose">סגור</button>
     </div>
     <div id="eqPanel">
@@ -425,7 +429,7 @@ let genType='pink', genOn=false, genGain=null, genSrc=null, genOsc=null;
 let genDb=-34, genHz=1000, targetMode='off';
 let genSweepDur=4, sweepTimer=null;
 let pinkComp=false;
-let rt60State='idle', rt60Samples=[], rt60CutT=0;
+let rt60State='idle', rt60Samples=[], rt60CutT=0, rtRange=10;
 let eqMarks=null;   // legacy
 let eqCurveData=null;   // {freqs,corr} drawn on the main graph
 let eqMode='graphic', lastEqCorr=null;   // graphic | param
@@ -1038,6 +1042,11 @@ function renderEqResult(){
 // ---- RT60 (interrupted-noise method) ----
 const rtPanel=document.getElementById('rtPanel'), rtStatus=document.getElementById('rtStatus');
 document.getElementById('rtClose').addEventListener('click',closeModals);
+document.getElementById('rtRange').addEventListener('input',e=>{
+  rtRange=parseFloat(e.target.value);
+  document.getElementById('rtRangeVal').textContent=rtRange+'dB';
+  if(rt60Samples.length) analyzeRT60();   // re-evaluate the last measurement at the new threshold
+});
 document.getElementById('rtBtn').addEventListener('click',startRT60);
 
 function startRT60(){
@@ -1080,8 +1089,9 @@ function analyzeRT60(){
   // clean decay region: from 5dB below steady down to 5dB above the noise floor
   const hi=steady-5, lo=noise+5;
   const reg=post.filter(x=>x.db<=hi && x.db>=lo);
-  if(reg.length<5 || (hi-lo)<10){
-    rtStatus.innerHTML='לא הצלחתי למדוד — טווח דעיכה קטן מדי.<br><span style="font-size:11px;color:var(--dim)">נסה עוצמה גבוהה יותר או חדר שקט יותר.</span>';
+  const needRange=rtRange;   // user-adjustable required decay span (dB)
+  if(reg.length<5 || (hi-lo)<Math.min(8,needRange)){
+    rtStatus.innerHTML='אין דעיכה למדוד — האות חלש/החדר שקט.<br><span style="font-size:11px;color:var(--dim)">הורד "טווח דעיכה נדרש" או העלה עוצמה.</span>';
     drawRTPlot(post, steady, null, 0); return;
   }
   // least-squares slope of dB vs time
@@ -1091,10 +1101,13 @@ function analyzeRT60(){
   const intercept=(sd - slope*st)/n;
   const rt60 = -60/slope;
   drawRTPlot(post, steady, slope, intercept);
+  const approx = (hi-lo) < needRange;   // measured span smaller than requested → less reliable
   if(slope<0 && rt60>0.05 && rt60<10)
-    rtStatus.innerHTML='RT60 ≈ <b>'+rt60.toFixed(2)+' ש\'</b>';
+    rtStatus.innerHTML='RT60 ≈ <b>'+rt60.toFixed(2)+' ש\'</b>'+
+      (approx?' <span style="font-size:11px;color:var(--warn)">(משוער · טווח '+(hi-lo).toFixed(0)+'dB)</span>':
+              ' <span style="font-size:11px;color:var(--dim)">(טווח '+(hi-lo).toFixed(0)+'dB)</span>');
   else
-    rtStatus.innerHTML='לא הצלחתי למדוד — נסה עוצמה גבוהה יותר או חדר שקט יותר';
+    rtStatus.innerHTML='לא הצלחתי למדוד — נסה עוצמה גבוהה יותר';
 }
 function drawRTPlot(post, steady, slope, intercept){
   const c=document.getElementById('rtCanvas'), x=c.getContext('2d');
@@ -1593,7 +1606,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v48';
+document.getElementById('ver').textContent='v49';
 // keep audio alive: browsers suspend the AudioContext when the app is backgrounded
 function reviveAudio(){ if(running && audioCtx && audioCtx.state==='suspended') audioCtx.resume(); }
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) reviveAudio(); });
