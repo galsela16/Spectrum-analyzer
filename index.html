@@ -70,10 +70,11 @@
   #modalBg{position:absolute;inset:0;z-index:5;background:rgba(0,0,0,.5);display:none}
   #modalBg.show{display:block}
   #areaPanel{position:absolute;top:8px;left:50%;transform:translateX(-50%);z-index:6;display:none;
-    flex-direction:column;gap:10px;width:min(92%,340px);max-height:calc(100% - 16px);overflow:auto;padding:16px 18px;
+    flex-direction:column;gap:10px;width:min(92%,280px);max-height:calc(100% - 16px);overflow:auto;padding:16px 18px;
     border:1px solid var(--accent);border-radius:14px;background:rgba(13,17,23,.97);backdrop-filter:blur(6px);box-shadow:0 8px 40px rgba(0,0,0,.6)}
   #areaPanel.open{display:flex}
   #areaPanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
+  #areaPanel .sub{font-size:10px;color:var(--dim);letter-spacing:.5px;line-height:1.5}
   #areaList{display:flex;flex-direction:column;gap:6px}
   #areaEqList{display:flex;flex-direction:column;gap:5px;max-height:200px;overflow:auto}
   .areaRow{display:flex;align-items:center;gap:10px;padding:8px 11px;border-radius:8px;border:1px solid var(--line);font-size:13px;color:var(--text)}
@@ -1559,7 +1560,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v42';
+document.getElementById('ver').textContent='v43';
 // keep audio alive: browsers suspend the AudioContext when the app is backgrounded
 function reviveAudio(){ if(running && audioCtx && audioCtx.state==='suspended') audioCtx.resume(); }
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) reviveAudio(); });
