@@ -96,7 +96,7 @@
   .meterLbl{position:relative;padding-inline-start:10px;font-size:10px;color:var(--dim);letter-spacing:1.5px;z-index:1}
   footer{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:18px 18px 20px;border-top:1px solid var(--line);position:relative;overflow:hidden;
     background:radial-gradient(120% 140% at 50% 0%, #14202c 0%, #0e161e 55%, #0a0e13 100%)}
-  #pcb{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:.35;z-index:0}
+  #pcb{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:.2;z-index:0}
   footer::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
     background:radial-gradient(70% 130% at 50% -10%, rgba(62,166,255,.12), transparent 70%)}
   footer>*{position:relative;z-index:1}
@@ -1671,27 +1671,43 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v68';
-// procedural "plexus" network: glowing nodes connected by thin lines
-(function drawPlexus(){
+document.getElementById('ver').textContent='v69';
+// procedural animated "plexus": drifting glowing nodes linked by thin lines
+(function plexus(){
   const g=document.getElementById('pcbTraces'); if(!g) return;
-  g.innerHTML='';
+  const NS='http://www.w3.org/2000/svg', W=600,H=200, N=90, LINK=46;
   let s=90210; const rnd=()=>{ s=(s*1103515245+12345)&0x7fffffff; return s/0x7fffffff; };
-  const W=600,H=200, NS='http://www.w3.org/2000/svg', N=54, pts=[];
-  for(let i=0;i<N;i++) pts.push({x:rnd()*W, y:rnd()*H, r:0.6+rnd()*2.2});
-  for(let i=0;i<N;i++) for(let j=i+1;j<N;j++){
-    const dx=pts[i].x-pts[j].x, dy=pts[i].y-pts[j].y, d=Math.hypot(dx,dy);
-    if(d<64){
-      const ln=document.createElementNS(NS,'line');
-      ln.setAttribute('x1',pts[i].x.toFixed(1)); ln.setAttribute('y1',pts[i].y.toFixed(1));
-      ln.setAttribute('x2',pts[j].x.toFixed(1)); ln.setAttribute('y2',pts[j].y.toFixed(1));
-      ln.setAttribute('stroke','#5ab0ff'); ln.setAttribute('stroke-width','0.4');
-      ln.setAttribute('opacity',(0.55*(1-d/64)).toFixed(2)); g.appendChild(ln);
-    }
+  const nodes=[], dots=[];
+  for(let i=0;i<N;i++){
+    const n={x:rnd()*W,y:rnd()*H,vx:(rnd()-0.5)*0.14,vy:(rnd()-0.5)*0.14,r:0.5+rnd()*1.8};
+    nodes.push(n);
+    const c=document.createElementNS(NS,'circle'); c.setAttribute('r',n.r.toFixed(1));
+    c.setAttribute('fill','#9fd4ff'); c.setAttribute('opacity',(0.4+rnd()*0.5).toFixed(2));
+    g.appendChild(c); dots.push(c);
   }
-  pts.forEach(p=>{ const c=document.createElementNS(NS,'circle');
-    c.setAttribute('cx',p.x.toFixed(1)); c.setAttribute('cy',p.y.toFixed(1)); c.setAttribute('r',p.r.toFixed(1));
-    c.setAttribute('fill','#9fd4ff'); c.setAttribute('opacity',(0.5+rnd()*0.5).toFixed(2)); g.appendChild(c); });
+  // pool of reusable line elements
+  const lines=[];
+  for(let i=0;i<420;i++){ const l=document.createElementNS(NS,'line');
+    l.setAttribute('stroke','#5ab0ff'); l.setAttribute('stroke-width','0.4'); l.setAttribute('opacity','0'); g.appendChild(l); lines.push(l); }
+  let last=0;
+  function frame(t){
+    if(t-last>40){ last=t;   // ~25fps is plenty and light
+      for(const n of nodes){ n.x+=n.vx; n.y+=n.vy;
+        if(n.x<0||n.x>W)n.vx*=-1; if(n.y<0||n.y>H)n.vy*=-1; }
+      for(let i=0;i<N;i++){ dots[i].setAttribute('cx',nodes[i].x.toFixed(1)); dots[i].setAttribute('cy',nodes[i].y.toFixed(1)); }
+      let li=0;
+      for(let i=0;i<N&&li<lines.length;i++) for(let j=i+1;j<N&&li<lines.length;j++){
+        const dx=nodes[i].x-nodes[j].x, dy=nodes[i].y-nodes[j].y, d2=dx*dx+dy*dy;
+        if(d2<LINK*LINK){ const d=Math.sqrt(d2), l=lines[li++];
+          l.setAttribute('x1',nodes[i].x.toFixed(1)); l.setAttribute('y1',nodes[i].y.toFixed(1));
+          l.setAttribute('x2',nodes[j].x.toFixed(1)); l.setAttribute('y2',nodes[j].y.toFixed(1));
+          l.setAttribute('opacity',(0.5*(1-d/LINK)).toFixed(2)); }
+      }
+      for(;li<lines.length;li++) lines[li].setAttribute('opacity','0');
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
 })();
 // keep audio alive: browsers suspend the AudioContext when the app is backgrounded
 function reviveAudio(){ if(running && audioCtx && audioCtx.state==='suspended') audioCtx.resume(); }
