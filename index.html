@@ -308,7 +308,6 @@
     <div class="tabbar">
       <button class="tab on" data-p="view">תצוגה</button>
       <button class="tab" data-p="tune">כיוונון</button>
-      <button class="tab" data-p="spl">SPL</button>
       <button class="tab" data-p="io">ייצוא/קלט</button>
       <button class="toggle" id="stopBtn" style="display:none;margin-inline-start:auto">אפס סשן</button>
     </div>
@@ -340,9 +339,6 @@
       <button class="toggle" id="calBtn">כיול מיק'</button>
       <button class="toggle" id="tfBtn">TF ‏2־ערוצי</button>
       <button class="toggle" id="rtBtn">RT60</button>
-    </div>
-
-    <div class="tabpage" data-page="spl">
       <div class="ctrl" style="flex:0 0 auto">
         <label>יחידת מד</label>
         <div class="seg" id="unitSeg">
@@ -1597,7 +1593,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v47';
+document.getElementById('ver').textContent='v48';
 // keep audio alive: browsers suspend the AudioContext when the app is backgrounded
 function reviveAudio(){ if(running && audioCtx && audioCtx.state==='suspended') audioCtx.resume(); }
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) reviveAudio(); });
