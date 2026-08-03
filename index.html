@@ -298,7 +298,7 @@
       <button class="tab" data-p="tune">כיוונון</button>
       <button class="tab" data-p="spl">SPL</button>
       <button class="tab" data-p="io">ייצוא/קלט</button>
-      <button class="toggle" id="stopBtn" style="display:none;margin-inline-start:auto">עצור</button>
+      <button class="toggle" id="stopBtn" style="display:none;margin-inline-start:auto">אפס סשן</button>
     </div>
 
     <div class="tabpage active" data-page="view">
@@ -1107,7 +1107,24 @@ document.getElementById('res').addEventListener('input',e=>{
 document.getElementById('mRta').addEventListener('click',()=>setMode('rta'));
 document.getElementById('mSpec').addEventListener('click',()=>setMode('spec'));
 document.getElementById('startBtn').addEventListener('click',()=>start());
-document.getElementById('stopBtn').addEventListener('click',stop);
+document.getElementById('stopBtn').addEventListener('click',resetSession);
+function resetSession(){
+  // clear everything accumulated this session; keep the mic running
+  peaks.fill(0); avgBuf.fill(0); snapCurve=null;
+  const fz=document.getElementById('freezeBtn'); fz.classList.remove('on'); fz.textContent='הקפא';
+  eqPositions=[]; eqMarks=null; eqCurveData=null; lastEqCorr=null;
+  document.getElementById('eqList').innerHTML=''; document.getElementById('eqCurveCanvas').style.display='none';
+  updateEqUI();
+  areas=[]; renderAreaList();
+  document.getElementById('areaEqCanvas').style.display='none';
+  document.getElementById('areaEqList').innerHTML='';
+  tfResult=null; document.getElementById('tfGeqList').innerHTML='';
+  document.getElementById('tfCanvas').style.display='none';
+  fbTrack.clear(); fbPanel.innerHTML='';
+  leqSumP=0; leqN=0; splMax=-120; lvlPeak=-120;
+  if(genOn) genStop();
+  closeModals();
+}
 
 function setMode(m){
   mode=m;
@@ -1520,7 +1537,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v38';
+document.getElementById('ver').textContent='v39';
 resize();
 // keep the canvas backing store in sync with the stage size (panels opening,
 // tab changes, etc. resize the plot area) — prevents stale/duplicate drawing
