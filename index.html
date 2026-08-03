@@ -372,6 +372,7 @@
       <button class="toggle" id="pngBtn">PNG</button>
       <button class="toggle" id="csvBtn">CSV</button>
       <select class="inp" id="inSel" title="מקור קלט"><option>מיקרופון ברירת מחדל</option></select>
+      <select class="inp" id="outSel" title="יציאת פלט (אות הגנרטור)"><option>פלט ברירת מחדל</option></select>
     </div>
   </footer>
 
@@ -1208,6 +1209,7 @@ async function start(deviceId){
     if(deviceId && typeof deviceId==='string') audio.deviceId={exact:deviceId};
     stream=await navigator.mediaDevices.getUserMedia({audio});
     audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    if(outSinkId && typeof audioCtx.setSinkId==='function'){ try{ await audioCtx.setSinkId(outSinkId); }catch(_){} }
     if(audioCtx.state==='suspended') await audioCtx.resume();
     analyser=audioCtx.createAnalyser();
     analyser.fftSize=32768;                 // ~1.5Hz bins @48k — supports 1/24-octave detail
@@ -1253,8 +1255,32 @@ async function populateInputs(){
       sel.appendChild(o);
     });
     if(cur) sel.value=cur;
+    // output devices (for the generator signal)
+    const outs=devs.filter(d=>d.kind==='audiooutput');
+    const osel=document.getElementById('outSel'); const ocur=osel.value;
+    osel.innerHTML='';
+    if(!outs.length){ const o=document.createElement('option'); o.textContent='פלט ברירת מחדל'; osel.appendChild(o); }
+    outs.forEach((d,i)=>{
+      const o=document.createElement('option');
+      o.value=d.deviceId; o.textContent=d.label||('פלט '+(i+1));
+      osel.appendChild(o);
+    });
+    if(ocur) osel.value=ocur;
   }catch(e){}
 }
+let outSinkId=null;
+async function applyOutput(deviceId){
+  outSinkId=deviceId;
+  // route the generator's audio graph to the chosen output, if supported
+  try{
+    if(audioCtx && typeof audioCtx.setSinkId==='function'){ await audioCtx.setSinkId(deviceId||''); return true; }
+  }catch(e){}
+  return false;
+}
+document.getElementById('outSel').addEventListener('change',async e=>{
+  const ok=await applyOutput(e.target.value);
+  if(!ok) alert('הדפדפן לא תומך בבחירת יציאת פלט. הגדר את הפלט ב־macOS: הגדרות → סאונד → פלט.');
+});
 
 async function switchInput(deviceId){
   if(!running) return;
@@ -1627,7 +1653,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v54';
+document.getElementById('ver').textContent='v55';
 // keep audio alive: browsers suspend the AudioContext when the app is backgrounded
 function reviveAudio(){ if(running && audioCtx && audioCtx.state==='suspended') audioCtx.resume(); }
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) reviveAudio(); });
