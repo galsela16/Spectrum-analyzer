@@ -132,8 +132,8 @@
   #rtPanel{position:relative;z-index:6;display:none;
     flex-direction:column;gap:10px;align-items:stretch;width:min(92%,340px);max-height:calc(100% - 16px);overflow:auto;padding:16px 18px;border:1px solid var(--accent);
     border-radius:14px;background:rgba(13,17,23,.97);backdrop-filter:blur(6px);box-shadow:0 8px 40px rgba(0,0,0,.6)}
-  #rtStatus{font-size:14px;color:var(--text);letter-spacing:.5px;text-align:center;min-height:20px}
-  #rtStatus b{color:var(--accent);font-size:20px}
+  #rtStatus{font-size:15px;color:var(--text);letter-spacing:.5px;text-align:center;min-height:24px;line-height:1.5}
+  #rtStatus b{color:var(--accent);font-size:26px}
   #rtCanvas{width:100%;height:120px;background:#0b0f16;border:1px solid var(--line);border-radius:8px}
   #rtPanel.open{display:flex}
   #rtClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
@@ -208,8 +208,8 @@
     <button class="zoomBtn" id="zoomBtn">⤢ טווח מלא</button>
     <div id="modalBg"></div>
     <div id="rtPanel">
-      <div id="rtStatus">RT60</div>
-      <canvas id="rtCanvas" width="300" height="120"></canvas>
+      <h3 style="font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600">מדידת RT60</h3>
+      <div id="rtStatus">לחץ RT60 כדי למדוד</div>
       <div class="ctrl" style="width:100%">
         <label>טווח דעיכה נדרש <b id="rtRangeVal">10dB</b></label>
         <input type="range" id="rtRange" min="6" max="30" step="1" value="10">
@@ -1113,7 +1113,8 @@ function analyzeRT60(){
     rtStatus.innerHTML='לא הצלחתי למדוד — נסה עוצמה גבוהה יותר';
 }
 function drawRTPlot(post, steady, slope, intercept){
-  const c=document.getElementById('rtCanvas'), x=c.getContext('2d');
+  const c=document.getElementById('rtCanvas'); if(!c) return;
+  const x=c.getContext('2d');
   const W=c.width, H=c.height; x.clearRect(0,0,W,H);
   const tMax=Math.max(0.5, post.length?post[post.length-1].t:1);
   const dbMin=steady-65, dbMax=steady+3;
@@ -1609,7 +1610,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v51';
+document.getElementById('ver').textContent='v52';
 // keep audio alive: browsers suspend the AudioContext when the app is backgrounded
 function reviveAudio(){ if(running && audioCtx && audioCtx.state==='suspended') audioCtx.resume(); }
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) reviveAudio(); });
