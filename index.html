@@ -1378,7 +1378,7 @@ function drawRta(W,H,nyquist,bins,xForFreq){
       ctx.fillStyle='rgba(255,255,255,.85)'; ctx.fillRect(x,py-2,barW,2);
     }
   }
-  // frozen snapshot overlay (A/B compare)
+  // frozen snapshot overlay (A/B compare) + peak frequency labels
   if(snapCurve && snapCurve.length===BANDS){
     ctx.strokeStyle='#ffb020'; ctx.lineWidth=2; ctx.beginPath();
     for(let b=0;b<BANDS;b++){
@@ -1388,6 +1388,27 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     ctx.stroke();
     ctx.fillStyle='#ffb020'; ctx.font='10px monospace'; ctx.textAlign='start';
     ctx.fillText('הקפאה', 8, 12);
+    // mark the prominent peaks with their exact frequency
+    const peaks=[];
+    for(let b=1;b<BANDS-1;b++){
+      const v=snapCurve[b];
+      if(v>snapCurve[b-1] && v>=snapCurve[b+1] && v>0.35) peaks.push({b,v});
+    }
+    peaks.sort((a,z)=>z.v-a.v);
+    peaks.slice(0,6).forEach(p=>{
+      const b=p.b, x=b*bw+bw/2, yy=plotH-p.v*plotH;
+      // exact freq: strongest FFT bin inside this band
+      const fc=ISO[b]; let lo=Math.floor((fc/R)/nyquist*bins), hi=Math.ceil((fc*R)/nyquist*bins);
+      lo=Math.max(1,lo); hi=Math.min(bins-1,hi); let bMax=-999, bi=lo;
+      for(let i=lo;i<=hi;i++){ if(floatData[i]>bMax){bMax=floatData[i];bi=i;} }
+      const hz=bi*nyquist/bins;
+      const lbl=hz>=1000?(hz/1000).toFixed(2)+'k':Math.round(hz)+'';
+      ctx.fillStyle='#ffb020'; ctx.beginPath(); ctx.arc(x,yy,3,0,6.28); ctx.fill();
+      ctx.font='10px monospace'; ctx.textAlign='center';
+      const tw=ctx.measureText(lbl).width+6;
+      ctx.fillStyle='rgba(13,17,23,.9)'; ctx.fillRect(x-tw/2, yy-16, tw, 13);
+      ctx.fillStyle='#ffd27a'; ctx.fillText(lbl, x, yy-6);
+    });
   }
   // drag-to-zoom selection rectangle
   if(dragging && Math.abs(dragX1-dragX0)>4){
@@ -1576,7 +1597,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v46';
+document.getElementById('ver').textContent='v47';
 // keep audio alive: browsers suspend the AudioContext when the app is backgrounded
 function reviveAudio(){ if(running && audioCtx && audioCtx.state==='suspended') audioCtx.resume(); }
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) reviveAudio(); });
