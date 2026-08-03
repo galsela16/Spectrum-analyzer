@@ -417,7 +417,7 @@ let running=false, mode='rta';
 let peakHold=true, fbOn=true, avgOn=false;
 let floorDb=-85, ceilDb=-15;
 let calib=0;              // dB offset for SPL calibration
-let fbProm=12;            // feedback prominence threshold (dB)
+let fbProm=14;            // feedback prominence threshold (dB); slider default 12 → 26-12
 let lvlPeak=-120, lvlPeakT=0;  // held level peak (dBFS) + timestamp
 let weightMode='Z';      // Z | A | C weighting for SPL stats
 let meterUnit='SPL';     // meter readout unit: SPL | dBFS
@@ -475,7 +475,7 @@ document.getElementById('cal').addEventListener('input',e=>{
   document.getElementById('calVal').textContent=(calib>=0?'+':'')+calib+'dB';
 });
 document.getElementById('fbSens').addEventListener('input',e=>{
-  fbProm=parseFloat(e.target.value);
+  fbProm = 26 - parseFloat(e.target.value);   // right (min)=low sensitivity, left (max)=high
   document.getElementById('fbSensVal').textContent = fbProm>=15?'נמוכה':fbProm>=10?'בינונית':'גבוהה';
 });
 document.getElementById('peakBtn').addEventListener('click',function(){
@@ -1576,7 +1576,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v45';
+document.getElementById('ver').textContent='v46';
 // keep audio alive: browsers suspend the AudioContext when the app is backgrounded
 function reviveAudio(){ if(running && audioCtx && audioCtx.state==='suspended') audioCtx.resume(); }
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) reviveAudio(); });
