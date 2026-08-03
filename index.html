@@ -70,6 +70,14 @@
     font-family:inherit;font-size:11px;letter-spacing:1px;padding:7px 12px;border-radius:4px;cursor:pointer}
   #modalBg{position:absolute;inset:0;z-index:5;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;padding:12px}
   #modalBg.show{display:flex}
+  #helpBtn{margin-inline-start:auto;width:30px;height:30px;border-radius:50%;border:1px solid var(--line);
+    background:#161b22;color:var(--dim);font-weight:700;font-size:14px;cursor:pointer;transition:.14s;flex:none}
+  #helpBtn:hover{color:var(--text);border-color:#3a4656}
+  #helpBtn.on{border-color:var(--accent);color:var(--accent);background:rgba(62,166,255,.14);box-shadow:0 0 12px rgba(62,166,255,.3)}
+  #helpTip{position:fixed;z-index:60;display:none;max-width:250px;padding:9px 12px;border:1px solid var(--accent);
+    border-radius:6px;background:rgba(13,17,23,.98);color:var(--text);font-size:12px;line-height:1.55;pointer-events:none;
+    box-shadow:0 8px 24px rgba(0,0,0,.6)}
+  body.help-on .toggle,body.help-on .tab,body.help-on .seg button,body.help-on input[type=range]{cursor:help}
   #areaPanel{position:relative;z-index:6;display:none;
     flex-direction:column;gap:10px;width:min(92%,280px);max-height:calc(100% - 16px);overflow:auto;padding:16px 18px;
     border:1px solid var(--accent);border-radius:6px;background:rgba(13,17,23,.97);backdrop-filter:blur(6px);box-shadow:0 8px 40px rgba(0,0,0,.6)}
@@ -203,6 +211,7 @@
       <button id="mRta" class="on">ספקטרום</button>
       <button id="mSpec">ווטרפול</button>
     </div>
+    <button id="helpBtn" title="מצב עזרה — רחף על כפתור להסבר">?</button>
   </header>
 
   <div id="stage">
@@ -382,7 +391,7 @@
         <label>כיול SPL <b id="calVal">+0dB</b></label>
         <input type="range" id="cal" min="0" max="130" step="1" value="0">
       </div>
-      <button class="toggle" id="wgtBtn">שקלול Z</button>
+      <button class="toggle" id="wgtBtn">dBZ</button>
       <button class="toggle" id="leqBtn">אפס Leq</button>
     </div>
 
@@ -542,7 +551,7 @@ function exportCSV(){
 // ---- weighting / Leq / input ----
 document.getElementById('wgtBtn').addEventListener('click',function(){
   weightMode = weightMode==='Z'?'A':weightMode==='A'?'C':'Z';
-  this.textContent='שקלול '+weightMode;
+  this.textContent='dB'+weightMode;
   this.classList.toggle('on', weightMode!=='Z');
   document.getElementById('wLbl').textContent=weightMode;
   leqSumP=0; leqN=0; splMax=-120;   // stats depend on weighting → reset
@@ -1195,7 +1204,7 @@ function resetSession(){
   // reset toggles to defaults
   targetMode='off'; const tb=document.getElementById('tgtBtn'); tb.textContent='יעד'; tb.classList.remove('on');
   pinkComp=false; compChoice=true; syncPinkComp();
-  weightMode='Z'; const wb=document.getElementById('wgtBtn'); wb.textContent='שקלול Z'; wb.classList.remove('on'); document.getElementById('wLbl').textContent='Z';
+  weightMode='Z'; const wb=document.getElementById('wgtBtn'); wb.textContent='dBZ'; wb.classList.remove('on'); document.getElementById('wLbl').textContent='Z';
   if(viewMin!==FMIN||viewMax!==FMAX){ viewMin=FMIN; viewMax=FMAX; buildBands(curBpo); document.getElementById('zoomBtn').style.display='none'; }
   if(genOn) genStop();
   closeModals();
@@ -1671,7 +1680,50 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v69';
+document.getElementById('ver').textContent='v70';
+const HELP={
+  mRta:'תצוגת ספקטרום — עוצמה לפי תדר, בזמן אמת.',
+  mSpec:'ווטרפול — הספקטרום לאורך זמן.',
+  genBtn:'גנרטור אותות: רעש ורוד/לבן, סינוס או סוויפ.\nלמדידה ולכיוונון המערכת.',
+  tgtBtn:'עקומת יעד: שטוח או House.\nמה שאליו משווים את המדידה.',
+  eqBtn:'מדידת המרחב: מדוד תגובת מערכת\nוקבל תיקון EQ (ממוצע / אזורים).',
+  calBtn:'כיולי מיקרופון: טען קובץ כיול (REW)\nלתיקון צביעת המיקרופון.',
+  tfBtn:'Transfer Function דו־ערוצי:\nמיק\' מול רפרנס מהמיקסר → תיקון EQ.',
+  rtBtn:'RT60: מדידת זמן הדהוד החדר.\nדורש עוצמה וחדר אמיתי.',
+  wgtBtn:'שקלול המד: dBZ (טכני), dBA (חוק/אוזן),\ndBC (עם בס). לחיצה מחליפה.',
+  leqBtn:'אפס Leq: מתחיל מדידת ממוצע עוצמה\nמחדש מהרגע הזה.',
+  peakBtn:'Peak Hold: משאיר את השיאים על המסך.',
+  avgBtn:'מיצוע: מייצב את התצוגה לאורך זמן.',
+  freezeBtn:'הקפא: שומר עקומה להשוואה,\nעם סימון תדרי הפיקים.',
+  fbBtn:'גלאי פידבק: מזהה תדרים שמתחילים\nלשרוק, עם המלצת חיתוך.',
+  stopBtn:'אפס סשן: מנקה מדידות והגדרות\nבלי לכבות את המיקרופון.',
+  pngBtn:'ייצוא תמונת מסך (PNG).',
+  csvBtn:'ייצוא הנתונים כקובץ CSV.',
+  inSel:'מקור קלט: בחר מיקרופון / כרטיס קול.',
+  outSel:'יציאת פלט: לאן יוצא אות הגנרטור.',
+  genOnBtn:'מפעיל/עוצר את אות הגנרטור.',
+  floor:'רצפת רעש: הסף התחתון של התצוגה.',
+  cal:'כיול SPL: התאם למד ייחוס\nכדי לקבל dB SPL אמיתי.',
+  genLvl:'עוצמת אות הגנרטור. התחל נמוך!',
+  genFreq:'תדר הסינוס.',
+  genSweep:'משך מחזור הסוויפ.',
+  smooth:'החלקה: מרכך קפיצות בתצוגה.',
+  res:'רזולוציה: פסים לאוקטבה.'
+};
+let helpMode=false;
+const helpTip=document.createElement('div'); helpTip.id='helpTip'; document.body.appendChild(helpTip);
+document.getElementById('helpBtn').addEventListener('click',function(){
+  helpMode=!helpMode; this.classList.toggle('on',helpMode); document.body.classList.toggle('help-on',helpMode);
+  if(!helpMode) helpTip.style.display='none';
+});
+document.addEventListener('mousemove',e=>{
+  if(!helpMode) return;
+  const el=e.target.closest('[id]'); const txt=el?HELP[el.id]:null;
+  if(txt){ helpTip.textContent=txt; helpTip.style.whiteSpace='pre-line'; helpTip.style.display='block';
+    let x=Math.min(e.clientX+14, innerWidth-helpTip.offsetWidth-10), y=Math.min(e.clientY+16, innerHeight-helpTip.offsetHeight-10);
+    helpTip.style.left=x+'px'; helpTip.style.top=y+'px';
+  } else helpTip.style.display='none';
+});
 // procedural animated "plexus": drifting glowing nodes linked by thin lines
 (function plexus(){
   const g=document.getElementById('pcbTraces'); if(!g) return;
