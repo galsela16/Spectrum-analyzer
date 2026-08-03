@@ -1109,6 +1109,10 @@ document.getElementById('mSpec').addEventListener('click',()=>setMode('spec'));
 document.getElementById('startBtn').addEventListener('click',()=>start());
 document.getElementById('stopBtn').addEventListener('click',resetSession);
 function resetSession(){
+  // revive the audio engine if the app was backgrounded / suspended
+  if(audioCtx && audioCtx.state==='suspended') audioCtx.resume();
+  const tr = stream && stream.getAudioTracks && stream.getAudioTracks()[0];
+  if(running && (!tr || tr.readyState==='ended')){ stop(); start(); return; }
   // clear everything accumulated this session; keep the mic running
   peaks.fill(0); avgBuf.fill(0); snapCurve=null;
   const fz=document.getElementById('freezeBtn'); fz.classList.remove('on'); fz.textContent='הקפא';
@@ -1537,7 +1541,11 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v39';
+document.getElementById('ver').textContent='v40';
+// keep audio alive: browsers suspend the AudioContext when the app is backgrounded
+function reviveAudio(){ if(running && audioCtx && audioCtx.state==='suspended') audioCtx.resume(); }
+document.addEventListener('visibilitychange',()=>{ if(!document.hidden) reviveAudio(); });
+window.addEventListener('focus',reviveAudio);
 resize();
 // keep the canvas backing store in sync with the stage size (panels opening,
 // tab changes, etc. resize the plot area) — prevents stale/duplicate drawing
