@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-title" content="RTA">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<title>אנלייזר ספקטרום · RTA</title>
+<title>גל אנלייזר</title>
 <style>
   :root{
     --panel:#0d1117; --panel-2:#161b22; --line:#21262d; --grid:#1c2530;
@@ -185,7 +185,7 @@
 <body>
   <header>
     <div class="dot" id="dot"></div>
-    <h1>RTA <span>אנלייזר</span> <small id="ver" style="font-size:10px;color:var(--dim);letter-spacing:1px"></small></h1>
+    <h1><span>גל</span> אנלייזר <small id="ver" style="font-size:10px;color:var(--dim);letter-spacing:1px"></small></h1>
     <div class="modes">
       <button id="mRta" class="on">ספקטרום</button>
       <button id="mSpec">ווטרפול</button>
@@ -209,7 +209,11 @@
       <button id="rtClose">סגור</button>
     </div>
     <div id="eqPanel">
-      <h3>מדידת EQ למערכת</h3>
+      <h3>מדידת EQ</h3>
+      <div class="seg" id="eqModeSwitchA" style="align-self:center">
+        <button class="on">ממוצע</button>
+        <button data-go="area">אזורים</button>
+      </div>
       <div class="sub" id="eqSub">מיקומים שנמדדו: 0</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
         <button id="eqMeasBtn" class="toggle">מדוד מיקום (5ש')</button>
@@ -225,7 +229,11 @@
       <button id="eqClose">סגור</button>
     </div>
     <div id="areaPanel">
-      <h3>אזורים · השוואת 360°</h3>
+      <h3>מדידת EQ</h3>
+      <div class="seg" id="eqModeSwitchB" style="align-self:center">
+        <button data-go="avg">ממוצע</button>
+        <button class="on">אזורים</button>
+      </div>
       <div class="sub">מדוד בכל צד של המעגל (צפון/דרום/מזרח/מערב) והשווה. עד 4 אזורים על הגרף.</div>
       <button id="areaMeasBtn" class="toggle" style="align-self:center">מדוד אזור חדש (5ש')</button>
       <div id="areaList"></div>
@@ -324,8 +332,7 @@
       <button class="toggle" id="genBtn">גנרטור</button>
       <button class="toggle" id="tgtBtn">יעד</button>
       <button class="toggle" id="compBtn">תגובה pink</button>
-      <button class="toggle" id="eqBtn">הצע EQ</button>
-      <button class="toggle" id="areaBtn">אזורים 360°</button>
+      <button class="toggle" id="eqBtn">מדידת EQ</button>
       <button class="toggle" id="calBtn">כיול מיק'</button>
       <button class="toggle" id="tfBtn">TF ‏2־ערוצי</button>
       <button class="toggle" id="rtBtn">RT60</button>
@@ -666,6 +673,9 @@ document.getElementById('compBtn').addEventListener('click',function(){
 const eqPanel=document.getElementById('eqPanel');
 document.getElementById('eqClose').addEventListener('click',closeModals);
 document.getElementById('eqBtn').addEventListener('click',()=>{ showModal(eqPanel); updateEqUI(); });
+document.querySelectorAll('#eqModeSwitchA button').forEach(b=>b.addEventListener('click',function(){
+  if(this.dataset.go==='area'){ openAreas(); }
+}));
 document.getElementById('eqMeasBtn').addEventListener('click',measurePosition);
 document.querySelectorAll('#eqModeSeg button').forEach(b=>b.addEventListener('click',function(){
   document.querySelectorAll('#eqModeSeg button').forEach(x=>x.classList.remove('on'));
@@ -789,7 +799,10 @@ document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModals(); });
 
 // ---- 360° area comparison ----
 const areaPanel=document.getElementById('areaPanel');
-document.getElementById('areaBtn').addEventListener('click',()=>{ renderAreaList(); showModal(areaPanel); });
+document.querySelectorAll('#eqModeSwitchB button').forEach(b=>b.addEventListener('click',function(){
+  if(this.dataset.go==='avg'){ showModal(eqPanel); updateEqUI(); }
+}));
+function openAreas(){ renderAreaList(); showModal(areaPanel); }
 document.getElementById('areaClose').addEventListener('click',closeModals);
 document.getElementById('areaMeasBtn').addEventListener('click',measureArea);
 document.getElementById('areaEqBtn').addEventListener('click',suggestAreaEQ);
@@ -1546,7 +1559,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v41';
+document.getElementById('ver').textContent='v42';
 // keep audio alive: browsers suspend the AudioContext when the app is backgrounded
 function reviveAudio(){ if(running && audioCtx && audioCtx.state==='suspended') audioCtx.resume(); }
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) reviveAudio(); });
