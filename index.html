@@ -198,8 +198,10 @@
   .calRow .del{color:#ff6b8b;font-size:16px;padding:0 4px;line-height:1}
   #calClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
     font-size:12px;padding:8px 20px;border-radius:4px;cursor:pointer;align-self:center}
+  
+  /* תיקון עיצוב חלון ה-Transfer Function להפרדה אנכית מלאה למניעת חפיפה */
   #tfPanel{position:relative;z-index:6;display:none;
-    flex-direction:column;gap:10px;width:min(92%,420px);max-height:calc(100% - 16px);padding:16px 18px;border:1px solid var(--accent);
+    flex-direction:column;gap:12px;width:min(92%,460px);max-height:calc(100% - 16px);padding:16px 18px;border:1px solid var(--accent);
     border-radius:6px;background:rgba(13,17,23,.97);backdrop-filter:blur(6px);box-shadow:0 8px 40px rgba(0,0,0,.6);overflow:auto}
   #tfPanel.open{display:flex}
   #tfPanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
@@ -213,8 +215,9 @@
   .chBar .fill.clip{background:#ff3b6b}
   .gainLbl{min-width:70px;font-size:10px;letter-spacing:.3px;text-align:start}
   .gainLbl.lo{color:#ff6b8b}.gainLbl.ok{color:#39d98a}.gainLbl.hi{color:#ffb020}.gainLbl.clip{color:#ff3b6b;font-weight:700}
-  #tfCanvas{width:100%;height:150px;background:#0b0f16;border:1px solid var(--line);border-radius:4px}
-  #tfGeqList{display:flex;flex-direction:column;gap:5px;max-height:230px;overflow:auto}
+  #tfCanvas{width:100%;height:150px;position:relative;flex-shrink:0;background:#0b0f16;border:1px solid var(--line);border-radius:4px}
+  #tfGeqList{display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;z-index:2;width:100%}
+  .tfGrid{display:grid;grid-template-columns:repeat(auto-fill, minmax(82px, 1fr));gap:6px;width:100%}
   #tfBtns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
   #tfClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
     font-size:12px;padding:8px 20px;border-radius:4px;cursor:pointer;align-self:center}
@@ -354,7 +357,6 @@
         </filter>
       </defs>
       <g id="pcbTraces" filter="url(#pcbGlow)"></g>
-    </svg>
     </svg>
     <div id="genPanel">
       <div class="seg" id="genType">
@@ -1075,14 +1077,30 @@ function tfCompute(){
     'רפרנס חלש/חסר — ודא שערוץ 2 מקבל אות מהמיקסר, או לחץ "החלף ערוצים".';
   renderTFList();
 }
+
+/* עדכון פונקציית הרינדור - מדפיסה את רשימת ערכי ה-dB של התיקון בפורמט גריד קריא וברור */
 function renderTFList(){
   const box=document.getElementById('tfGeqList');
   const cv2=document.getElementById('tfCanvas');
   if(!tfResult){ box.innerHTML=''; cv2.style.display='none'; return; }
   cv2.style.display='block'; drawGEQ(cv2, GEQ, tfResult.corr);
   eqCurveData={freqs:GEQ.slice(), corr:tfResult.corr.slice()};
-  box.innerHTML='<div class="sub">ירוק=הגבר, אדום=חתוך, אפור=לא אמין. שכפל את הפיידרים לגרפיק־EQ.</div>';
+  
+  let html = '<div class="sub">ערכי תיקון לגרפיק-EQ (31 פסים):</div><div class="tfGrid">';
+  let rows = [];
+  
+  for(let k = 0; k < GEQ.length; k++){
+    const v = tfResult.corr[k];
+    if(v == null || isNaN(v)) continue;
+    const fStr = GEQ[k] >= 1000 ? (GEQ[k]/1000) + 'k' : GEQ[k] + 'Hz';
+    const cls = v < 0 ? 'cut' : (v > 0 ? 'boost' : '');
+    const sign = v > 0 ? '+' : '';
+    rows.push('<div class="eqRow ' + cls + '"><span class="f">' + fStr + '</span><span class="g">' + sign + v.toFixed(1) + 'dB</span></div>');
+  }
+  
+  box.innerHTML = html + (rows.length ? rows.join('') + '</div>' : '</div><div class="sub">אות רפרנס חלש מדי לחישוב תיקון</div>');
 }
+
 function drawTF(){
   const c=document.getElementById('tfCanvas'), x=c.getContext('2d');
   const W=c.width=c.clientWidth||400, H=150; c.height=H;
@@ -1412,47 +1430,79 @@ function buildWeighting(nyquist,bins){
   }
 }
 
+/* עדכון פונקציית ה-start לכפיית 2 ערוצי קלט סטריאופוניים מול הדרייבר וה-AudioContext */
 async function start(deviceId){
   try{
-    const audio={echoCancellation:false,noiseSuppression:false,autoGainControl:false,channelCount:2};
-    if(deviceId && typeof deviceId==='string') audio.deviceId={exact:deviceId};
-    stream=await navigator.mediaDevices.getUserMedia({audio});
-    audioCtx=new (window.AudioContext||window.webkitAudioContext)();
-    if(outSinkId && typeof audioCtx.setSinkId==='function'){ try{ await audioCtx.setSinkId(outSinkId); }catch(_){} }
-    if(audioCtx.state==='suspended') await audioCtx.resume();
-    analyser=audioCtx.createAnalyser();
-    analyser.fftSize=32768;                 // ~1.5Hz bins @48k — supports 1/24-octave detail
-    analyser.smoothingTimeConstant=parseFloat(document.getElementById('smooth').value);
-    analyser.minDecibels=-100; analyser.maxDecibels=-10;
-    source=audioCtx.createMediaStreamSource(stream);
-    // how many channels did we actually get? (diagnostic for 2-channel measurements)
-    try{ const st=stream.getAudioTracks()[0].getSettings(); chReceived=st.channelCount||source.channelCount||1; }
-    catch(_){ chReceived=source.channelCount||1; }
-    const ci=document.getElementById('chCount');
-    if(ci){ ci.textContent='ערוצים: '+chReceived+(chReceived<2?' ⚠ מונו — אין ערוץ 2':' ✓'); ci.style.color=chReceived<2?'#ff6b8b':'#39d98a'; }
-    // stereo split: ch0 → main (mic), ch1 → reference analyser (for 2-channel TF)
-    const splitter=audioCtx.createChannelSplitter(2);
+    const audio = {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+      channelCount: { ideal: 2, min: 2 } // כפיית 2 ערוצים מול מערכת ההפעלה
+    };
+    if(deviceId && typeof deviceId === 'string') audio.deviceId = { exact: deviceId };
+    
+    stream = await navigator.mediaDevices.getUserMedia({ audio });
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    
+    if(outSinkId && typeof audioCtx.setSinkId === 'function'){ 
+      try{ await audioCtx.setSinkId(outSinkId); }catch(_){} 
+    }
+    if(audioCtx.state === 'suspended') await audioCtx.resume();
+
+    // יצירת ה-Source וכפיית הגדרות 2 ערוצים ב-Web Audio API (מונע מיזוג למונו)
+    source = audioCtx.createMediaStreamSource(stream);
+    source.channelCount = 2;
+    source.channelCountMode = 'explicit';
+
+    // בדיקה כמה ערוצים התקבלו בפועל מהמיקסר
+    const track = stream.getAudioTracks()[0];
+    const settings = track.getSettings ? track.getSettings() : {};
+    chReceived = settings.channelCount || source.channelCount || 1;
+
+    const ci = document.getElementById('chCount');
+    if(ci){ 
+      ci.textContent = 'ערוצים: ' + chReceived + (chReceived < 2 ? ' ⚠ מונו — אין ערוץ 2' : ' ✓ סטריאו'); 
+      ci.style.color = chReceived < 2 ? '#ff6b8b' : '#39d98a'; 
+    }
+
+    // Analyser לערוץ 1 (מיקרופון)
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 32768;
+    analyser.smoothingTimeConstant = parseFloat(document.getElementById('smooth').value);
+    analyser.minDecibels = -100; 
+    analyser.maxDecibels = -10;
+
+    // Analyser לערוץ 2 (רפרנס)
+    analyserRef = audioCtx.createAnalyser();
+    analyserRef.fftSize = 32768; 
+    analyserRef.smoothingTimeConstant = 0.3;
+    analyserRef.minDecibels = -100; 
+    analyserRef.maxDecibels = -10;
+
+    // מפצל ערוצים (Splitter) ל-2 ערוצים מופרדים
+    const splitter = audioCtx.createChannelSplitter(2);
     source.connect(splitter);
-    analyserRef=audioCtx.createAnalyser();
-    analyserRef.fftSize=32768; analyserRef.smoothingTimeConstant=0.3;
-    analyserRef.minDecibels=-100; analyserRef.maxDecibels=-10;
-    try{ splitter.connect(analyser,0); splitter.connect(analyserRef,1); }
-    catch(_){ source.connect(analyser); }   // fallback: mono
-    floatData=new Float32Array(analyser.frequencyBinCount);
-    floatDataRef=new Float32Array(analyserRef.frequencyBinCount);
-    timeData=new Float32Array(analyser.fftSize);
-    buildWeighting(audioCtx.sampleRate/2, analyser.frequencyBinCount);
+
+    // חיבור נפרד בלבד ללא ה-catch המנחית למונו
+    splitter.connect(analyser, 0);    // ערוץ 1 במיקסר -> analyser
+    splitter.connect(analyserRef, 1); // ערוץ 2 במיקסר -> analyserRef
+
+    floatData = new Float32Array(analyser.frequencyBinCount);
+    floatDataRef = new Float32Array(analyserRef.frequencyBinCount);
+    timeData = new Float32Array(analyser.fftSize);
+    
+    buildWeighting(audioCtx.sampleRate / 2, analyser.frequencyBinCount);
     resize();
-    peaks.fill(0); fbTrack.clear(); fbPanel.innerHTML=''; lvlPeak=-120;
-    leqSumP=0; leqN=0; splMax=-120;
-    running=true; idle.style.display='none'; dot.classList.add('live');
-    meterEl.style.display='flex'; document.getElementById('stats').style.display='flex';
-    document.getElementById('stopBtn').style.display='';
+    peaks.fill(0); fbTrack.clear(); fbPanel.innerHTML = ''; lvlPeak = -120;
+    leqSumP = 0; leqN = 0; splMax = -120;
+    running = true; idle.style.display = 'none'; dot.classList.add('live');
+    meterEl.style.display = 'flex'; document.getElementById('stats').style.display = 'flex';
+    document.getElementById('stopBtn').style.display = '';
     populateInputs();
     draw();
-  }catch(e){
-    errBox.style.display='block';
-    errBox.textContent='לא ניתן לגשת למיקרופון: '+(e.message||e.name)+'. יש לאשר הרשאה ולהריץ מעל HTTPS.';
+  } catch(e) {
+    errBox.style.display = 'block';
+    errBox.textContent = 'לא ניתן לגשת למיקרופון: ' + (e.message || e.name) + '. יש לאשר הרשאה ולהריץ מעל HTTPS.';
   }
 }
 
