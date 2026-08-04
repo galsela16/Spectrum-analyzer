@@ -300,7 +300,7 @@
       <h3>כיולי מיקרופון</h3>
       <div class="sub">בחר כיול פעיל, או הוסף קובץ (תדר+dB, פורמט REW/miniDSP). נשמר לפעם הבאה.</div>
       <div id="calList"></div>
-      <label class="toggle" style="cursor:pointer;align-self:center">➕ הוסף קובץ כיול<input id="calAdd" type="file" accept=".txt,.cal,.frd,.csv" style="display:none"></label>
+      <label class="toggle" style="cursor:pointer;align-self:center">➕ הוסף קובץ כיול<input id="calAdd" type="file" accept=".txt,.cal,.frd,.csv,.dat,.mdat,.gain,.zma,text/*" style="display:none"></label>
       <button id="calResetBtn" class="toggle" style="align-self:center">אפס את כל הכיולים</button>
       <button id="calClose">סגור</button>
     </div>
@@ -851,18 +851,25 @@ function renderCalList(){
 function addCalFromFile(file){
   const r=new FileReader();
   r.onload=()=>{
+    let text=String(r.result||'').replace(/^\uFEFF/,'');   // strip BOM
     const F=[],G=[];
-    r.result.split(/\r?\n/).forEach(line=>{
-      const m=line.trim().match(/^([\d.]+)[\s,]+(-?[\d.]+)/);
-      if(m){ F.push(parseFloat(m[1])); G.push(parseFloat(m[2])); }
+    const numRe='([+-]?\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)';
+    const lineRe=new RegExp('^\\s*'+numRe+'[\\s,;\\t]+'+numRe);
+    text.split(/\r?\n/).forEach(line=>{
+      const m=line.trim().match(lineRe);
+      if(m){ const f=parseFloat(m[1]), g=parseFloat(m[2]);
+        if(isFinite(f)&&isFinite(g)&&f>0&&f<200000) { F.push(f); G.push(g); } }
     });
     if(F.length>1){
       const id='c'+Date.now();
       micCalList.push({id, name:file.name.replace(/\.[^.]+$/,''), f:F, g:G});
       activeCalId=id; deriveActiveCal(); saveCalStore(); renderCalList();
       if(eqPositions.length) computeAndShow();
-    } else alert('קובץ כיול לא תקין — צריך שורות של תדר ואז dB.');
+    } else {
+      alert('לא הצלחתי לקרוא את קובץ הכיול ('+F.length+' נקודות זוהו).\nהפורמט הצפוי: כל שורה = תדר [רווח/טאב/פסיק] dB.\nלדוגמה:  1000  -1.5');
+    }
   };
+  r.onerror=()=>alert('שגיאה בקריאת הקובץ.');
   r.readAsText(file);
 }
 const calPanel=document.getElementById('calPanel');
@@ -1835,7 +1842,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v73';
+document.getElementById('ver').textContent='v74';
 const HELP={
   mRta:'תצוגת ספקטרום — עוצמה לפי תדר, בזמן אמת.',
   mSpec:'ווטרפול — הספקטרום לאורך זמן.',
