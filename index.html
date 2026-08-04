@@ -66,8 +66,8 @@
     border:1px solid var(--accent);background:rgba(47,155,255,.12);color:var(--accent);
     font-family:inherit;font-size:11px;letter-spacing:1px;padding:7px 12px;border-radius:4px;cursor:pointer}
   
-  /* שכבת הדיאלוגים הצפה (Modal Backdrop) - קבועה מעל כל המסך למניעת קרטוע וקלסטרופוביה */
-  #modalBg{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.75);backdrop-filter:blur(5px);display:none;align-items:center;justify-content:center;padding:16px}
+  /* שכבת הכיסוי של המודאל: רקע שקוף ועדין לראייה ברורה של הרקע והגרפים */
+  #modalBg{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.22);backdrop-filter:blur(1px);-webkit-backdrop-filter:blur(1px);display:none;align-items:center;justify-content:center;padding:16px}
   #modalBg.show{display:flex}
   
   #helpBtn{margin-inline-start:auto;width:30px;height:30px;border-radius:50%;border:1px solid var(--line);
@@ -77,9 +77,9 @@
   #helpTip{position:fixed;z-index:120;display:none;max-width:250px;padding:9px 12px;border:1px solid var(--accent);
     border-radius:6px;background:rgba(13,17,23,.98);color:var(--text);font-size:12px;line-height:1.55;pointer-events:none;
     box-shadow:0 8px 24px rgba(0,0,0,.6)}
-  #srcOverlay{position:fixed;inset:0;z-index:110;display:none;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);align-items:center;justify-content:center}
+  #srcOverlay{position:fixed;inset:0;z-index:110;display:none;background:rgba(0,0,0,.25);backdrop-filter:blur(1px);-webkit-backdrop-filter:blur(1px);align-items:center;justify-content:center}
   #dlyPanel{position:relative;display:none;flex-direction:column;gap:10px;width:min(94%,380px);max-height:calc(100dvh - 32px);overflow:auto;
-    padding:16px 18px;border:1px solid var(--accent);border-radius:6px;background:rgba(13,17,23,.98);box-shadow:0 12px 48px rgba(0,0,0,.8)}
+    padding:16px 18px;border:1px solid var(--accent);border-radius:6px;background:rgba(13,17,23,.96);box-shadow:0 12px 48px rgba(0,0,0,.8)}
   #dlyPanel.open{display:flex}
   #dlyPanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
   #dlyPanel .sub{font-size:10px;color:var(--dim);letter-spacing:.5px;line-height:1.5}
@@ -94,7 +94,7 @@
   
   #areaPanel{position:relative;display:none;
     flex-direction:column;gap:10px;width:min(94%,520px);max-height:calc(100dvh - 32px);overflow:auto;padding:16px 18px;
-    border:1px solid var(--accent);border-radius:6px;background:rgba(13,17,23,.98);box-shadow:0 12px 48px rgba(0,0,0,.8)}
+    border:1px solid var(--accent);border-radius:6px;background:rgba(13,17,23,.96);box-shadow:0 12px 48px rgba(0,0,0,.8)}
   #areaPanel.open{display:flex}
   #areaPanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
   #areaPanel .sub{font-size:10px;color:var(--dim);letter-spacing:.5px;line-height:1.5}
@@ -164,7 +164,7 @@
   
   #rtPanel{position:relative;display:none;
     flex-direction:column;gap:10px;align-items:stretch;width:min(92%,360px);max-height:calc(100dvh - 32px);overflow:auto;padding:16px 18px;border:1px solid var(--accent);
-    border-radius:6px;background:rgba(13,17,23,.98);box-shadow:0 12px 48px rgba(0,0,0,.8)}
+    border-radius:6px;background:rgba(13,17,23,.96);box-shadow:0 12px 48px rgba(0,0,0,.8)}
   #rtStatus{font-size:15px;color:var(--text);letter-spacing:.5px;text-align:center;min-height:24px;line-height:1.5}
   #rtStatus b{color:var(--accent);font-size:26px}
   #rtCanvas{width:100%;height:120px;background:#0b0f16;border:1px solid var(--line);border-radius:4px}
@@ -172,10 +172,9 @@
   #rtClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
     font-size:12px;padding:8px 20px;border-radius:4px;cursor:pointer;align-self:center}
   
-  /* חלונית מדידת המרחב */
   #eqPanel{position:relative;display:none;
     flex-direction:column;gap:12px;width:min(94%,520px);max-height:calc(100dvh - 32px);overflow:auto;padding:16px 18px;border:1px solid var(--accent);
-    border-radius:6px;background:rgba(13,17,23,.98);box-shadow:0 12px 48px rgba(0,0,0,.8)}
+    border-radius:6px;background:rgba(13,17,23,.96);box-shadow:0 12px 48px rgba(0,0,0,.8)}
   #eqPanel.open{display:flex}
   #eqPanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
   #eqPanel .sub{font-size:10px;color:var(--dim);letter-spacing:.5px;line-height:1.5}
@@ -191,10 +190,9 @@
   #eqClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
     font-size:12px;padding:8px 20px;border-radius:4px;cursor:pointer;align-self:center}
   
-  /* חלונית כיול מיקרופון */
   #calPanel{position:relative;display:none;
     flex-direction:column;gap:12px;width:min(94%,440px);max-height:calc(100dvh - 32px);overflow:auto;padding:16px 18px;border:1px solid var(--accent);
-    border-radius:6px;background:rgba(13,17,23,.98);box-shadow:0 12px 48px rgba(0,0,0,.8)}
+    border-radius:6px;background:rgba(13,17,23,.96);box-shadow:0 12px 48px rgba(0,0,0,.8)}
   #calPanel.open{display:flex}
   #calPanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
   #calList{display:flex;flex-direction:column;gap:6px;max-height:160px;overflow-y:auto;padding-inline-end:2px}
@@ -209,10 +207,9 @@
   #calClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
     font-size:12px;padding:8px 20px;border-radius:4px;cursor:pointer;align-self:center}
   
-  /* עיצוב חלון ה-Transfer Function */
   #tfPanel{position:relative;display:none;
     flex-direction:column;gap:12px;width:min(94%,520px);max-height:calc(100dvh - 32px);padding:16px 18px;border:1px solid var(--accent);
-    border-radius:6px;background:rgba(13,17,23,.98);box-shadow:0 12px 48px rgba(0,0,0,.8);overflow:auto}
+    border-radius:6px;background:rgba(13,17,23,.96);box-shadow:0 12px 48px rgba(0,0,0,.8);overflow:auto}
   #tfPanel.open{display:flex}
   #tfPanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
   #tfPanel .sub{font-size:10px;color:var(--dim);letter-spacing:.5px;line-height:1.5}
@@ -231,7 +228,6 @@
   #tfClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
     font-size:12px;padding:8px 20px;border-radius:4px;cursor:pointer;align-self:center}
   
-  /* עיצוב כרטיסיות הגריד לפסים */
   .tfGrid{display:grid;grid-template-columns:repeat(auto-fill, minmax(92px, 1fr));gap:6px;max-height:220px;overflow-y:auto;padding:6px;border:1px solid var(--line);border-radius:4px;background:#0b0f16}
   .tfItem{display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-radius:4px;border:1px solid var(--line);font-size:11px;background:var(--panel-2);font-variant-numeric:tabular-nums}
   .tfItem.boost{background:rgba(80,230,140,0.12);border-color:rgba(80,230,140,0.4)}
@@ -268,7 +264,6 @@
     </div>
     <button class="zoomBtn" id="zoomBtn">⤢ טווח מלא</button>
     
-    <!-- Modal Backdrop צף וממורכז מעל כל המסך -->
     <div id="modalBg"></div>
     
     <div id="srcOverlay">
@@ -759,10 +754,14 @@ function syncPinkComp(){
 function genApplyLevel(){
   if(genGain){ genGain.gain.setTargetAtTime(Math.pow(10,genDb/20),audioCtx.currentTime,0.1); }
 }
+
+/* סגירת חלון הגנרטור בצורה עצמאית ללא סגירת חלונות מדידה פעילים */
 document.getElementById('genBtn').addEventListener('click',function(){
-  const p=document.getElementById('genPanel'); const open=p.classList.toggle('open');
+  const p=document.getElementById('genPanel'); 
+  const open=p.classList.toggle('open');
   this.classList.toggle('on',open);
 });
+
 document.querySelectorAll('#genType button').forEach(b=>b.addEventListener('click',function(){
   document.querySelectorAll('#genType button').forEach(x=>x.classList.remove('on'));
   this.classList.add('on'); genType=this.dataset.t;
@@ -789,7 +788,6 @@ document.getElementById('genFreq').addEventListener('input',e=>{
 });
 document.getElementById('genOnBtn').addEventListener('click',()=>{ genOn?genStop():genStart(); });
 
-/* שליטה מהירה ברעש ורוד מתוך חלונות המדידה */
 ['eqGenToggleBtn', 'areaGenToggleBtn'].forEach(id=>{
   const el = document.getElementById(id);
   if(el){
