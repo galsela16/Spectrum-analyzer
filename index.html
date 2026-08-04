@@ -355,7 +355,6 @@
       </defs>
       <g id="pcbTraces" filter="url(#pcbGlow)"></g>
     </svg>
-    </svg>
     <div id="genPanel">
       <div class="seg" id="genType">
         <button data-t="pink" class="on">ורוד</button>
@@ -1008,7 +1007,7 @@ function renderAreaList(){
   box.innerHTML=areas.map((a,i)=>
     '<div class="areaRow"><span class="dot" style="background:'+a.color+'"></span>'+
     '<span class="nm">'+a.name+'</span>'+
-    '<button data-show="'+i+'" class="'+(a.show?'on':'')+'">'+(a.show?'מוצג':'מוסתר')+'</button>'+
+    '<button data-show="'+i+'" class="'+(a.show?'מוצג':'מוסתר')+'">'+(a.show?'מוצג':'מוסתר')+'</button>'+
     '<button data-del="'+i+'">מחק</button></div>').join('');
   box.querySelectorAll('[data-show]').forEach(b=>b.addEventListener('click',()=>{
     const i=+b.dataset.show; areas[i].show=!areas[i].show; renderAreaList();
@@ -1414,45 +1413,76 @@ function buildWeighting(nyquist,bins){
 
 async function start(deviceId){
   try{
-    const audio={echoCancellation:false,noiseSuppression:false,autoGainControl:false,channelCount:2};
-    if(deviceId && typeof deviceId==='string') audio.deviceId={exact:deviceId};
-    stream=await navigator.mediaDevices.getUserMedia({audio});
-    audioCtx=new (window.AudioContext||window.webkitAudioContext)();
-    if(outSinkId && typeof audioCtx.setSinkId==='function'){ try{ await audioCtx.setSinkId(outSinkId); }catch(_){} }
-    if(audioCtx.state==='suspended') await audioCtx.resume();
-    analyser=audioCtx.createAnalyser();
-    analyser.fftSize=32768;                 // ~1.5Hz bins @48k — supports 1/24-octave detail
-    analyser.smoothingTimeConstant=parseFloat(document.getElementById('smooth').value);
-    analyser.minDecibels=-100; analyser.maxDecibels=-10;
-    source=audioCtx.createMediaStreamSource(stream);
-    // how many channels did we actually get? (diagnostic for 2-channel measurements)
-    try{ const st=stream.getAudioTracks()[0].getSettings(); chReceived=st.channelCount||source.channelCount||1; }
-    catch(_){ chReceived=source.channelCount||1; }
-    const ci=document.getElementById('chCount');
-    if(ci){ ci.textContent='ערוצים: '+chReceived+(chReceived<2?' ⚠ מונו — אין ערוץ 2':' ✓'); ci.style.color=chReceived<2?'#ff6b8b':'#39d98a'; }
-    // stereo split: ch0 → main (mic), ch1 → reference analyser (for 2-channel TF)
-    const splitter=audioCtx.createChannelSplitter(2);
+    const audio = {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+      channelCount: { ideal: 2, min: 2 } // כפיית 2 ערוצים מול הדרייבר/דפדפן
+    };
+    if(deviceId && typeof deviceId === 'string') audio.deviceId = { exact: deviceId };
+    
+    stream = await navigator.mediaDevices.getUserMedia({ audio });
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    
+    if(outSinkId && typeof audioCtx.setSinkId === 'function'){ 
+      try{ await audioCtx.setSinkId(outSinkId); }catch(_){} 
+    }
+    if(audioCtx.state === 'suspended') await audioCtx.resume();
+
+    // יצירת ה-Source וכפיית הגדרות 2 ערוצים ב-Web Audio API
+    source = audioCtx.createMediaStreamSource(stream);
+    source.channelCount = 2;
+    source.channelCountMode = 'explicit';
+
+    // בדיקה כמה ערוצים התקבלו בפועל
+    const track = stream.getAudioTracks()[0];
+    const settings = track.getSettings ? track.getSettings() : {};
+    chReceived = settings.channelCount || source.channelCount || 1;
+
+    const ci = document.getElementById('chCount');
+    if(ci){ 
+      ci.textContent = 'ערוצים: ' + chReceived + (chReceived < 2 ? ' ⚠ מונו — אין ערוץ 2' : ' ✓ סטריאו'); 
+      ci.style.color = chReceived < 2 ? '#ff6b8b' : '#39d98a'; 
+    }
+
+    // הגדרת Analyser לערוץ 1 (מיקרופון)
+    analyser = audioCtx.createAnalyser();
+    analyser.fftSize = 32768;                 // ~1.5Hz bins @48k — supports 1/24-octave detail
+    analyser.smoothingTimeConstant = parseFloat(document.getElementById('smooth').value);
+    analyser.minDecibels = -100; 
+    analyser.maxDecibels = -10;
+
+    // הגדרת Analyser לערוץ 2 (רפרנס)
+    analyserRef = audioCtx.createAnalyser();
+    analyserRef.fftSize = 32768; 
+    analyserRef.smoothingTimeConstant = 0.3;
+    analyserRef.minDecibels = -100; 
+    analyserRef.maxDecibels = -10;
+
+    // מפצל ערוצים (Splitter) מוגדר ל-2 ערוצים
+    const splitter = audioCtx.createChannelSplitter(2);
     source.connect(splitter);
-    analyserRef=audioCtx.createAnalyser();
-    analyserRef.fftSize=32768; analyserRef.smoothingTimeConstant=0.3;
-    analyserRef.minDecibels=-100; analyserRef.maxDecibels=-10;
-    try{ splitter.connect(analyser,0); splitter.connect(analyserRef,1); }
-    catch(_){ source.connect(analyser); }   // fallback: mono
-    floatData=new Float32Array(analyser.frequencyBinCount);
-    floatDataRef=new Float32Array(analyserRef.frequencyBinCount);
-    timeData=new Float32Array(analyser.fftSize);
-    buildWeighting(audioCtx.sampleRate/2, analyser.frequencyBinCount);
+
+    // חיבור נפרד: ערוץ 0 (Left) -> analyser | ערוץ 1 (Right) -> analyserRef
+    splitter.connect(analyser, 0);    // ערוץ 1 במיקסר
+    splitter.connect(analyserRef, 1); // ערוץ 2 במיקסר
+
+    floatData = new Float32Array(analyser.frequencyBinCount);
+    floatDataRef = new Float32Array(analyserRef.frequencyBinCount);
+    timeData = new Float32Array(analyser.fftSize);
+    
+    buildWeighting(audioCtx.sampleRate / 2, analyser.frequencyBinCount);
     resize();
-    peaks.fill(0); fbTrack.clear(); fbPanel.innerHTML=''; lvlPeak=-120;
-    leqSumP=0; leqN=0; splMax=-120;
-    running=true; idle.style.display='none'; dot.classList.add('live');
-    meterEl.style.display='flex'; document.getElementById('stats').style.display='flex';
-    document.getElementById('stopBtn').style.display='';
+    peaks.fill(0); fbTrack.clear(); fbPanel.innerHTML = ''; lvlPeak = -120;
+    leqSumP = 0; leqN = 0; splMax = -120;
+    running = true; idle.style.display = 'none'; dot.classList.add('live');
+    meterEl.style.display = 'flex'; document.getElementById('stats').style.display = 'flex';
+    document.getElementById('stopBtn').style.display = '';
     populateInputs();
     draw();
-  }catch(e){
-    errBox.style.display='block';
-    errBox.textContent='לא ניתן לגשת למיקרופון: '+(e.message||e.name)+'. יש לאשר הרשאה ולהריץ מעל HTTPS.';
+  } catch(e) {
+    errBox.style.display = 'block';
+    errBox.textContent = 'לא ניתן לגשת למיקרופון: ' + (e.message || e.name) + '. יש לאשר הרשאה ולהריץ מעל HTTPS.';
   }
 }
 
