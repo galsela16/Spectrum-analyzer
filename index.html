@@ -48,13 +48,7 @@
     color:var(--accent);font-family:inherit;font-size:14px;font-weight:600;letter-spacing:2px;
     padding:14px 30px;border-radius:5px;text-transform:uppercase;transition:.15s}
   .btn:active{transform:scale(.97)}
-  #fbPanel{position:absolute;top:10px;inset-inline-start:10px;z-index:3;display:flex;flex-direction:column;gap:6px;pointer-events:none}
-  .fbItem{background:rgba(255,59,107,.14);border:1px solid var(--hot);color:#ffd7e0;
-    padding:6px 11px;border-radius:4px;font-size:12px;letter-spacing:.5px;display:flex;gap:10px;align-items:baseline;
-    backdrop-filter:blur(4px);animation:fbin .2s ease}
-  @keyframes fbin{from{opacity:0;transform:translateY(-4px)}to{opacity:1}}
-  .fbItem b{color:#fff;font-size:13px;font-variant-numeric:tabular-nums}
-  .fbItem small{color:#ffb3c4}
+  #fbPanel{display:none !important;} /* ביטול תצוגת התראות פידבק אדומות */
   .readout{position:absolute;top:10px;inset-inline-end:10px;z-index:3;text-align:end;font-size:11px;color:var(--dim);letter-spacing:1px;pointer-events:none}
   .readout b{display:block;color:var(--text);font-size:15px;font-variant-numeric:tabular-nums}
   .stats{position:absolute;top:52px;inset-inline-end:10px;z-index:3;pointer-events:none;
@@ -110,7 +104,7 @@
     border-radius:4px;background:rgba(13,17,23,.55);backdrop-filter:blur(4px);overflow:hidden;display:flex;align-items:center;pointer-events:none}
   .meterFill{position:absolute;inset-inline-start:0;top:0;bottom:0;width:0%;
     background:linear-gradient(90deg,var(--accent) 0%,#5ab6ff 60%,#9fd4ff 80%,var(--hot) 100%);
-    opacity:.8;transition:width 0.06s ease-out} /* מעטפת תנועה רכה וטבעית */
+    opacity:.8;transition:width 0.06s ease-out}
   .meterPeak{position:absolute;top:0;bottom:0;width:2px;background:#fff;opacity:.9}
   .meterVal{position:relative;margin-inline-start:auto;padding-inline-end:10px;font-size:13px;font-weight:600;
     color:var(--text);font-variant-numeric:tabular-nums;letter-spacing:.5px;z-index:1}
@@ -559,7 +553,7 @@ let specCanvas, specCtx;
 
 let fbTrack=new Map();
 let fbFrameCounter = 0;
-let smoothedDbfs = -120; // משתנה גלובלי להחלקת תנועת המיטר
+let smoothedDbfs = -120;
 
 function resize(){
   const r=cv.getBoundingClientRect();
@@ -1718,7 +1712,6 @@ function bandDb(fLo,fHi,nyquist,bins){
   return 10*Math.log10(p+1e-12);
 }
 
-/* חישוב עוצמה מוחלק (Ballistics: Fast Attack / Smooth Release) לתנועת מיטר חלקות וטבעית */
 function updateLevel(){
   if(!analyserMeter) return;
   analyserMeter.getFloatTimeDomainData(timeDataMeter);
@@ -1728,9 +1721,9 @@ function updateLevel(){
   const dbfs = 20 * Math.log10(rms + 1e-9);
 
   if (dbfs > smoothedDbfs) {
-    smoothedDbfs += (dbfs - smoothedDbfs) * 0.55; // עלייה מהירה ומיידית
+    smoothedDbfs += (dbfs - smoothedDbfs) * 0.55;
   } else {
-    smoothedDbfs += (dbfs - smoothedDbfs) * 0.14; // דעיכה רכה והדרגתית
+    smoothedDbfs += (dbfs - smoothedDbfs) * 0.14;
   }
 
   if(rt60State==='capture'){
@@ -2001,6 +1994,7 @@ function drawSpec(W,H,nyquist,bins,xForFreq){
   peakHzEl.textContent= pk>floorDb ? (pkf>=1000?(pkf/1000).toFixed(1)+' kHz':Math.round(pkf)+' Hz') : '—';
 }
 
+/* אלגוריתם הפידבק מעבד ברקע בלבד ללא הצגת חלוניות אדומות לקוד CSS */
 function detectFeedback(nyquist,bins){
   const PROM=fbProm;
   const MINDB=-58;
@@ -2033,12 +2027,6 @@ function detectFeedback(nyquist,bins){
     rec.db=d; rec.hz=hz; rec.cut=cut; rec.q=q; fbTrack.set(key,rec);
   }
   for(const [k,rec] of fbTrack){ if(!seen.has(k)){ rec.frames-=1; if(rec.frames<=0) fbTrack.delete(k);} }
-
-  const conf=[...fbTrack.values()].filter(r=>r.frames>=HOLD).sort((a,b)=>b.db-a.db).slice(0,4);
-  fbPanel.innerHTML = conf.map(r=>{
-    const hz=r.hz>=1000?(r.hz/1000).toFixed(2)+'kHz':r.hz+'Hz';
-    return '<div class="fbItem"><b>'+hz+'</b><small>חתוך −'+r.cut+'dB · Q≈'+r.q.toFixed(1)+'</small></div>';
-  }).join('');
 }
 
 loadCalStore();
