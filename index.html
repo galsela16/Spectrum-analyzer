@@ -207,6 +207,12 @@
   .chBar{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text)}
   .chBar .track{flex:1;height:8px;border-radius:4px;background:var(--line);overflow:hidden}
   .chBar .fill{height:100%;width:0%;background:var(--accent);transition:width .06s}
+  .chBar .fill.lo{background:#ff3b6b}
+  .chBar .fill.ok{background:#39d98a}
+  .chBar .fill.hi{background:#ffb020}
+  .chBar .fill.clip{background:#ff3b6b}
+  .gainLbl{min-width:70px;font-size:10px;letter-spacing:.3px;text-align:start}
+  .gainLbl.lo{color:#ff6b8b}.gainLbl.ok{color:#39d98a}.gainLbl.hi{color:#ffb020}.gainLbl.clip{color:#ff3b6b;font-weight:700}
   #tfCanvas{width:100%;height:150px;background:#0b0f16;border:1px solid var(--line);border-radius:4px}
   #tfGeqList{display:flex;flex-direction:column;gap:5px;max-height:230px;overflow:auto}
   #tfBtns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
@@ -316,8 +322,8 @@
     <div id="dlyPanel">
       <h3>מדידת דיליי</h3>
       <div class="sub">כניסה 1 = מיקרופון · כניסה 2 = רפרנס מהמיקסר. נגן רעש ורוד/מוזיקה דרך המערכת (עם שליחת רפרנס לכניסה 2), ולחץ מדוד.</div>
-      <div class="chBar"><span id="dlyL1" style="min-width:96px">כניסה 1 (מיק')</span><div class="track"><div class="fill" id="dlyMicFill"></div></div></div>
-      <div class="chBar"><span id="dlyL2" style="min-width:96px">כניסה 2 (רפרנס)</span><div class="track"><div class="fill" id="dlyRefFill"></div></div></div>
+      <div class="chBar"><span id="dlyL1" style="min-width:90px">כניסה 1 (מיק')</span><div class="track"><div class="fill" id="dlyMicFill"></div></div><span class="gainLbl" id="dlyMicGain">—</span></div>
+      <div class="chBar"><span id="dlyL2" style="min-width:90px">כניסה 2 (רפרנס)</span><div class="track"><div class="fill" id="dlyRefFill"></div></div><span class="gainLbl" id="dlyRefGain">—</span></div>
       <button id="dlyMeasBtn" class="toggle" style="align-self:center">מדוד דיליי (2ש')</button>
       <div id="dlyStatus" style="text-align:center;font-size:14px;color:var(--text);min-height:22px">—</div>
       <div class="sub" id="dlyInfo">התוצאה: כמה זמן המיק' מאחר אחרי הרפרנס = הדיליי של הרמקול. הזן אותו בעיכוב של הרמקול המוקדם יותר.</div>
@@ -1095,7 +1101,18 @@ function fft(re,im,inv){
   }
   if(inv){ for(let i=0;i<n;i++){ re[i]/=n; im[i]/=n; } }
 }
-let dlyState='idle';
+let dlyState='idle', timeDataRef=null;
+function peakDb(buf){ let m=0; for(let i=0;i<buf.length;i++){ const a=Math.abs(buf[i]); if(a>m)m=a; } return 20*Math.log10(m+1e-9); }
+function setGain(id, db){
+  const fill=document.getElementById(id+'Fill'), lbl=document.getElementById(id+'Gain');
+  let cls,txt;
+  if(db>=-1){ cls='clip'; txt='קליפ!'; }
+  else if(db>=-8){ cls='hi'; txt='חזק ('+db.toFixed(0)+')'; }
+  else if(db>=-40){ cls='ok'; txt='טוב ('+db.toFixed(0)+')'; }
+  else { cls='lo'; txt='חלש ('+db.toFixed(0)+')'; }
+  fill.style.width=Math.max(2,Math.min(100,(db+60)/60*100))+'%';
+  fill.className='fill '+cls; lbl.className='gainLbl '+cls; lbl.textContent=txt;
+}
 function measureDelay(){
   if(!running||!analyserRef||!source){ alert('צריך כרטיס קול עם input סטריאו (מיק\'+רפרנס).'); return; }
   if(dlyState==='measuring') return;
@@ -1545,10 +1562,11 @@ function draw(){
     if(tfPanel.classList.contains('open')) updateTfLevels();
   }
   if(analyserRef && floatDataRef && dlyPanel.classList.contains('open')){
-    analyserRef.getFloatFrequencyData(floatDataRef);
-    const pct=d=>Math.max(0,Math.min(100,(d+80)/70*100));
-    document.getElementById('dlyMicFill').style.width=pct(chLevel(floatData))+'%';
-    document.getElementById('dlyRefFill').style.width=pct(chLevel(floatDataRef))+'%';
+    analyser.getFloatTimeDomainData(timeData);
+    if(!timeDataRef || timeDataRef.length!==analyserRef.fftSize) timeDataRef=new Float32Array(analyserRef.fftSize);
+    analyserRef.getFloatTimeDomainData(timeDataRef);
+    setGain('dlyMic', peakDb(timeData));
+    setGain('dlyRef', peakDb(timeDataRef));
   }
   updateLevel();
   const W=cv.clientWidth,H=cv.clientHeight;
@@ -1817,7 +1835,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v72';
+document.getElementById('ver').textContent='v73';
 const HELP={
   mRta:'תצוגת ספקטרום — עוצמה לפי תדר, בזמן אמת.',
   mSpec:'ווטרפול — הספקטרום לאורך זמן.',
