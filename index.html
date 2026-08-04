@@ -110,7 +110,7 @@
     border-radius:4px;background:rgba(13,17,23,.55);backdrop-filter:blur(4px);overflow:hidden;display:flex;align-items:center;pointer-events:none}
   .meterFill{position:absolute;inset-inline-start:0;top:0;bottom:0;width:0%;
     background:linear-gradient(90deg,var(--accent) 0%,#5ab6ff 60%,#9fd4ff 80%,var(--hot) 100%);
-    opacity:.8;transition:none} /* ביטול ההשהיה לקבלת תנועת מיטר מיידית */
+    opacity:.8;transition:width 0.06s ease-out} /* מעטפת תנועה רכה וטבעית */
   .meterPeak{position:absolute;top:0;bottom:0;width:2px;background:#fff;opacity:.9}
   .meterVal{position:relative;margin-inline-start:auto;padding-inline-end:10px;font-size:13px;font-weight:600;
     color:var(--text);font-variant-numeric:tabular-nums;letter-spacing:.5px;z-index:1}
@@ -559,6 +559,7 @@ let specCanvas, specCtx;
 
 let fbTrack=new Map();
 let fbFrameCounter = 0;
+let smoothedDbfs = -120; // משתנה גלובלי להחלקת תנועת המיטר
 
 function resize(){
   const r=cv.getBoundingClientRect();
@@ -1608,7 +1609,6 @@ async function start(deviceId){
     analyserRef.minDecibels = -100; 
     analyserRef.maxDecibels = -10;
 
-    /* Analyser קל ומהיר המוקדש בלעדית למיטרים לקבלת 60FPS */
     analyserMeter = audioCtx.createAnalyser();
     analyserMeter.fftSize = 2048;
 
@@ -1628,6 +1628,7 @@ async function start(deviceId){
     resize();
     peaks.fill(0); fbTrack.clear(); fbPanel.innerHTML = ''; lvlPeak = -120;
     leqSumP = 0; leqN = 0; splMax = -120;
+    smoothedDbfs = -120;
     running = true; idle.style.display = 'none'; dot.classList.add('live');
     meterEl.style.display = 'flex'; document.getElementById('stats').style.display = 'flex';
     document.getElementById('stopBtn').style.display = '';
@@ -1717,6 +1718,7 @@ function bandDb(fLo,fHi,nyquist,bins){
   return 10*Math.log10(p+1e-12);
 }
 
+/* חישוב עוצמה מוחלק (Ballistics: Fast Attack / Smooth Release) לתנועת מיטר חלקות וטבעית */
 function updateLevel(){
   if(!analyserMeter) return;
   analyserMeter.getFloatTimeDomainData(timeDataMeter);
@@ -1725,18 +1727,24 @@ function updateLevel(){
   const rms = Math.sqrt(sum / 2048);
   const dbfs = 20 * Math.log10(rms + 1e-9);
 
+  if (dbfs > smoothedDbfs) {
+    smoothedDbfs += (dbfs - smoothedDbfs) * 0.55; // עלייה מהירה ומיידית
+  } else {
+    smoothedDbfs += (dbfs - smoothedDbfs) * 0.14; // דעיכה רכה והדרגתית
+  }
+
   if(rt60State==='capture'){
     let s2=0, N=Math.min(2048,timeData.length);
     for(let i=timeData.length-N;i<timeData.length;i++){ const v=timeData[i]; s2+=v*v; }
     rt60Samples.push({t:performance.now(), db:20*Math.log10(Math.sqrt(s2/N)+1e-9)});
   }
   const now=performance.now();
-  if(dbfs>lvlPeak || now-lvlPeakT>1500){ lvlPeak=dbfs; lvlPeakT=now; }
+  if(smoothedDbfs>lvlPeak || now-lvlPeakT>1500){ lvlPeak=smoothedDbfs; lvlPeakT=now; }
   const pct=v=>Math.max(0,Math.min(100,(v+60)/60*100));
-  meterFill.style.width=pct(dbfs)+'%';
+  meterFill.style.width=pct(smoothedDbfs)+'%';
   meterPeak.style.insetInlineStart=pct(lvlPeak)+'%';
-  if(meterUnit==='SPL') meterVal.textContent=(dbfs+calib).toFixed(0)+' dB SPL≈';
-  else meterVal.textContent=dbfs.toFixed(1)+' dBFS';
+  if(meterUnit==='SPL') meterVal.textContent=(smoothedDbfs+calib).toFixed(0)+' dB SPL≈';
+  else meterVal.textContent=smoothedDbfs.toFixed(1)+' dBFS';
 
   const w = weightMode==='A'?weightA : weightMode==='C'?weightC : null;
   let p=0;
