@@ -188,7 +188,7 @@
   #eqClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
     font-size:12px;padding:8px 20px;border-radius:4px;cursor:pointer;align-self:center}
   
-  /* חלונית כיול מיקרופון - עיצוב חדש וקריא */
+  /* חלונית כיול מיקרופון */
   #calPanel{position:relative;z-index:6;display:none;
     flex-direction:column;gap:12px;width:min(94%,420px);max-height:calc(100% - 16px);overflow:auto;padding:16px 18px;border:1px solid var(--accent);
     border-radius:6px;background:rgba(13,17,23,.97);backdrop-filter:blur(6px);box-shadow:0 8px 40px rgba(0,0,0,.6)}
@@ -228,7 +228,7 @@
   #tfClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
     font-size:12px;padding:8px 20px;border-radius:4px;cursor:pointer;align-self:center}
   
-  /* עיצוב כרטיסיות הגריד לפסים (משמש גם ל-TF וגם למדידת המרחב) */
+  /* עיצוב כרטיסיות הגריד לפסים (משמש ל-TF ולמדידת המרחב) */
   .tfGrid{display:grid;grid-template-columns:repeat(auto-fill, minmax(92px, 1fr));gap:6px;max-height:220px;overflow-y:auto;padding:6px;border:1px solid var(--line);border-radius:4px;background:#0b0f16}
   .tfItem{display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-radius:4px;border:1px solid var(--line);font-size:11px;background:var(--panel-2);font-variant-numeric:tabular-nums}
   .tfItem.boost{background:rgba(80,230,140,0.12);border-color:rgba(80,230,140,0.4)}
@@ -285,9 +285,15 @@
     </div>
     <div id="eqPanel">
       <h3>מדידת המרחב</h3>
-      <div class="seg" id="eqModeSwitchA" style="align-self:center">
-        <button class="on">ממוצע</button>
-        <button data-go="area">אזורים</button>
+      <div style="display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;">
+        <div class="seg" id="eqModeSwitchA">
+          <button class="on">ממוצע</button>
+          <button data-go="area">אזורים</button>
+        </div>
+        <div class="seg" id="eqChSeg">
+          <button data-ch="1" class="on">כניסה 1 (מיק')</button>
+          <button data-ch="2">כניסה 2 (רפרנס)</button>
+        </div>
       </div>
       <div class="sub" id="eqSub">מיקומים שנמדדו: 0</div>
       <div class="chBar"><span style="min-width:64px">גיין מיק'</span><div class="track"><div class="fill" id="eqMicFill"></div></div><span class="gainLbl" id="eqMicGain">—</span></div>
@@ -528,6 +534,7 @@ let rt60State='idle', rt60Samples=[], rt60CutT=0, rtRange=10;
 let eqMarks=null;
 let eqCurveData=null;
 let eqMode='graphic', lastEqCorr=null;
+let eqCh = 1; // בחירת ערוץ למדידת המרחב (1=מיק', 2=רפרנס)
 const AREA_COLORS=['#2f9bff','#ffa53b','#ff5cc8','#50e68c'];
 const AREA_NAMES=['צפון','דרום','מזרח','מערב'];
 let areas=[];
@@ -775,6 +782,14 @@ document.getElementById('eqBtn').addEventListener('click',()=>{ showModal(eqPane
 document.querySelectorAll('#eqModeSwitchA button').forEach(b=>b.addEventListener('click',function(){
   if(this.dataset.go==='area'){ openAreas(); }
 }));
+
+/* בחירת ערוץ למדידת המרחב */
+document.querySelectorAll('#eqChSeg button').forEach(b=>b.addEventListener('click',function(){
+  document.querySelectorAll('#eqChSeg button').forEach(x=>x.classList.remove('on'));
+  this.classList.add('on');
+  eqCh = parseInt(this.dataset.ch, 10);
+}));
+
 document.getElementById('eqMeasBtn').addEventListener('click',()=>pickSource(measurePosition,5000));
 document.querySelectorAll('#eqModeSeg button').forEach(b=>b.addEventListener('click',function(){
   document.querySelectorAll('#eqModeSeg button').forEach(x=>x.classList.remove('on'));
@@ -784,7 +799,7 @@ document.getElementById('eqResetBtn').addEventListener('click',()=>{ eqPositions
 
 function updateEqUI(){
   const meas = measState==='measuring';
-  document.getElementById('eqSub').textContent = meas ? 'מודד… החזק את המיק\' יציב' : ('מיקומים שנמדדו: '+eqPositions.length);
+  document.getElementById('eqSub').textContent = meas ? 'מודד… החזק יציב' : ('מיקומים שנמדדו: '+eqPositions.length);
   document.getElementById('eqMeasBtn').textContent = meas ? 'מודד…' : (eqPositions.length?'מדוד מיקום נוסף':'מדוד מיקום (5ש\')');
   document.getElementById('eqMeasBtn').style.opacity = meas?0.5:1;
 }
@@ -839,7 +854,6 @@ function deriveActiveCal(){
   const el=document.getElementById('eqCalName'); if(el) el.textContent=nm;
 }
 
-/* פונקציית רשימת קבצי הכיול - עיצוב מתוקן ומרווח ללא חפיפות */
 function renderCalList(){
   const box=document.getElementById('calList');
   let html='<div class="calRow'+(activeCalId===null?' on':'')+'" data-id=""><span class="nm">ללא כיול</span></div>';
@@ -962,7 +976,6 @@ function runWithSource(kind, measureFn, durMs){
   }, 450+durMs+300);
 }
 
-/* הצגת תוצאות ממוצע אזורים בגריד כרטיסיות כמו ב-TF */
 document.getElementById('areaEqBtn').addEventListener('click',suggestAreaEQ);
 function suggestAreaEQ(){
   if(!areas.length){ alert('מדוד לפחות אזור אחד.'); return; }
@@ -1006,7 +1019,8 @@ function measureArea(){
   if(!running){ alert('קודם הפעל את המיקרופון.'); return; }
   if(areas.length>=4){ alert('הגעת ל־4 אזורים — מחק אחד כדי להוסיף.'); return; }
   if(areaState==='measuring') return;
-  areaAccum=new Float64Array(floatData.length); areaFrames=0; areaState='measuring';
+  const srcData = (eqCh === 2 && floatDataRef) ? floatDataRef : floatData;
+  areaAccum=new Float64Array(srcData.length); areaFrames=0; areaState='measuring';
   updateAreaMeasBtn();
   setTimeout(()=>{
     const bins=areaAccum.length, nyq=audioCtx.sampleRate/2, R6=Math.pow(2,1/6);
@@ -1143,6 +1157,7 @@ const dlyPanel=document.getElementById('dlyPanel');
 document.getElementById('dlyBtn').addEventListener('click',()=>{ showModal(dlyPanel); });
 document.getElementById('dlyClose').addEventListener('click',closeModals);
 document.getElementById('dlyMeasBtn').addEventListener('click',()=>pickSource(measureDelay,2100));
+
 function fft(re,im,inv){
   const n=re.length;
   for(let i=1,j=0;i<n;i++){ let bit=n>>1; for(;j&bit;bit>>=1) j^=bit; j^=bit;
@@ -1160,6 +1175,7 @@ function fft(re,im,inv){
   }
   if(inv){ for(let i=0;i<n;i++){ re[i]/=n; im[i]/=n; } }
 }
+
 let dlyState='idle', timeDataRef=null;
 function peakDb(buf){ let m=0; for(let i=0;i<buf.length;i++){ const a=Math.abs(buf[i]); if(a>m)m=a; } return 20*Math.log10(m+1e-9); }
 function gainClass(db){
@@ -1174,6 +1190,7 @@ function setGainEl(fill,lbl,db){
   if(lbl){ lbl.className='gainLbl '+cls; lbl.textContent=txt; }
 }
 function setGain(id, db){ setGainEl(document.getElementById(id+'Fill'), document.getElementById(id+'Gain'), db); }
+
 function measureDelay(){
   if(!running||!analyserRef||!source){ alert('צריך כרטיס קול עם input סטריאו (מיק\'+רפרנס).'); return; }
   if(dlyState==='measuring') return;
@@ -1200,30 +1217,86 @@ function measureDelay(){
     st.innerHTML='דיליי ≈ <b>'+ms.toFixed(2)+' ms</b><br><span style="font-size:11px;color:var(--dim)">≈ '+dist.toFixed(2)+' מ\' · '+(ms>=0?'המיק\' מאחר אחרי הרפרנס':'המיק\' מקדים את הרפרנס')+'</span>';
   },2100);
 }
-function computeDelay(ref,mic,sr){
-  let n=1; const L=Math.min(ref.length,mic.length); while(n*2<=L) n*=2; n=Math.min(n,131072);
-  if(n<1024) return null;
-  const xr=new Float64Array(n), xi=new Float64Array(n), yr=new Float64Array(n), yi=new Float64Array(n);
-  let e0=0,e1=0;
-  for(let i=0;i<n;i++){ xr[i]=ref[i]; yr[i]=mic[i]; e0+=ref[i]*ref[i]; e1+=mic[i]*mic[i]; }
-  if(e0<1e-6||e1<1e-6) return null;
-  fft(xr,xi,false); fft(yr,yi,false);
-  const rr=new Float64Array(n), ri=new Float64Array(n);
-  for(let k=0;k<n;k++){
-    const cr=yr[k]*xr[k]+yi[k]*xi[k], ci=yi[k]*xr[k]-yr[k]*xi[k];
-    const mag=Math.hypot(cr,ci)+1e-9;
-    rr[k]=cr/mag; ri[k]=ci/mag;
+
+/* אלגוריתם GCC-PHAT משודרג ומיוצב עם ממוצע חלונות (Chunk Averaging) */
+function computeDelay(ref, mic, sr){
+  const L = Math.min(ref.length, mic.length);
+  const chunkSize = 8192;
+  const hopSize = 4096;
+  if(L < chunkSize) return null;
+
+  const numChunks = Math.floor((L - chunkSize) / hopSize) + 1;
+  if(numChunks < 1) return null;
+
+  const avgRr = new Float64Array(chunkSize);
+  const avgRi = new Float64Array(chunkSize);
+  const xr = new Float64Array(chunkSize);
+  const xi = new Float64Array(chunkSize);
+  const yr = new Float64Array(chunkSize);
+  const yi = new Float64Array(chunkSize);
+
+  const win = new Float32Array(chunkSize);
+  for(let i = 0; i < chunkSize; i++){
+    win[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (chunkSize - 1)));
   }
-  fft(rr,ri,true);
-  let best=-1e9,bi=0;
-  for(let k=0;k<n;k++){ if(rr[k]>best){ best=rr[k]; bi=k; } }
-  let lag=bi; if(lag>n/2) lag-=n;
-  return { ms: lag/sr*1000, samples: lag };
+
+  let validChunks = 0;
+  for(let c = 0; c < numChunks; c++){
+    const offset = c * hopSize;
+    let eRef = 0, eMic = 0;
+
+    for(let i = 0; i < chunkSize; i++){
+      const rVal = ref[offset + i] * win[i];
+      const mVal = mic[offset + i] * win[i];
+      xr[i] = rVal; xi[i] = 0;
+      yr[i] = mVal; yi[i] = 0;
+      eRef += rVal * rVal;
+      eMic += mVal * mVal;
+    }
+
+    if(eRef < 1e-7 || eMic < 1e-7) continue;
+
+    fft(xr, xi, false);
+    fft(yr, yi, false);
+
+    for(let k = 0; k < chunkSize; k++){
+      const cr = yr[k] * xr[k] + yi[k] * xi[k];
+      const ci = yi[k] * xr[k] - yr[k] * xi[k];
+      const mag = Math.hypot(cr, ci) + 1e-9;
+      avgRr[k] += cr / mag;
+      avgRi[k] += ci / mag;
+    }
+    validChunks++;
+  }
+
+  if(validChunks === 0) return null;
+
+  for(let k = 0; k < chunkSize; k++){
+    avgRr[k] /= validChunks;
+    avgRi[k] /= validChunks;
+  }
+
+  fft(avgRr, avgRi, true);
+
+  let best = -1e9, bi = 0;
+  for(let k = 0; k < chunkSize; k++){
+    if(avgRr[k] > best){
+      best = avgRr[k];
+      bi = k;
+    }
+  }
+
+  let lag = bi;
+  if(lag > chunkSize / 2) lag -= chunkSize;
+
+  return { ms: (lag / sr) * 1000, samples: lag };
 }
+
 function measurePosition(){
   if(!running){ alert('קודם הפעל את המיקרופון.'); return; }
   if(measState==='measuring') return;
-  measAccum=new Float64Array(floatData.length); measFrames=0; measState='measuring';
+  const srcData = (eqCh === 2 && floatDataRef) ? floatDataRef : floatData;
+  measAccum=new Float64Array(srcData.length); measFrames=0; measState='measuring';
   updateEqUI();
   setTimeout(()=>{
     const bins=measAccum.length, bd=new Float32Array(bins);
@@ -1276,11 +1349,10 @@ function paramFromCorr(corr){
   return picked.slice(0,6).sort((a,b)=>a.f-b.f);
 }
 
-/* הצגת תוצאות מדידת המרחב בגריד כרטיסיות כמו ב-TF */
 function renderEqResult(){
   if(!lastEqCorr){ return; }
   const head='<div class="sub" style="margin-bottom:6px; color:var(--text); font-weight:600;">יעד '+(targetMode==='house'?'House':'שטוח')+
-    (micCal?' · כיול פעיל':' · ללא כיול')+' · '+eqPositions.length+' מיקומים:</div>';
+    (micCal?' · כיול פעיל':' · ללא כיול')+' · '+eqPositions.length+' מיקומים (' + (eqCh===2?'כניסה 2':'כניסה 1') + '):</div>';
   const box=document.getElementById('eqList');
   if(eqMode==='graphic'){
     let html = head + '<div class="tfGrid">';
@@ -1597,12 +1669,17 @@ function bandDb(fLo,fHi,nyquist,bins){
   return 10*Math.log10(p+1e-12);
 }
 
+/* חישוב RMS מואץ למניעת עומס מעבד וקרטועים בתצוגה */
 function updateLevel(){
   analyser.getFloatTimeDomainData(timeData);
-  let sum=0;
-  for(let i=0;i<timeData.length;i++){ const s=timeData[i]; sum+=s*s; }
-  const rms=Math.sqrt(sum/timeData.length);
-  const dbfs=20*Math.log10(rms+1e-9);
+  let sum = 0;
+  const len = timeData.length;
+  const step = Math.max(1, Math.floor(len / 4096)); // דיגום מואץ של 4096 נקודות בלבד
+  let count = 0;
+  for(let i = 0; i < len; i += step){ const s = timeData[i]; sum += s * s; count++; }
+  const rms = Math.sqrt(sum / count);
+  const dbfs = 20 * Math.log10(rms + 1e-9);
+
   if(rt60State==='capture'){
     let s2=0, N=Math.min(2048,timeData.length);
     for(let i=timeData.length-N;i<timeData.length;i++){ const v=timeData[i]; s2+=v*v; }
@@ -1638,11 +1715,13 @@ function draw(){
   raf=requestAnimationFrame(draw);
   analyser.getFloatFrequencyData(floatData);
   if(measState==='measuring' && measAccum){
-    for(let i=0;i<floatData.length;i++) measAccum[i]+=Math.pow(10,floatData[i]/10);
+    const srcData = (eqCh === 2 && floatDataRef) ? floatDataRef : floatData;
+    for(let i=0;i<srcData.length;i++) measAccum[i]+=Math.pow(10,srcData[i]/10);
     measFrames++;
   }
   if(areaState==='measuring' && areaAccum){
-    for(let i=0;i<floatData.length;i++) areaAccum[i]+=Math.pow(10,floatData[i]/10);
+    const srcData = (eqCh === 2 && floatDataRef) ? floatDataRef : floatData;
+    for(let i=0;i<srcData.length;i++) areaAccum[i]+=Math.pow(10,srcData[i]/10);
     areaFrames++;
   }
   if(analyserRef && floatDataRef && (tfState==='measuring' || tfPanel.classList.contains('open'))){
@@ -1663,8 +1742,10 @@ function draw(){
     setGain('dlyRef', peakDb(timeDataRef));
   }
   if(eqPanel.classList.contains('open')){
-    analyser.getFloatTimeDomainData(timeData);
-    setGainEl(document.getElementById('eqMicFill'), document.getElementById('eqMicGain'), peakDb(timeData));
+    const targetData = (eqCh === 2 && timeDataRef) ? timeDataRef : timeData;
+    if(eqCh === 2 && analyserRef) analyserRef.getFloatTimeDomainData(timeDataRef);
+    else analyser.getFloatTimeDomainData(timeData);
+    setGainEl(document.getElementById('eqMicFill'), document.getElementById('eqMicGain'), peakDb(targetData));
   }
   updateLevel();
   const W=cv.clientWidth,H=cv.clientHeight;
@@ -1952,6 +2033,8 @@ document.addEventListener('mousemove',e=>{
     helpTip.style.left=x+'px'; helpTip.style.top=y+'px';
   } else helpTip.style.display='none';
 });
+
+/* אופטימיזציית רשת הרקע (Plexus) להפחתת עומס מעבד */
 (function plexus(){
   const g=document.getElementById('pcbTraces'); if(!g) return;
   const NS='http://www.w3.org/2000/svg', W=600,H=200, N=90, LINK=46;
@@ -1969,7 +2052,7 @@ document.addEventListener('mousemove',e=>{
     l.setAttribute('stroke','#5ab0ff'); l.setAttribute('stroke-width','0.4'); l.setAttribute('opacity','0'); g.appendChild(l); lines.push(l); }
   let last=0;
   function frame(t){
-    if(t-last>40){ last=t;
+    if(t-last>60){ last=t; // ~16fps מספיקים בהחלט לאפקט רקע וחוסכים משאבי מעבד
       for(const n of nodes){ n.x+=n.vx; n.y+=n.vy;
         if(n.x<0||n.x>W)n.vx*=-1; if(n.y<0||n.y>H)n.vy*=-1; }
       for(let i=0;i<N;i++){ dots[i].setAttribute('cx',nodes[i].x.toFixed(1)); dots[i].setAttribute('cy',nodes[i].y.toFixed(1)); }
@@ -1987,6 +2070,7 @@ document.addEventListener('mousemove',e=>{
   }
   requestAnimationFrame(frame);
 })();
+
 function reviveAudio(){ if(running && audioCtx && audioCtx.state==='suspended') audioCtx.resume(); }
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) reviveAudio(); });
 window.addEventListener('focus',reviveAudio);
