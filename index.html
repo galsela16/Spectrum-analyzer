@@ -48,7 +48,7 @@
     color:var(--accent);font-family:inherit;font-size:14px;font-weight:600;letter-spacing:2px;
     padding:14px 30px;border-radius:5px;text-transform:uppercase;transition:.15s}
   .btn:active{transform:scale(.97)}
-  #fbPanel{display:none !important;} /* ביטול תצוגת התראות פידבק אדומות */
+  #fbPanel{display:none !important;}
   .readout{position:absolute;top:10px;inset-inline-end:10px;z-index:3;text-align:end;font-size:11px;color:var(--dim);letter-spacing:1px;pointer-events:none}
   .readout b{display:block;color:var(--text);font-size:15px;font-variant-numeric:tabular-nums}
   .stats{position:absolute;top:52px;inset-inline-end:10px;z-index:3;pointer-events:none;
@@ -104,7 +104,7 @@
     border-radius:4px;background:rgba(13,17,23,.55);backdrop-filter:blur(4px);overflow:hidden;display:flex;align-items:center;pointer-events:none}
   .meterFill{position:absolute;inset-inline-start:0;top:0;bottom:0;width:0%;
     background:linear-gradient(90deg,var(--accent) 0%,#5ab6ff 60%,#9fd4ff 80%,var(--hot) 100%);
-    opacity:.8;transition:width 0.06s ease-out}
+    opacity:.8;transition:width 0.08s ease-out}
   .meterPeak{position:absolute;top:0;bottom:0;width:2px;background:#fff;opacity:.9}
   .meterVal{position:relative;margin-inline-start:auto;padding-inline-end:10px;font-size:13px;font-weight:600;
     color:var(--text);font-variant-numeric:tabular-nums;letter-spacing:.5px;z-index:1}
@@ -1712,6 +1712,7 @@ function bandDb(fLo,fHi,nyquist,bins){
   return 10*Math.log10(p+1e-12);
 }
 
+/* התאמת דינמיקת המד: עלייה מהירה לקלט חדש, ודעיכה איטית (Slow Release = 0.035) לתנועה אנלוגית וטבעית */
 function updateLevel(){
   if(!analyserMeter) return;
   analyserMeter.getFloatTimeDomainData(timeDataMeter);
@@ -1721,9 +1722,9 @@ function updateLevel(){
   const dbfs = 20 * Math.log10(rms + 1e-9);
 
   if (dbfs > smoothedDbfs) {
-    smoothedDbfs += (dbfs - smoothedDbfs) * 0.55;
+    smoothedDbfs += (dbfs - smoothedDbfs) * 0.55; // Fast Attack
   } else {
-    smoothedDbfs += (dbfs - smoothedDbfs) * 0.14;
+    smoothedDbfs += (dbfs - smoothedDbfs) * 0.035; // Slow & Smooth Decay
   }
 
   if(rt60State==='capture'){
@@ -1994,7 +1995,6 @@ function drawSpec(W,H,nyquist,bins,xForFreq){
   peakHzEl.textContent= pk>floorDb ? (pkf>=1000?(pkf/1000).toFixed(1)+' kHz':Math.round(pkf)+' Hz') : '—';
 }
 
-/* אלגוריתם הפידבק מעבד ברקע בלבד ללא הצגת חלוניות אדומות לקוד CSS */
 function detectFeedback(nyquist,bins){
   const PROM=fbProm;
   const MINDB=-58;
