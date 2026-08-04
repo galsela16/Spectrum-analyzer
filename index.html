@@ -269,6 +269,7 @@
         <button data-go="area">אזורים</button>
       </div>
       <div class="sub" id="eqSub">מיקומים שנמדדו: 0</div>
+      <div class="chBar"><span style="min-width:64px">גיין מיק'</span><div class="track"><div class="fill" id="eqMicFill"></div></div><span class="gainLbl" id="eqMicGain">—</span></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
         <button id="eqMeasBtn" class="toggle">מדוד מיקום (5ש')</button>
         <button id="eqResetBtn" class="toggle">אפס</button>
@@ -1014,12 +1015,12 @@ document.getElementById('tfCsvBtn').addEventListener('click',tfExportCsv);
 
 function chLevel(arr){ let p=0; for(let i=1;i<arr.length;i++) p+=Math.pow(10,arr[i]/10); return 10*Math.log10(p+1e-12); }
 function updateTfLevels(){
-  if(!floatDataRef) return;
-  const l1=chLevel(floatData), l2=chLevel(floatDataRef), pct=d=>Math.max(0,Math.min(100,(d+80)/70*100));
-  document.getElementById('tfMicFill').style.width=pct(l1)+'%';   // bar 1 = physical channel 1
-  document.getElementById('tfRefFill').style.width=pct(l2)+'%';   // bar 2 = physical channel 2
-  document.getElementById('tfMicDb').textContent=isFinite(l1)?l1.toFixed(0):'—';
-  document.getElementById('tfRefDb').textContent=isFinite(l2)?l2.toFixed(0):'—';
+  if(!floatDataRef || !analyserRef) return;
+  analyser.getFloatTimeDomainData(timeData);
+  if(!timeDataRef || timeDataRef.length!==analyserRef.fftSize) timeDataRef=new Float32Array(analyserRef.fftSize);
+  analyserRef.getFloatTimeDomainData(timeDataRef);
+  setGainEl(document.getElementById('tfMicFill'), document.getElementById('tfMicDb'), peakDb(timeData));
+  setGainEl(document.getElementById('tfRefFill'), document.getElementById('tfRefDb'), peakDb(timeDataRef));
   document.getElementById('tfL1').textContent = tfSwap?"כניסה 1 → רפרנס":"כניסה 1 → מיק'";
   document.getElementById('tfL2').textContent = tfSwap?"כניסה 2 → מיק'":"כניסה 2 → רפרנס";
 }
@@ -1118,16 +1119,18 @@ function fft(re,im,inv){
 }
 let dlyState='idle', timeDataRef=null;
 function peakDb(buf){ let m=0; for(let i=0;i<buf.length;i++){ const a=Math.abs(buf[i]); if(a>m)m=a; } return 20*Math.log10(m+1e-9); }
-function setGain(id, db){
-  const fill=document.getElementById(id+'Fill'), lbl=document.getElementById(id+'Gain');
-  let cls,txt;
-  if(db>=-1){ cls='clip'; txt='קליפ!'; }
-  else if(db>=-8){ cls='hi'; txt='חזק ('+db.toFixed(0)+')'; }
-  else if(db>=-40){ cls='ok'; txt='טוב ('+db.toFixed(0)+')'; }
-  else { cls='lo'; txt='חלש ('+db.toFixed(0)+')'; }
-  fill.style.width=Math.max(2,Math.min(100,(db+60)/60*100))+'%';
-  fill.className='fill '+cls; lbl.className='gainLbl '+cls; lbl.textContent=txt;
+function gainClass(db){
+  if(db>=-1) return ['clip','קליפ!'];
+  if(db>=-8) return ['hi','חזק ('+db.toFixed(0)+')'];
+  if(db>=-40) return ['ok','טוב ('+db.toFixed(0)+')'];
+  return ['lo','חלש ('+db.toFixed(0)+')'];
 }
+function setGainEl(fill,lbl,db){
+  const [cls,txt]=gainClass(db);
+  if(fill){ fill.style.width=Math.max(2,Math.min(100,(db+60)/60*100))+'%'; fill.className='fill '+cls; }
+  if(lbl){ lbl.className='gainLbl '+cls; lbl.textContent=txt; }
+}
+function setGain(id, db){ setGainEl(document.getElementById(id+'Fill'), document.getElementById(id+'Gain'), db); }
 function measureDelay(){
   if(!running||!analyserRef||!source){ alert('צריך כרטיס קול עם input סטריאו (מיק\'+רפרנס).'); return; }
   if(dlyState==='measuring') return;
@@ -1583,6 +1586,10 @@ function draw(){
     setGain('dlyMic', peakDb(timeData));
     setGain('dlyRef', peakDb(timeDataRef));
   }
+  if(eqPanel.classList.contains('open')){
+    analyser.getFloatTimeDomainData(timeData);
+    setGainEl(document.getElementById('eqMicFill'), document.getElementById('eqMicGain'), peakDb(timeData));
+  }
   updateLevel();
   const W=cv.clientWidth,H=cv.clientHeight;
   const nyquist=audioCtx.sampleRate/2, bins=floatData.length;
@@ -1850,7 +1857,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v75';
+document.getElementById('ver').textContent='v76';
 const HELP={
   mRta:'תצוגת ספקטרום — עוצמה לפי תדר, בזמן אמת.',
   mSpec:'ווטרפול — הספקטרום לאורך זמן.',
