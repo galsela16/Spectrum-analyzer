@@ -66,7 +66,6 @@
     border:1px solid var(--accent);background:rgba(47,155,255,.12);color:var(--accent);
     font-family:inherit;font-size:11px;letter-spacing:1px;padding:7px 12px;border-radius:4px;cursor:pointer}
   
-  /* שכבת הכיסוי של המודאל: רקע שקוף ועדין לראייה ברורה של הרקע והגרפים */
   #modalBg{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.22);backdrop-filter:blur(1px);-webkit-backdrop-filter:blur(1px);display:none;align-items:center;justify-content:center;padding:16px}
   #modalBg.show{display:flex}
   
@@ -111,7 +110,7 @@
     border-radius:4px;background:rgba(13,17,23,.55);backdrop-filter:blur(4px);overflow:hidden;display:flex;align-items:center;pointer-events:none}
   .meterFill{position:absolute;inset-inline-start:0;top:0;bottom:0;width:0%;
     background:linear-gradient(90deg,var(--accent) 0%,#5ab6ff 60%,#9fd4ff 80%,var(--hot) 100%);
-    opacity:.6;transition:width .05s linear}
+    opacity:.8;transition:none} /* ביטול ההשהיה לקבלת תנועת מיטר מיידית */
   .meterPeak{position:absolute;top:0;bottom:0;width:2px;background:#fff;opacity:.9}
   .meterVal{position:relative;margin-inline-start:auto;padding-inline-end:10px;font-size:13px;font-weight:600;
     color:var(--text);font-variant-numeric:tabular-nums;letter-spacing:.5px;z-index:1}
@@ -521,10 +520,10 @@ const meterFill = document.getElementById('meterFill');
 const meterPeak = document.getElementById('meterPeak');
 const meterVal = document.getElementById('meterVal');
 
-let audioCtx, analyser, source, stream, raf;
+let audioCtx, analyser, analyserMeter, source, stream, raf;
 let analyserRef=null, floatDataRef=null, chReceived=1;
 let floatData;
-let timeData;
+let timeData, timeDataMeter;
 const GEQ=[20,25,31.5,40,50,63,80,100,125,160,200,250,315,400,500,630,800,1000,
            1250,1600,2000,2500,3150,4000,5000,6300,8000,10000,12500,16000,20000];
 let tfState='idle', tfSwap=false, tfMic=null, tfRef=null, tfFrames=0, tfResult=null;
@@ -559,6 +558,7 @@ const CAL_KEY='rta_miccals';
 let specCanvas, specCtx;
 
 let fbTrack=new Map();
+let fbFrameCounter = 0;
 
 function resize(){
   const r=cv.getBoundingClientRect();
@@ -755,7 +755,6 @@ function genApplyLevel(){
   if(genGain){ genGain.gain.setTargetAtTime(Math.pow(10,genDb/20),audioCtx.currentTime,0.1); }
 }
 
-/* סגירת חלון הגנרטור בצורה עצמאית ללא סגירת חלונות מדידה פעילים */
 document.getElementById('genBtn').addEventListener('click',function(){
   const p=document.getElementById('genPanel'); 
   const open=p.classList.toggle('open');
@@ -1609,15 +1608,21 @@ async function start(deviceId){
     analyserRef.minDecibels = -100; 
     analyserRef.maxDecibels = -10;
 
+    /* Analyser קל ומהיר המוקדש בלעדית למיטרים לקבלת 60FPS */
+    analyserMeter = audioCtx.createAnalyser();
+    analyserMeter.fftSize = 2048;
+
     const splitter = audioCtx.createChannelSplitter(2);
     source.connect(splitter);
 
     splitter.connect(analyser, 0);
     splitter.connect(analyserRef, 1);
+    source.connect(analyserMeter);
 
     floatData = new Float32Array(analyser.frequencyBinCount);
     floatDataRef = new Float32Array(analyserRef.frequencyBinCount);
     timeData = new Float32Array(analyser.fftSize);
+    timeDataMeter = new Float32Array(2048);
     
     buildWeighting(audioCtx.sampleRate / 2, analyser.frequencyBinCount);
     resize();
@@ -1713,13 +1718,11 @@ function bandDb(fLo,fHi,nyquist,bins){
 }
 
 function updateLevel(){
-  analyser.getFloatTimeDomainData(timeData);
+  if(!analyserMeter) return;
+  analyserMeter.getFloatTimeDomainData(timeDataMeter);
   let sum = 0;
-  const len = timeData.length;
-  const step = Math.max(1, Math.floor(len / 4096));
-  let count = 0;
-  for(let i = 0; i < len; i += step){ const s = timeData[i]; sum += s * s; count++; }
-  const rms = Math.sqrt(sum / count);
+  for(let i = 0; i < 2048; i++){ const s = timeDataMeter[i]; sum += s * s; }
+  const rms = Math.sqrt(sum / 2048);
   const dbfs = 20 * Math.log10(rms + 1e-9);
 
   if(rt60State==='capture'){
@@ -1798,7 +1801,8 @@ function draw(){
   if(mode==='rta') drawRta(W,H,nyquist,bins,xForFreq);
   else drawSpec(W,H,nyquist,bins,xForFreq);
 
-  if(fbOn) detectFeedback(nyquist,bins);
+  fbFrameCounter++;
+  if(fbOn && fbFrameCounter % 4 === 0) detectFeedback(nyquist,bins);
 }
 
 function drawRta(W,H,nyquist,bins,xForFreq){
