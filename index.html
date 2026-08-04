@@ -77,6 +77,12 @@
   #helpTip{position:fixed;z-index:60;display:none;max-width:250px;padding:9px 12px;border:1px solid var(--accent);
     border-radius:6px;background:rgba(13,17,23,.98);color:var(--text);font-size:12px;line-height:1.55;pointer-events:none;
     box-shadow:0 8px 24px rgba(0,0,0,.6)}
+  #srcOverlay{position:fixed;inset:0;z-index:40;display:none;background:rgba(0,0,0,.55);align-items:center;justify-content:center}
+  #srcOverlay.show{display:flex}
+  #srcBox{display:flex;flex-direction:column;gap:9px;width:min(90%,280px);padding:18px;border:1px solid var(--accent);
+    border-radius:6px;background:rgba(13,17,23,.98);box-shadow:0 10px 40px rgba(0,0,0,.6)}
+  #srcBox .srcTitle{font-size:13px;color:var(--text);text-align:center;margin-bottom:4px;letter-spacing:.5px}
+  #srcBox .toggle{width:100%;text-align:center}
   body.help-on .toggle,body.help-on .tab,body.help-on .seg button,body.help-on input[type=range]{cursor:help}
   #areaPanel{position:relative;z-index:6;display:none;
     flex-direction:column;gap:10px;width:min(92%,280px);max-height:calc(100% - 16px);overflow:auto;padding:16px 18px;
@@ -225,6 +231,15 @@
     </div>
     <button class="zoomBtn" id="zoomBtn">⤢ טווח מלא</button>
     <div id="modalBg"></div>
+    <div id="srcOverlay">
+      <div id="srcBox">
+        <div class="srcTitle">איזה אות להשמיע למדידה?</div>
+        <button class="toggle" data-src="pink">רעש ורוד</button>
+        <button class="toggle" data-src="sweep">סוויפ</button>
+        <button class="toggle" data-src="external">מקור חיצוני (אני מנגן)</button>
+        <button class="toggle" data-src="cancel" style="opacity:.7">ביטול</button>
+      </div>
+    </div>
     <div id="rtPanel">
       <h3 style="font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600">מדידת RT60</h3>
       <div id="rtStatus">לחץ RT60 כדי למדוד</div>
@@ -725,7 +740,7 @@ document.getElementById('eqBtn').addEventListener('click',()=>{ showModal(eqPane
 document.querySelectorAll('#eqModeSwitchA button').forEach(b=>b.addEventListener('click',function(){
   if(this.dataset.go==='area'){ openAreas(); }
 }));
-document.getElementById('eqMeasBtn').addEventListener('click',measurePosition);
+document.getElementById('eqMeasBtn').addEventListener('click',()=>pickSource(measurePosition));
 document.querySelectorAll('#eqModeSeg button').forEach(b=>b.addEventListener('click',function(){
   document.querySelectorAll('#eqModeSeg button').forEach(x=>x.classList.remove('on'));
   this.classList.add('on'); eqMode=this.dataset.m; renderEqResult();
@@ -856,7 +871,36 @@ document.querySelectorAll('#eqModeSwitchB button').forEach(b=>b.addEventListener
 }));
 function openAreas(){ renderAreaList(); showModal(areaPanel); }
 document.getElementById('areaClose').addEventListener('click',closeModals);
-document.getElementById('areaMeasBtn').addEventListener('click',measureArea);
+document.getElementById('areaMeasBtn').addEventListener('click',()=>pickSource(measureArea));
+// ---- source chooser + auto-signal for spatial measurement ----
+let pendingMeasureFn=null;
+const srcOverlay=document.getElementById('srcOverlay');
+function pickSource(fn){
+  if(!running){ alert('קודם הפעל את המיקרופון.'); return; }
+  pendingMeasureFn=fn; srcOverlay.classList.add('show');
+}
+srcOverlay.addEventListener('click',e=>{ if(e.target===srcOverlay) srcOverlay.classList.remove('show'); });
+document.querySelectorAll('#srcBox button').forEach(b=>b.addEventListener('click',function(){
+  srcOverlay.classList.remove('show');
+  const src=this.dataset.src; if(src==='cancel'||!pendingMeasureFn) return;
+  runWithSource(src, pendingMeasureFn); pendingMeasureFn=null;
+}));
+function setGenTypeUI(kind){
+  document.querySelectorAll('#genType button').forEach(x=>x.classList.toggle('on', x.dataset.t===kind));
+  document.getElementById('genFreqWrap').style.display='none';
+  document.getElementById('genSweepWrap').style.display = kind==='sweep'?'flex':'none';
+  document.getElementById('genCompWrap').style.display = kind==='pink'?'flex':'none';
+}
+function runWithSource(kind, measureFn){
+  if(kind==='external'){ measureFn(); return; }
+  const prevOn=genOn, prevType=genType;
+  genType=kind; setGenTypeUI(kind); genStart();          // play the chosen signal
+  setTimeout(measureFn, 450);                             // let it settle, then measure 5s
+  setTimeout(()=>{                                        // restore generator to prior state
+    if(prevOn){ genType=prevType; setGenTypeUI(prevType); genStart(); }
+    else genStop();
+  }, 450+5000+300);
+}
 document.getElementById('areaEqBtn').addEventListener('click',suggestAreaEQ);
 function suggestAreaEQ(){
   if(!areas.length){ alert('מדוד לפחות אזור אחד.'); return; }
@@ -1680,7 +1724,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v70';
+document.getElementById('ver').textContent='v71';
 const HELP={
   mRta:'תצוגת ספקטרום — עוצמה לפי תדר, בזמן אמת.',
   mSpec:'ווטרפול — הספקטרום לאורך זמן.',
