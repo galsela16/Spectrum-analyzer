@@ -848,29 +848,37 @@ function renderCalList(){
     deriveActiveCal(); saveCalStore(); renderCalList();
   }));
 }
-function addCalFromFile(file){
-  const r=new FileReader();
-  r.onload=()=>{
-    let text=String(r.result||'').replace(/^\uFEFF/,'');   // strip BOM
-    const F=[],G=[];
-    const numRe='([+-]?\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)';
-    const lineRe=new RegExp('^\\s*'+numRe+'[\\s,;\\t]+'+numRe);
-    text.split(/\r?\n/).forEach(line=>{
-      const m=line.trim().match(lineRe);
-      if(m){ const f=parseFloat(m[1]), g=parseFloat(m[2]);
-        if(isFinite(f)&&isFinite(g)&&f>0&&f<200000) { F.push(f); G.push(g); } }
-    });
-    if(F.length>1){
-      const id='c'+Date.now();
-      micCalList.push({id, name:file.name.replace(/\.[^.]+$/,''), f:F, g:G});
-      activeCalId=id; deriveActiveCal(); saveCalStore(); renderCalList();
-      if(eqPositions.length) computeAndShow();
-    } else {
-      alert('לא הצלחתי לקרוא את קובץ הכיול ('+F.length+' נקודות זוהו).\nהפורמט הצפוי: כל שורה = תדר [רווח/טאב/פסיק] dB.\nלדוגמה:  1000  -1.5');
+function parseCalText(text, fname){
+  text=String(text||'').replace(/^\uFEFF/,'');
+  const F=[],G=[];
+  const numRe='([+-]?\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?)';
+  const lineRe=new RegExp('^\\s*'+numRe+'[\\s,;\\t]+'+numRe);
+  text.split(/\r?\n/).forEach(line=>{
+    const m=line.trim().match(lineRe);
+    if(m){ const f=parseFloat(m[1]), g=parseFloat(m[2]);
+      if(isFinite(f)&&isFinite(g)&&f>0&&f<200000) { F.push(f); G.push(g); } }
+  });
+  if(F.length>1){
+    const id='c'+Date.now();
+    micCalList.push({id, name:(fname||'כיול').replace(/\.[^.]+$/,''), f:F, g:G});
+    activeCalId=id; deriveActiveCal(); saveCalStore(); renderCalList();
+    if(eqPositions.length) computeAndShow();
+    return true;
+  }
+  return false;
+}
+async function addCalFromFile(file){
+  try{
+    let text=null;
+    if(file.text){ text=await file.text(); }            // modern API, handles most cases
+    if(text==null){ text=await new Promise((res,rej)=>{ const r=new FileReader();
+      r.onload=()=>res(r.result); r.onerror=()=>rej(r.error); r.readAsText(file); }); }
+    if(!parseCalText(text, file.name)){
+      alert('לא זיהיתי נתוני כיול בקובץ.\nהפורמט הצפוי: כל שורה = תדר [רווח/טאב/פסיק] dB. לדוגמה: 1000  -1.5');
     }
-  };
-  r.onerror=()=>alert('שגיאה בקריאת הקובץ.');
-  r.readAsText(file);
+  }catch(err){
+    alert('לא הצלחתי לקרוא את הקובץ.\nאם הוא ב־iCloud — הורד אותו מקומית קודם, ונסה קובץ בסיומת .txt / .cal / .frd.');
+  }
 }
 const calPanel=document.getElementById('calPanel');
 document.getElementById('calBtn').addEventListener('click',()=>{ renderCalList(); showModal(calPanel); });
@@ -1842,7 +1850,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v74';
+document.getElementById('ver').textContent='v75';
 const HELP={
   mRta:'תצוגת ספקטרום — עוצמה לפי תדר, בזמן אמת.',
   mSpec:'ווטרפול — הספקטרום לאורך זמן.',
