@@ -302,6 +302,9 @@
       <div class="sub">בחר כיול פעיל, או הוסף קובץ (תדר+dB, פורמט REW/miniDSP). נשמר לפעם הבאה.</div>
       <div id="calList"></div>
       <label class="toggle" style="cursor:pointer;align-self:center">➕ הוסף קובץ כיול<input id="calAdd" type="file" accept=".txt,.cal,.frd,.csv,.dat,.mdat,.gain,.zma,text/*" style="display:none"></label>
+      <div class="sub" style="text-align:center">או הדבק את תוכן הקובץ כאן (תדר [רווח] dB):</div>
+      <textarea id="calPaste" placeholder="20&#9;0.39&#10;20.5&#9;0.39&#10;…" style="width:100%;height:70px;background:#0c1017;border:1px solid var(--line);border-radius:4px;color:var(--text);font-family:monospace;font-size:11px;padding:6px;resize:vertical"></textarea>
+      <button class="toggle" id="calPasteBtn" style="align-self:center">טען מהטקסט</button>
       <button id="calResetBtn" class="toggle" style="align-self:center">אפס את כל הכיולים</button>
       <button id="calClose">סגור</button>
     </div>
@@ -885,6 +888,17 @@ const calPanel=document.getElementById('calPanel');
 document.getElementById('calBtn').addEventListener('click',()=>{ renderCalList(); showModal(calPanel); });
 document.getElementById('calClose').addEventListener('click',closeModals);
 document.getElementById('calAdd').addEventListener('change',e=>{ if(e.target.files[0]) addCalFromFile(e.target.files[0]); e.target.value=''; });
+document.getElementById('calPasteBtn').addEventListener('click',()=>{
+  const t=document.getElementById('calPaste').value;
+  if(!t.trim()){ alert('הדבק קודם את תוכן הקובץ.'); return; }
+  if(parseCalText(t,'כיול מודבק')) document.getElementById('calPaste').value='';
+  else alert('לא זיהיתי נתונים. כל שורה צריכה להיות: תדר [רווח/טאב] dB.');
+});
+// drag & drop a file onto the calibration panel
+calPanel.addEventListener('dragover',e=>{ e.preventDefault(); calPanel.style.borderColor='var(--accent)'; });
+calPanel.addEventListener('dragleave',()=>{ calPanel.style.borderColor=''; });
+calPanel.addEventListener('drop',e=>{ e.preventDefault(); calPanel.style.borderColor='';
+  const f=e.dataTransfer.files[0]; if(f) addCalFromFile(f); });
 document.getElementById('calResetBtn').addEventListener('click',()=>{
   if(!micCalList.length){ return; }
   if(!confirm('לאפס ולמחוק את כל קבצי הכיול?')) return;
@@ -1857,7 +1871,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v76';
+document.getElementById('ver').textContent='v77';
 const HELP={
   mRta:'תצוגת ספקטרום — עוצמה לפי תדר, בזמן אמת.',
   mSpec:'ווטרפול — הספקטרום לאורך זמן.',
