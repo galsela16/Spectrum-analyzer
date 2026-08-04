@@ -768,7 +768,7 @@ document.getElementById('eqBtn').addEventListener('click',()=>{ showModal(eqPane
 document.querySelectorAll('#eqModeSwitchA button').forEach(b=>b.addEventListener('click',function(){
   if(this.dataset.go==='area'){ openAreas(); }
 }));
-document.getElementById('eqMeasBtn').addEventListener('click',()=>pickSource(measurePosition));
+document.getElementById('eqMeasBtn').addEventListener('click',()=>pickSource(measurePosition,5000));
 document.querySelectorAll('#eqModeSeg button').forEach(b=>b.addEventListener('click',function(){
   document.querySelectorAll('#eqModeSeg button').forEach(x=>x.classList.remove('on'));
   this.classList.add('on'); eqMode=this.dataset.m; renderEqResult();
@@ -925,19 +925,19 @@ document.querySelectorAll('#eqModeSwitchB button').forEach(b=>b.addEventListener
 }));
 function openAreas(){ renderAreaList(); showModal(areaPanel); }
 document.getElementById('areaClose').addEventListener('click',closeModals);
-document.getElementById('areaMeasBtn').addEventListener('click',()=>pickSource(measureArea));
+document.getElementById('areaMeasBtn').addEventListener('click',()=>pickSource(measureArea,5000));
 // ---- source chooser + auto-signal for spatial measurement ----
-let pendingMeasureFn=null;
+let pendingMeasureFn=null, pendingDur=5000;
 const srcOverlay=document.getElementById('srcOverlay');
-function pickSource(fn){
+function pickSource(fn, dur){
   if(!running){ alert('קודם הפעל את המיקרופון.'); return; }
-  pendingMeasureFn=fn; srcOverlay.classList.add('show');
+  pendingMeasureFn=fn; pendingDur=dur||5000; srcOverlay.classList.add('show');
 }
 srcOverlay.addEventListener('click',e=>{ if(e.target===srcOverlay) srcOverlay.classList.remove('show'); });
 document.querySelectorAll('#srcBox button').forEach(b=>b.addEventListener('click',function(){
   srcOverlay.classList.remove('show');
   const src=this.dataset.src; if(src==='cancel'||!pendingMeasureFn) return;
-  runWithSource(src, pendingMeasureFn); pendingMeasureFn=null;
+  runWithSource(src, pendingMeasureFn, pendingDur); pendingMeasureFn=null;
 }));
 function setGenTypeUI(kind){
   document.querySelectorAll('#genType button').forEach(x=>x.classList.toggle('on', x.dataset.t===kind));
@@ -945,15 +945,16 @@ function setGenTypeUI(kind){
   document.getElementById('genSweepWrap').style.display = kind==='sweep'?'flex':'none';
   document.getElementById('genCompWrap').style.display = kind==='pink'?'flex':'none';
 }
-function runWithSource(kind, measureFn){
+function runWithSource(kind, measureFn, durMs){
+  durMs=durMs||5000;
   if(kind==='external'){ measureFn(); return; }
   const prevOn=genOn, prevType=genType;
   genType=kind; setGenTypeUI(kind); genStart();          // play the chosen signal
-  setTimeout(measureFn, 450);                             // let it settle, then measure 5s
+  setTimeout(measureFn, 450);                             // let it settle, then measure
   setTimeout(()=>{                                        // restore generator to prior state
     if(prevOn){ genType=prevType; setGenTypeUI(prevType); genStart(); }
     else genStop();
-  }, 450+5000+300);
+  }, 450+durMs+300);
 }
 document.getElementById('areaEqBtn').addEventListener('click',suggestAreaEQ);
 function suggestAreaEQ(){
@@ -1024,7 +1025,7 @@ const tfPanel=document.getElementById('tfPanel');
 document.getElementById('tfBtn').addEventListener('click',()=>{ showModal(tfPanel); });
 document.getElementById('tfClose').addEventListener('click',closeModals);
 document.getElementById('tfSwapBtn').addEventListener('click',function(){ tfSwap=!tfSwap; this.classList.toggle('on',tfSwap); });
-document.getElementById('tfMeasBtn').addEventListener('click',tfMeasure);
+document.getElementById('tfMeasBtn').addEventListener('click',()=>pickSource(tfMeasure,6000));
 document.getElementById('tfCsvBtn').addEventListener('click',tfExportCsv);
 
 function chLevel(arr){ let p=0; for(let i=1;i<arr.length;i++) p+=Math.pow(10,arr[i]/10); return 10*Math.log10(p+1e-12); }
@@ -1113,7 +1114,7 @@ function tfExportCsv(){
 const dlyPanel=document.getElementById('dlyPanel');
 document.getElementById('dlyBtn').addEventListener('click',()=>{ showModal(dlyPanel); });
 document.getElementById('dlyClose').addEventListener('click',closeModals);
-document.getElementById('dlyMeasBtn').addEventListener('click',measureDelay);
+document.getElementById('dlyMeasBtn').addEventListener('click',()=>pickSource(measureDelay,2100));
 function fft(re,im,inv){
   const n=re.length;
   for(let i=1,j=0;i<n;i++){ let bit=n>>1; for(;j&bit;bit>>=1) j^=bit; j^=bit;
@@ -1871,7 +1872,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v77';
+document.getElementById('ver').textContent='v78';
 const HELP={
   mRta:'תצוגת ספקטרום — עוצמה לפי תדר, בזמן אמת.',
   mSpec:'ווטרפול — הספקטרום לאורך זמן.',
