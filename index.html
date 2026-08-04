@@ -443,6 +443,7 @@
       <button class="toggle" id="csvBtn">CSV</button>
       <select class="inp" id="inSel" title="מקור קלט"><option>מיקרופון ברירת מחדל</option></select>
       <select class="inp" id="outSel" title="יציאת פלט (אות הגנרטור)"><option>פלט ברירת מחדל</option></select>
+      <span id="chCount" class="sub" style="align-self:center;font-size:11px">—</span>
     </div>
   </footer>
 
@@ -483,7 +484,7 @@ const meterPeak = document.getElementById('meterPeak');
 const meterVal = document.getElementById('meterVal');
 
 let audioCtx, analyser, source, stream, raf;
-let analyserRef=null, floatDataRef=null;   // 2nd channel (reference) for dual-channel TF
+let analyserRef=null, floatDataRef=null, chReceived=1;   // 2nd channel (reference) for dual-channel TF
 let floatData;            // Float32 dB per bin
 let timeData;             // Float32 time-domain samples
 // dual-channel transfer-function measurement
@@ -1424,6 +1425,11 @@ async function start(deviceId){
     analyser.smoothingTimeConstant=parseFloat(document.getElementById('smooth').value);
     analyser.minDecibels=-100; analyser.maxDecibels=-10;
     source=audioCtx.createMediaStreamSource(stream);
+    // how many channels did we actually get? (diagnostic for 2-channel measurements)
+    try{ const st=stream.getAudioTracks()[0].getSettings(); chReceived=st.channelCount||source.channelCount||1; }
+    catch(_){ chReceived=source.channelCount||1; }
+    const ci=document.getElementById('chCount');
+    if(ci){ ci.textContent='ערוצים: '+chReceived+(chReceived<2?' ⚠ מונו — אין ערוץ 2':' ✓'); ci.style.color=chReceived<2?'#ff6b8b':'#39d98a'; }
     // stereo split: ch0 → main (mic), ch1 → reference analyser (for 2-channel TF)
     const splitter=audioCtx.createChannelSplitter(2);
     source.connect(splitter);
@@ -1872,7 +1878,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v78';
+document.getElementById('ver').textContent='v79';
 const HELP={
   mRta:'תצוגת ספקטרום — עוצמה לפי תדר, בזמן אמת.',
   mSpec:'ווטרפול — הספקטרום לאורך זמן.',
