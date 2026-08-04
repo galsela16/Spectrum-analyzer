@@ -494,7 +494,6 @@ let weightMode='Z';
 let meterUnit='SPL';
 let weightA=null, weightC=null;
 let leqSumP=0, leqN=0, splMax=-120;
-let zMin=viewMin, zMax=viewMax;
 let dragging=false, dragX0=0, dragX1=0, cursorX=null;
 let genType='pink', genOn=false, genGain=null, genSrc=null, genOsc=null;
 let genDb=-34, genHz=1000, targetMode='off';
@@ -994,7 +993,10 @@ function renderAreaList(){
 }
 
 const tfPanel=document.getElementById('tfPanel');
-document.getElementById('tfBtn').addEventListener('click',()=>{ showModal(tfPanel); });
+document.getElementById('tfBtn').addEventListener('click',()=>{ 
+  showModal(tfPanel); 
+  if(tfResult) renderTFList(); 
+});
 document.getElementById('tfClose').addEventListener('click',closeModals);
 document.getElementById('tfSwapBtn').addEventListener('click',function(){ tfSwap=!tfSwap; this.classList.toggle('on',tfSwap); });
 document.getElementById('tfMeasBtn').addEventListener('click',()=>pickSource(tfMeasure,6000));
@@ -1083,27 +1085,6 @@ function renderTFList(){
   box.innerHTML = html;
 }
 
-function drawTF(){
-  const c=document.getElementById('tfCanvas'), x=c.getContext('2d');
-  const W=c.width=c.clientWidth||400, H=150; c.height=H;
-  x.clearRect(0,0,W,H);
-  const mid=H/2, scale=(H/2-16)/6;
-  x.font='9px monospace'; x.textAlign='left';
-  [-6,-3,0,3,6].forEach(d=>{ const yy=mid-d*scale; x.strokeStyle='#2b3646'; x.globalAlpha=d===0?.9:.4;
-    x.beginPath();x.moveTo(0,yy);x.lineTo(W,yy);x.stroke(); x.globalAlpha=1; x.fillStyle='#8b97a5'; x.fillText((d>0?'+':'')+d+'dB',2,yy-2); });
-  if(!tfResult){ return; }
-  const n=GEQ.length, bw=W/n;
-  for(let k=0;k<n;k++){
-    const cx=k*bw+bw*0.5, v=tfResult.corr[k];
-    if(v==null){ x.fillStyle='#39424f'; x.fillRect(cx-1,mid-1,2,2); continue; }
-    const y=mid - v*scale;
-    x.fillStyle = v>=0 ? '#50e68c' : '#ff6b8b';
-    x.fillRect(cx-bw*0.35, Math.min(mid,y), bw*0.7, Math.abs(mid-y));
-    if(Math.abs(v)>=1.5){ x.fillStyle='#e6ecf3'; x.textAlign='center'; x.fillText(v.toFixed(0), cx, v>=0? y-3 : y+9); }
-  }
-  x.fillStyle='#8b97a5'; x.textAlign='center';
-  [100,1000,10000].forEach(f=>{ const k=GEQ.indexOf(f); if(k>=0) x.fillText(f>=1000?(f/1000)+'k':f, k*bw+bw*0.5, H-3); });
-}
 function tfExportCsv(){
   if(!tfResult){ alert('קודם מדוד.'); return; }
   let rows='freq_hz,geq_correction_db,measured_db\n';
@@ -1280,6 +1261,7 @@ function startRT60(){
   if(!running||!audioCtx){ alert('קודם הפעל את המיקרופון.'); return; }
   showModal(rtPanel);
   rtStatus.innerHTML='מכין… משמיע רעש ורוד';
+  const prevGenOn = genOn;
   const restoreType=genType; genType='pink';
   if(!genOn){ genStart(); }
   const boost=Math.max(genDb,-20);
@@ -1295,7 +1277,9 @@ function startRT60(){
         genGain.gain.linearRampToValueAtTime(0,t+0.005);}catch(_){} }
       rt60CutT=performance.now();
       setTimeout(()=>{
-        rt60State='idle'; genStop(); genType=restoreType;
+        rt60State='idle'; 
+        if(!prevGenOn) genStop(); 
+        genType=restoreType;
         analyzeRT60();
       },2500);
     },400);
