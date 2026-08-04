@@ -78,6 +78,13 @@
     border-radius:6px;background:rgba(13,17,23,.98);color:var(--text);font-size:12px;line-height:1.55;pointer-events:none;
     box-shadow:0 8px 24px rgba(0,0,0,.6)}
   #srcOverlay{position:fixed;inset:0;z-index:40;display:none;background:rgba(0,0,0,.55);align-items:center;justify-content:center}
+  #dlyPanel{position:relative;z-index:6;display:none;flex-direction:column;gap:10px;width:min(92%,340px);max-height:calc(100% - 16px);overflow:auto;
+    padding:16px 18px;border:1px solid var(--accent);border-radius:6px;background:rgba(13,17,23,.97);backdrop-filter:blur(6px);box-shadow:0 8px 40px rgba(0,0,0,.6)}
+  #dlyPanel.open{display:flex}
+  #dlyPanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
+  #dlyPanel .sub{font-size:10px;color:var(--dim);letter-spacing:.5px;line-height:1.5}
+  #dlyStatus b{color:var(--accent);font-size:24px}
+  #dlyClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;font-size:12px;padding:8px 20px;border-radius:4px;cursor:pointer;align-self:center}
   #srcOverlay.show{display:flex}
   #srcBox{display:flex;flex-direction:column;gap:9px;width:min(90%,280px);padding:18px;border:1px solid var(--accent);
     border-radius:6px;background:rgba(13,17,23,.98);box-shadow:0 10px 40px rgba(0,0,0,.6)}
@@ -306,6 +313,16 @@
       <div class="sub" id="tfInfo">התוצאה: כמה dB להזיז בכל פס בגרפיק־EQ (31 פסים). ירוק=הזז, אפור=לא אמין (רפרנס חלש).</div>
       <button id="tfClose">סגור</button>
     </div>
+    <div id="dlyPanel">
+      <h3>מדידת דיליי</h3>
+      <div class="sub">כניסה 1 = מיקרופון · כניסה 2 = רפרנס מהמיקסר. נגן רעש ורוד/מוזיקה דרך המערכת (עם שליחת רפרנס לכניסה 2), ולחץ מדוד.</div>
+      <div class="chBar"><span id="dlyL1" style="min-width:96px">כניסה 1 (מיק')</span><div class="track"><div class="fill" id="dlyMicFill"></div></div></div>
+      <div class="chBar"><span id="dlyL2" style="min-width:96px">כניסה 2 (רפרנס)</span><div class="track"><div class="fill" id="dlyRefFill"></div></div></div>
+      <button id="dlyMeasBtn" class="toggle" style="align-self:center">מדוד דיליי (2ש')</button>
+      <div id="dlyStatus" style="text-align:center;font-size:14px;color:var(--text);min-height:22px">—</div>
+      <div class="sub" id="dlyInfo">התוצאה: כמה זמן המיק' מאחר אחרי הרפרנס = הדיליי של הרמקול. הזן אותו בעיכוב של הרמקול המוקדם יותר.</div>
+      <button id="dlyClose">סגור</button>
+    </div>
     <div class="meter" id="meter" style="display:none">
       <div class="meterFill" id="meterFill"></div>
       <div class="meterPeak" id="meterPeak" style="inset-inline-start:0"></div>
@@ -390,6 +407,7 @@
       <button class="toggle" id="eqBtn">מדידת המרחב</button>
       <button class="toggle" id="calBtn">כיול מיק'</button>
       <button class="toggle" id="tfBtn">TF ‏2־ערוצי</button>
+      <button class="toggle" id="dlyBtn">דיליי</button>
       <button class="toggle" id="rtBtn">RT60</button>
       <div class="ctrl" style="flex:0 0 auto">
         <label>יחידת מד</label>
@@ -853,12 +871,12 @@ document.getElementById('calResetBtn').addEventListener('click',()=>{
 
 // ---- modal backdrop: dim + click-outside to close, for all popups ----
 const modalBg=document.getElementById('modalBg');
-['rtPanel','eqPanel','calPanel','tfPanel','areaPanel'].forEach(id=>{
+['rtPanel','eqPanel','calPanel','tfPanel','areaPanel','dlyPanel'].forEach(id=>{
   const p=document.getElementById(id); if(p) modalBg.appendChild(p);   // center via backdrop flexbox
 });
 function showModal(p){ closeModals(); p.classList.add('open'); modalBg.classList.add('show'); }
 function closeModals(){
-  ['rtPanel','eqPanel','calPanel','tfPanel','areaPanel'].forEach(id=>document.getElementById(id).classList.remove('open'));
+  ['rtPanel','eqPanel','calPanel','tfPanel','areaPanel','dlyPanel'].forEach(id=>document.getElementById(id).classList.remove('open'));
   modalBg.classList.remove('show');
 }
 modalBg.addEventListener('click',e=>{ if(e.target===modalBg) closeModals(); });
@@ -1054,6 +1072,75 @@ function tfExportCsv(){
   let rows='freq_hz,geq_correction_db,measured_db\n';
   GEQ.forEach((f,k)=> rows+=f+','+(tfResult.corr[k]==null?'':tfResult.corr[k].toFixed(1))+','+tfResult.H[k].toFixed(1)+'\n');
   download('tf_geq_'+stamp()+'.csv', URL.createObjectURL(new Blob([rows],{type:'text/csv'})));
+}
+// ---- dual-channel delay measurement (GCC-PHAT) ----
+const dlyPanel=document.getElementById('dlyPanel');
+document.getElementById('dlyBtn').addEventListener('click',()=>{ showModal(dlyPanel); });
+document.getElementById('dlyClose').addEventListener('click',closeModals);
+document.getElementById('dlyMeasBtn').addEventListener('click',measureDelay);
+function fft(re,im,inv){
+  const n=re.length;
+  for(let i=1,j=0;i<n;i++){ let bit=n>>1; for(;j&bit;bit>>=1) j^=bit; j^=bit;
+    if(i<j){ const tr=re[i];re[i]=re[j];re[j]=tr; const ti=im[i];im[i]=im[j];im[j]=ti; } }
+  for(let len=2;len<=n;len<<=1){
+    const ang=(inv?2:-2)*Math.PI/len, wr=Math.cos(ang), wi=Math.sin(ang);
+    for(let i=0;i<n;i+=len){ let cwr=1,cwi=0;
+      for(let k=0;k<len/2;k++){
+        const a=i+k, b=i+k+len/2;
+        const vr=re[b]*cwr-im[b]*cwi, vi=re[b]*cwi+im[b]*cwr;
+        re[b]=re[a]-vr; im[b]=im[a]-vi; re[a]+=vr; im[a]+=vi;
+        const t=cwr*wr-cwi*wi; cwi=cwr*wi+cwi*wr; cwr=t;
+      }
+    }
+  }
+  if(inv){ for(let i=0;i<n;i++){ re[i]/=n; im[i]/=n; } }
+}
+let dlyState='idle';
+function measureDelay(){
+  if(!running||!analyserRef||!source){ alert('צריך כרטיס קול עם input סטריאו (מיק\'+רפרנס).'); return; }
+  if(dlyState==='measuring') return;
+  dlyState='measuring';
+  const btn=document.getElementById('dlyMeasBtn'); btn.textContent='מקליט…'; btn.style.opacity=.5;
+  document.getElementById('dlyStatus').textContent='מקליט 2 שניות…';
+  const sr=audioCtx.sampleRate, want=Math.floor(sr*2.0);
+  const mic=new Float32Array(want), ref=new Float32Array(want); let pos=0;
+  const sp=audioCtx.createScriptProcessor(4096,2,1);
+  sp.onaudioprocess=e=>{
+    const c0=e.inputBuffer.getChannelData(0), c1=e.inputBuffer.numberOfChannels>1?e.inputBuffer.getChannelData(1):c0;
+    for(let i=0;i<c0.length && pos<want;i++,pos++){ mic[pos]=c0[i]; ref[pos]=c1[i]; }
+  };
+  const mute=audioCtx.createGain(); mute.gain.value=0;   // keep node alive without audible output
+  source.connect(sp); sp.connect(mute); mute.connect(audioCtx.destination);
+  setTimeout(()=>{
+    try{ source.disconnect(sp); }catch(_){} try{ sp.disconnect(); }catch(_){} try{ mute.disconnect(); }catch(_){}
+    dlyState='idle'; btn.textContent='מדוד שוב (2ש\')'; btn.style.opacity=1;
+    const m = tfSwap? ref: mic, r = tfSwap? mic: ref;
+    const res=computeDelay(r, m, sr);
+    const st=document.getElementById('dlyStatus');
+    if(res==null){ st.textContent='לא הצלחתי — ודא שמנגן אות רחב־פס ושכניסה 2 מקבלת רפרנס.'; return; }
+    const ms=res.ms, dist=Math.abs(ms)/1000*343;
+    st.innerHTML='דיליי ≈ <b>'+ms.toFixed(2)+' ms</b><br><span style="font-size:11px;color:var(--dim)">≈ '+dist.toFixed(2)+' מ\' · '+(ms>=0?'המיק\' מאחר אחרי הרפרנס':'המיק\' מקדים את הרפרנס')+'</span>';
+  },2100);
+}
+function computeDelay(ref,mic,sr){
+  let n=1; const L=Math.min(ref.length,mic.length); while(n*2<=L) n*=2; n=Math.min(n,131072);
+  if(n<1024) return null;
+  const xr=new Float64Array(n), xi=new Float64Array(n), yr=new Float64Array(n), yi=new Float64Array(n);
+  let e0=0,e1=0;
+  for(let i=0;i<n;i++){ xr[i]=ref[i]; yr[i]=mic[i]; e0+=ref[i]*ref[i]; e1+=mic[i]*mic[i]; }
+  if(e0<1e-6||e1<1e-6) return null;
+  fft(xr,xi,false); fft(yr,yi,false);
+  const rr=new Float64Array(n), ri=new Float64Array(n);
+  for(let k=0;k<n;k++){
+    const cr=yr[k]*xr[k]+yi[k]*xi[k], ci=yi[k]*xr[k]-yr[k]*xi[k];
+    const mag=Math.hypot(cr,ci)+1e-9;
+    rr[k]=cr/mag; ri[k]=ci/mag;
+  }
+  fft(rr,ri,true);
+  let best=-1e9,bi=0;
+  for(let k=0;k<n;k++){ if(rr[k]>best){ best=rr[k]; bi=k; } }
+  let lag=bi; if(lag>n/2) lag-=n;
+  return { ms: lag/sr*1000, samples: lag };
 }
 function measurePosition(){
   if(!running){ alert('קודם הפעל את המיקרופון.'); return; }
@@ -1457,6 +1544,12 @@ function draw(){
     }
     if(tfPanel.classList.contains('open')) updateTfLevels();
   }
+  if(analyserRef && floatDataRef && dlyPanel.classList.contains('open')){
+    analyserRef.getFloatFrequencyData(floatDataRef);
+    const pct=d=>Math.max(0,Math.min(100,(d+80)/70*100));
+    document.getElementById('dlyMicFill').style.width=pct(chLevel(floatData))+'%';
+    document.getElementById('dlyRefFill').style.width=pct(chLevel(floatDataRef))+'%';
+  }
   updateLevel();
   const W=cv.clientWidth,H=cv.clientHeight;
   const nyquist=audioCtx.sampleRate/2, bins=floatData.length;
@@ -1724,7 +1817,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v71';
+document.getElementById('ver').textContent='v72';
 const HELP={
   mRta:'תצוגת ספקטרום — עוצמה לפי תדר, בזמן אמת.',
   mSpec:'ווטרפול — הספקטרום לאורך זמן.',
@@ -1733,6 +1826,7 @@ const HELP={
   eqBtn:'מדידת המרחב: מדוד תגובת מערכת\nוקבל תיקון EQ (ממוצע / אזורים).',
   calBtn:'כיולי מיקרופון: טען קובץ כיול (REW)\nלתיקון צביעת המיקרופון.',
   tfBtn:'Transfer Function דו־ערוצי:\nמיק\' מול רפרנס מהמיקסר → תיקון EQ.',
+  dlyBtn:'מדידת דיליי דו־ערוצי: זמן ההשהיה\nבין רמקולים (סאב מול טופ).',
   rtBtn:'RT60: מדידת זמן הדהוד החדר.\nדורש עוצמה וחדר אמיתי.',
   wgtBtn:'שקלול המד: dBZ (טכני), dBA (חוק/אוזן),\ndBC (עם בס). לחיצה מחליפה.',
   leqBtn:'אפס Leq: מתחיל מדידת ממוצע עוצמה\nמחדש מהרגע הזה.',
