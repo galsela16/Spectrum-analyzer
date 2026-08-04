@@ -194,8 +194,9 @@
   #calClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
     font-size:12px;padding:8px 20px;border-radius:4px;cursor:pointer;align-self:center}
   
+  /* עיצוב חלון ה-Transfer Function מורחב וקריא */
   #tfPanel{position:relative;z-index:6;display:none;
-    flex-direction:column;gap:12px;width:min(92%,460px);max-height:calc(100% - 16px);padding:16px 18px;border:1px solid var(--accent);
+    flex-direction:column;gap:12px;width:min(94%,520px);max-height:calc(100% - 16px);padding:16px 18px;border:1px solid var(--accent);
     border-radius:6px;background:rgba(13,17,23,.97);backdrop-filter:blur(6px);box-shadow:0 8px 40px rgba(0,0,0,.6);overflow:auto}
   #tfPanel.open{display:flex}
   #tfPanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
@@ -210,10 +211,22 @@
   .gainLbl{min-width:70px;font-size:10px;letter-spacing:.3px;text-align:start}
   .gainLbl.lo{color:#ff6b8b}.gainLbl.ok{color:#39d98a}.gainLbl.hi{color:#ffb020}.gainLbl.clip{color:#ff3b6b;font-weight:700}
   #tfCanvas{width:100%;height:150px;position:relative;flex-shrink:0;background:#0b0f16;border:1px solid var(--line);border-radius:4px}
-  #tfGeqList{display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;z-index:2;width:100%}
+  #tfGeqList{display:flex;flex-direction:column;gap:6px;z-index:2;width:100%}
   #tfBtns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
   #tfClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
     font-size:12px;padding:8px 20px;border-radius:4px;cursor:pointer;align-self:center}
+  
+  /* עיצוב כרטיסיות הפסים בחלון ה-Transfer Function למניעת חפיפות */
+  .tfGrid{display:grid;grid-template-columns:repeat(auto-fill, minmax(92px, 1fr));gap:6px;max-height:220px;overflow-y:auto;padding:6px;border:1px solid var(--line);border-radius:4px;background:#0b0f16}
+  .tfItem{display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-radius:4px;border:1px solid var(--line);font-size:11px;background:var(--panel-2);font-variant-numeric:tabular-nums}
+  .tfItem.boost{background:rgba(80,230,140,0.12);border-color:rgba(80,230,140,0.4)}
+  .tfItem.boost .g{color:#50e68c;font-weight:700}
+  .tfItem.cut{background:rgba(255,59,107,0.12);border-color:rgba(255,59,107,0.4)}
+  .tfItem.cut .g{color:#ff6b8b;font-weight:700}
+  .tfItem.off{opacity:0.35;background:rgba(255,255,255,0.02)}
+  .tfItem .f{color:var(--dim);font-weight:600}
+  .tfItem .g{color:var(--text)}
+
   .err{position:absolute;bottom:14px;inset-inline:14px;z-index:5;background:rgba(255,59,107,.12);border:1px solid var(--hot);
     color:#ffb3c4;padding:10px 14px;border-radius:4px;font-size:12px;line-height:1.6;display:none}
 </style>
@@ -1058,23 +1071,23 @@ function renderTFList(){
   drawGEQ(cv2, GEQ, tfResult.corr);
   eqCurveData = { freqs: GEQ.slice(), corr: tfResult.corr.slice() };
 
-  let html = '<div class="sub" style="margin-bottom:6px; color:var(--text);">ערכי תיקון לגרפיק-EQ (31 פסים):</div>';
-  html += '<div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(85px, 1fr)); gap:6px; max-height:200px; overflow-y:auto; padding-inline-end:4px;">';
+  let html = '<div class="sub" style="margin-bottom:6px; color:var(--text); font-weight:600;">ערכי תיקון לגרפיק-EQ (31 פסים):</div>';
+  html += '<div class="tfGrid">';
 
   for(let k = 0; k < GEQ.length; k++){
     const f = GEQ[k];
-    const fStr = f >= 1000 ? (f / 1000) + 'k' : f;
+    const fStr = f >= 1000 ? (f / 1000) + 'k' : f + 'Hz';
     const v = tfResult.corr[k];
 
     if(v == null || !tfResult.rel[k]){
-      html += `<div class="eqRow" style="opacity:0.35; background:rgba(255,255,255,0.02);">
-                <span class="f" style="color:var(--dim);">${fStr}</span>
-                <span class="g" style="color:var(--dim);">—</span>
+      html += `<div class="tfItem off">
+                <span class="f">${fStr}</span>
+                <span class="g">—</span>
                </div>`;
     } else {
       const cls = v < 0 ? 'cut' : (v > 0 ? 'boost' : '');
       const sign = v > 0 ? '+' : '';
-      html += `<div class="eqRow ${cls}">
+      html += `<div class="tfItem ${cls}">
                 <span class="f">${fStr}</span>
                 <span class="g">${sign}${v.toFixed(1)}dB</span>
                </div>`;
