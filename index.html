@@ -203,6 +203,8 @@
   .calRow .sub{color:var(--dim);font-size:11px;flex-shrink:0}
   .calRow .del{color:#ff6b8b;font-size:14px;padding:2px 6px;line-height:1;border-radius:3px;flex-shrink:0}
   .calRow .del:hover{background:rgba(255,59,107,.2)}
+  .posName{flex:1;background:transparent;border:none;color:var(--text);font-family:inherit;font-size:12px;font-weight:600;outline:none;min-width:0}
+  .posName:focus{border-bottom:1px solid var(--accent)}
   #calClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
     font-size:12px;padding:8px 20px;border-radius:4px;cursor:pointer;align-self:center}
   
@@ -305,6 +307,7 @@
         </div>
       </div>
       <div class="sub" id="eqSub">מיקומים שנמדדו: 0</div>
+      <div id="eqPosList" style="display:flex;flex-direction:column;gap:5px"></div>
       <div class="chBar"><span style="min-width:64px">גיין מיק'</span><div class="track"><div class="fill" id="eqMicFill"></div></div><span class="gainLbl" id="eqMicGain">—</span></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
         <button id="eqMeasBtn" class="toggle">מדוד מיקום (5ש')</button>
@@ -870,7 +873,7 @@ document.querySelectorAll('#eqModeSeg button').forEach(b=>b.addEventListener('cl
   document.querySelectorAll('#eqModeSeg button').forEach(x=>x.classList.remove('on'));
   this.classList.add('on'); eqMode=this.dataset.m; renderEqResult();
 }));
-document.getElementById('eqResetBtn').addEventListener('click',()=>{ eqPositions=[]; eqMarks=null; document.getElementById('eqList').innerHTML=''; updateEqUI(); });
+document.getElementById('eqResetBtn').addEventListener('click',()=>{ eqPositions=[]; eqMarks=null; document.getElementById('eqList').innerHTML=''; document.getElementById('eqPosList').innerHTML=''; updateEqUI(); });
 
 function updateEqUI(){
   const meas = measState==='measuring';
@@ -1410,13 +1413,27 @@ function measurePosition(){
   setTimeout(()=>{
     const bins=measAccum.length, bd=new Float32Array(bins);
     for(let i=0;i<bins;i++) bd[i]=10*Math.log10(measAccum[i]/Math.max(1,measFrames)+1e-12);
-    eqPositions.push(bd); measState='idle';
-    computeAndShow(); updateEqUI();
+    eqPositions.push({name:'מיקום '+(eqPositions.length+1), data:bd}); measState='idle';
+    computeAndShow(); updateEqUI(); renderEqList();
   },5000);
 }
+function renderEqList(){
+  const box=document.getElementById('eqPosList'); if(!box) return;
+  if(!eqPositions.length){ box.innerHTML=''; return; }
+  box.innerHTML=eqPositions.map((p,i)=>
+    '<div class="calRow"><input class="posName" data-i="'+i+'" value="'+(p.name||('מיקום '+(i+1))).replace(/"/g,'&quot;')+'">'+
+    '<span class="del" data-del="'+i+'" title="מחק מיקום">🗑</span></div>').join('');
+  box.querySelectorAll('.posName').forEach(inp=>inp.addEventListener('change',function(){
+    const i=+this.dataset.i; if(eqPositions[i]) eqPositions[i].name=this.value; }));
+  box.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',function(){
+    const i=+this.dataset.del; eqPositions.splice(i,1);
+    if(eqPositions.length) computeAndShow(); else { eqMarks=null; eqCurveData=null; document.getElementById('eqList').innerHTML=''; document.getElementById('eqCurveCanvas').style.display='none'; }
+    updateEqUI(); renderEqList();
+  }));
+}
 function avgPositions(){
-  const bins=eqPositions[0].length, out=new Float32Array(bins);
-  for(let i=0;i<bins;i++){ let p=0; for(const pos of eqPositions) p+=Math.pow(10,pos[i]/10); out[i]=10*Math.log10(p/eqPositions.length+1e-12); }
+  const bins=eqPositions[0].data.length, out=new Float32Array(bins);
+  for(let i=0;i<bins;i++){ let p=0; for(const pos of eqPositions) p+=Math.pow(10,pos.data[i]/10); out[i]=10*Math.log10(p/eqPositions.length+1e-12); }
   return out;
 }
 function bandDbFromBins(bd,fLo,fHi,nyq,bins){
@@ -1596,6 +1613,7 @@ function resetSession(){
   peaks.fill(0); avgBuf.fill(0); snapCurve=null;
   const fz=document.getElementById('freezeBtn'); fz.classList.remove('on'); fz.textContent='הקפא';
   eqPositions=[]; eqMarks=null; eqCurveData=null; lastEqCorr=null;
+  { const pl=document.getElementById('eqPosList'); if(pl) pl.innerHTML=''; const el=document.getElementById('eqList'); if(el) el.innerHTML=''; }
   document.getElementById('eqList').innerHTML=''; document.getElementById('eqCurveCanvas').style.display='none';
   updateEqUI();
   areas=[]; renderAreaList();
@@ -2117,7 +2135,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v85';
+document.getElementById('ver').textContent='v86';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 function applyAccent(hex){
   document.documentElement.style.setProperty('--accent',hex);
