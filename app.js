@@ -1699,7 +1699,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v91';
+document.getElementById('ver').textContent='v92';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 function applyAccent(hex){
   document.documentElement.style.setProperty('--accent',hex);
@@ -1778,36 +1778,34 @@ document.addEventListener('mousemove',e=>{
 
 (function plexus(){
   const g=document.getElementById('pcbTraces'); if(!g) return;
-  const NS='http://www.w3.org/2000/svg', W=600,H=200, N=90, LINK=46;
+  const NS='http://www.w3.org/2000/svg', W=600,H=200, N=42, LINK=54;
   let s=90210; const rnd=()=>{ s=(s*1103515245+12345)&0x7fffffff; return s/0x7fffffff; };
   const nodes=[], dots=[];
+  // one shared path for ALL connecting lines (1 DOM update/frame instead of hundreds)
+  const linePath=document.createElementNS(NS,'path');
+  linePath.setAttribute('stroke','#5ab0ff'); linePath.setAttribute('stroke-width','0.4');
+  linePath.setAttribute('fill','none'); linePath.setAttribute('opacity','0.5'); g.appendChild(linePath);
   for(let i=0;i<N;i++){
-    const n={x:rnd()*W,y:rnd()*H,vx:(rnd()-0.5)*0.14,vy:(rnd()-0.5)*0.14,r:0.5+rnd()*1.8};
+    const n={x:rnd()*W,y:rnd()*H,vx:(rnd()-0.5)*0.12,vy:(rnd()-0.5)*0.12,r:0.5+rnd()*1.6};
     nodes.push(n);
     const c=document.createElementNS(NS,'circle'); c.setAttribute('r',n.r.toFixed(1));
     c.setAttribute('fill','#9fd4ff'); c.setAttribute('opacity',(0.4+rnd()*0.5).toFixed(2));
     g.appendChild(c); dots.push(c);
   }
-  const lines=[];
-  for(let i=0;i<420;i++){ const l=document.createElementNS(NS,'line');
-    l.setAttribute('stroke','#5ab0ff'); l.setAttribute('stroke-width','0.4'); l.setAttribute('opacity','0'); g.appendChild(l); lines.push(l); }
   let last=0;
   function frame(t){
-    if(t-last>60){ last=t;
-      for(const n of nodes){ n.x+=n.vx; n.y+=n.vy;
-        if(n.x<0||n.x>W)n.vx*=-1; if(n.y<0||n.y>H)n.vy*=-1; }
-      for(let i=0;i<N;i++){ dots[i].setAttribute('cx',nodes[i].x.toFixed(1)); dots[i].setAttribute('cy',nodes[i].y.toFixed(1)); }
-      let li=0;
-      for(let i=0;i<N&&li<lines.length;i++) for(let j=i+1;j<N&&li<lines.length;j++){
-        const dx=nodes[i].x-nodes[j].x, dy=nodes[i].y-nodes[j].y, d2=dx*dx+dy*dy;
-        if(d2<LINK*LINK){ const d=Math.sqrt(d2), l=lines[li++];
-          l.setAttribute('x1',nodes[i].x.toFixed(1)); l.setAttribute('y1',nodes[i].y.toFixed(1));
-          l.setAttribute('x2',nodes[j].x.toFixed(1)); l.setAttribute('y2',nodes[j].y.toFixed(1));
-          l.setAttribute('opacity',(0.5*(1-d/LINK)).toFixed(2)); }
-      }
-      for(;li<lines.length;li++) lines[li].setAttribute('opacity','0');
-    }
     requestAnimationFrame(frame);
+    if(t-last<70) return;                 // ~14fps — decorative, keeps the main thread free for meters
+    if(document.hidden) return;           // pause when tab/app not visible
+    last=t;
+    let d='';
+    for(const n of nodes){ n.x+=n.vx; n.y+=n.vy; if(n.x<0||n.x>W)n.vx*=-1; if(n.y<0||n.y>H)n.vy*=-1; }
+    for(let i=0;i<N;i++){ dots[i].setAttribute('cx',nodes[i].x.toFixed(1)); dots[i].setAttribute('cy',nodes[i].y.toFixed(1)); }
+    for(let i=0;i<N;i++) for(let j=i+1;j<N;j++){
+      const dx=nodes[i].x-nodes[j].x, dy=nodes[i].y-nodes[j].y, d2=dx*dx+dy*dy;
+      if(d2<LINK*LINK) d+='M'+nodes[i].x.toFixed(1)+' '+nodes[i].y.toFixed(1)+'L'+nodes[j].x.toFixed(1)+' '+nodes[j].y.toFixed(1);
+    }
+    linePath.setAttribute('d', d);        // single write for every connection
   }
   requestAnimationFrame(frame);
 })();
