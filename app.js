@@ -233,6 +233,7 @@ function scheduleSweepCycle(){
 }
 function genStart(){
   if(!running||!audioCtx){ alert('קודם הפעל את המיקרופון (כדי שהאודיו יהיה פעיל).'); return; }
+  if(audioCtx.state==='suspended') audioCtx.resume();   // safety: ensure output is live
   genStop();
   genGain=audioCtx.createGain(); genGain.gain.value=0;
   if(genType==='sine' || genType==='sweep'){
@@ -1665,7 +1666,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v87';
+document.getElementById('ver').textContent='v88';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 function applyAccent(hex){
   document.documentElement.style.setProperty('--accent',hex);
