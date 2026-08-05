@@ -730,6 +730,14 @@ function tfExportCsv(){
 const dlyPanel=document.getElementById('dlyPanel');
 document.getElementById('dlyBtn').addEventListener('click',()=>{ showModal(dlyPanel); });
 document.getElementById('dlyClose').addEventListener('click',closeModals);
+function resetDelay(){
+  dlyState='idle';
+  dlySpeakers.forEach((s,i)=>{ s.ms=null; s.name='רמקול '+(i+1); });
+  dlyAnchor=0;
+  const st=document.getElementById('dlyStatus'); if(st) st.textContent='—';
+  renderDlySpk();
+}
+document.getElementById('dlyReset').addEventListener('click',resetDelay);
 document.getElementById('dlyMeasBtn').addEventListener('click',()=>pickSource(measureDelay,2100));
 
 function fft(re,im,inv){
@@ -824,24 +832,48 @@ function runDelayCapture(btn, cb){
     cb(computeDelay(r, m, sr));
   }, captureSec*1000+100);
 }
-// speaker A/B comparison
-let dlyA=null, dlyB=null;
-function dlyComputeDiff(){
-  const el=document.getElementById('dlyDiff');
-  document.getElementById('dlyAval').textContent = dlyA==null?'—':dlyA.toFixed(2)+' ms';
-  document.getElementById('dlyBval').textContent = dlyB==null?'—':dlyB.toFixed(2)+' ms';
-  if(dlyA==null||dlyB==null){ el.textContent='—'; return; }
-  const diff=Math.abs(dlyA-dlyB), early = dlyA<dlyB ? 'A' : 'B';
-  el.innerHTML='פער: <b style="color:var(--accent)">'+diff.toFixed(2)+' ms</b> · הוסף דיליי לרמקול <b>'+early+'</b> (המוקדם)';
+// multi-speaker alignment (2/4/6), align to a chosen anchor
+let dlySpeakers=[{name:'רמקול 1',ms:null},{name:'רמקול 2',ms:null}];
+let dlyAnchor=0;
+function setDlyCount(n){
+  const cur=dlySpeakers.length;
+  if(n>cur){ for(let i=cur;i<n;i++) dlySpeakers.push({name:'רמקול '+(i+1),ms:null}); }
+  else if(n<cur){ dlySpeakers=dlySpeakers.slice(0,n); if(dlyAnchor>=n) dlyAnchor=0; }
+  renderDlySpk();
 }
-document.getElementById('dlyMeasA').addEventListener('click',()=>pickSource(()=>runDelayCapture(document.getElementById('dlyMeasA'),(res)=>{
-  if(res==null){ document.getElementById('dlyDiff').textContent='מדידת A נכשלה — נסה שוב.'; return; }
-  dlyA=res.ms; dlyComputeDiff();
-}),2100));
-document.getElementById('dlyMeasB').addEventListener('click',()=>pickSource(()=>runDelayCapture(document.getElementById('dlyMeasB'),(res)=>{
-  if(res==null){ document.getElementById('dlyDiff').textContent='מדידת B נכשלה — נסה שוב.'; return; }
-  dlyB=res.ms; dlyComputeDiff();
-}),2100));
+function renderDlySpk(){
+  const box=document.getElementById('dlySpk'); if(!box) return;
+  box.innerHTML=dlySpeakers.map((s,i)=>{
+    let add='—';
+    if(s.ms!=null && dlySpeakers[dlyAnchor] && dlySpeakers[dlyAnchor].ms!=null){
+      if(i===dlyAnchor) add='<span style="color:var(--accent)">עוגן</span>';
+      else{ const d=dlySpeakers[dlyAnchor].ms - s.ms;
+        add = d>=0 ? '<b style="color:var(--accent)">+'+d.toFixed(2)+' ms</b>'
+                   : '<span style="color:var(--warn)">'+d.toFixed(2)+' ms (מאוחר מהעוגן)</span>'; }
+    }
+    return '<div class="calRow" style="gap:6px">'+
+      '<span class="dlyAnchor" data-a="'+i+'" title="בחר כעוגן" style="cursor:pointer;font-size:15px;color:'+(i===dlyAnchor?'var(--accent)':'var(--dim)')+'">'+(i===dlyAnchor?'◉':'◎')+'</span>'+
+      '<input class="posName" data-i="'+i+'" value="'+(s.name||('רמקול '+(i+1))).replace(/"/g,'&quot;')+'" style="flex:1">'+
+      '<span style="min-width:64px;font-size:11px;color:var(--dim)">'+(s.ms==null?'—':s.ms.toFixed(2)+'ms')+'</span>'+
+      '<button class="toggle dlyMeasOne" data-i="'+i+'" style="padding:6px 10px;font-size:11px">מדוד</button>'+
+      '<span style="min-width:74px;font-size:11px;text-align:end">'+add+'</span>'+
+      '</div>';
+  }).join('');
+  box.querySelectorAll('.dlyAnchor').forEach(a=>a.addEventListener('click',function(){ dlyAnchor=+this.dataset.a; renderDlySpk(); }));
+  box.querySelectorAll('.posName').forEach(inp=>inp.addEventListener('change',function(){ const i=+this.dataset.i; if(dlySpeakers[i]) dlySpeakers[i].name=this.value; }));
+  box.querySelectorAll('.dlyMeasOne').forEach(b=>b.addEventListener('click',function(){
+    const i=+this.dataset.i, btn=this;
+    pickSource(()=>runDelayCapture(btn,(res)=>{
+      if(res==null){ btn.textContent='נכשל'; setTimeout(()=>btn.textContent='מדוד',1500); return; }
+      dlySpeakers[i].ms=res.ms; renderDlySpk();
+    }),2100);
+  }));
+}
+document.querySelectorAll('#dlyCountSeg button').forEach(b=>b.addEventListener('click',function(){
+  document.querySelectorAll('#dlyCountSeg button').forEach(x=>x.classList.remove('on'));
+  this.classList.add('on'); setDlyCount(+this.dataset.n);
+}));
+renderDlySpk();
 
 function computeDelay(ref, mic, sr){
   const L = Math.min(ref.length, mic.length);
@@ -1141,6 +1173,7 @@ function resetSession(){
   document.getElementById('areaEqList').innerHTML='';
   tfResult=null; document.getElementById('tfGeqList').innerHTML='';
   document.getElementById('tfCanvas').style.display='none';
+  resetDelay();
   fbTrack.clear(); fbPanel.innerHTML='';
   leqSumP=0; leqN=0; splMax=-120; lvlPeak=-120;
   targetMode='off'; const tb=document.getElementById('tgtBtn'); tb.textContent='יעד'; tb.classList.remove('on');
@@ -1666,7 +1699,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v89';
+document.getElementById('ver').textContent='v91';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 function applyAccent(hex){
   document.documentElement.style.setProperty('--accent',hex);

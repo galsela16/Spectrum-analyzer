@@ -380,19 +380,22 @@
       <div class="sub" id="dlyInfo">התוצאה: כמה זמן המיק' מאחר אחרי הרפרנס = הדיליי של הרמקול.</div>
 
       <div style="border-top:1px solid var(--line);margin-top:6px;padding-top:10px">
-        <div class="sub" style="text-align:center;color:var(--text);font-weight:600;margin-bottom:8px">השוואת רמקולים (יישור סאב/טופ)</div>
-        <div class="sub" style="margin-bottom:8px">מדוד כל רמקול בתורו <b>מאותו מיקום מיקרופון</b>. האפליקציה תחשב את הפער.</div>
-        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-          <button id="dlyMeasA" class="toggle">מדוד רמקול A</button>
-          <button id="dlyMeasB" class="toggle">מדוד רמקול B</button>
+        <div class="sub" style="text-align:center;color:var(--text);font-weight:600;margin-bottom:8px">יישור רמקולים</div>
+        <div class="ctrl" style="flex:0 0 auto;align-items:center;min-width:auto;margin-bottom:8px">
+          <label style="justify-content:center">מספר רמקולים</label>
+          <div class="seg" id="dlyCountSeg">
+            <button data-n="2" class="on">2</button>
+            <button data-n="4">4</button>
+            <button data-n="6">6</button>
+          </div>
         </div>
-        <div id="dlyAB" style="display:flex;gap:14px;justify-content:center;margin-top:8px;font-size:12px;color:var(--dim)">
-          <span>A: <b id="dlyAval" style="color:var(--accent)">—</b></span>
-          <span>B: <b id="dlyBval" style="color:var(--accent)">—</b></span>
-        </div>
-        <div id="dlyDiff" style="text-align:center;font-size:14px;color:var(--text);min-height:22px;margin-top:6px">—</div>
+        <div class="sub" style="margin-bottom:8px">מדוד כל רמקול בתורו <b>מאותו מיקום מיקרופון</b>. בחר רמקול עוגן (◎), והאפליקציה תחשב כמה דיליי להוסיף לכל אחד.</div>
+        <div id="dlySpk" style="display:flex;flex-direction:column;gap:6px"></div>
       </div>
-      <button id="dlyClose">סגור</button>
+      <div style="display:flex;gap:8px;justify-content:center">
+        <button id="dlyReset" class="toggle">אפס דיליי</button>
+        <button id="dlyClose">סגור</button>
+      </div>
     </div>
     
     <div class="meter" id="meter" style="display:none">
