@@ -78,8 +78,11 @@ let smoothedDbfs = -120;
 
 function resize(){
   const r=cv.getBoundingClientRect();
-  const dpr=Math.min(window.devicePixelRatio||1,2);
-  cv.width=r.width*dpr; cv.height=r.height*dpr;
+  // cap the backing resolution: keep it crisp on small sizes, but don't render millions of
+  // extra pixels on a full-screen Retina canvas (that's what slows it down when maximized).
+  const MAXW=1800;
+  const dpr=Math.max(1, Math.min(window.devicePixelRatio||1, 2, MAXW/Math.max(1,r.width)));
+  cv.width=Math.round(r.width*dpr); cv.height=Math.round(r.height*dpr);
   ctx.setTransform(dpr,0,0,dpr,0,0);
   specCanvas=document.createElement('canvas');
   specCanvas.width=Math.max(2,Math.floor(r.width));
@@ -1707,7 +1710,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v94';
+document.getElementById('ver').textContent='v95';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 function applyAccent(hex){
   document.documentElement.style.setProperty('--accent',hex);
