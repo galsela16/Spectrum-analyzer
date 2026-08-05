@@ -361,7 +361,21 @@
       <div class="chBar"><span id="dlyL2" style="min-width:90px">כניסה 2 (רפרנס)</span><div class="track"><div class="fill" id="dlyRefFill"></div></div><span class="gainLbl" id="dlyRefGain">—</span></div>
       <button id="dlyMeasBtn" class="toggle" style="align-self:center">מדוד דיליי (2ש')</button>
       <div id="dlyStatus" style="text-align:center;font-size:14px;color:var(--text);min-height:22px">—</div>
-      <div class="sub" id="dlyInfo">התוצאה: כמה זמן המיק' מאחר אחרי הרפרנס = הדיליי של הרמקול. הזן אותו בעיכוב של הרמקול המוקדם יותר.</div>
+      <div class="sub" id="dlyInfo">התוצאה: כמה זמן המיק' מאחר אחרי הרפרנס = הדיליי של הרמקול.</div>
+
+      <div style="border-top:1px solid var(--line);margin-top:6px;padding-top:10px">
+        <div class="sub" style="text-align:center;color:var(--text);font-weight:600;margin-bottom:8px">השוואת רמקולים (יישור סאב/טופ)</div>
+        <div class="sub" style="margin-bottom:8px">מדוד כל רמקול בתורו <b>מאותו מיקום מיקרופון</b>. האפליקציה תחשב את הפער.</div>
+        <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+          <button id="dlyMeasA" class="toggle">מדוד רמקול A</button>
+          <button id="dlyMeasB" class="toggle">מדוד רמקול B</button>
+        </div>
+        <div id="dlyAB" style="display:flex;gap:14px;justify-content:center;margin-top:8px;font-size:12px;color:var(--dim)">
+          <span>A: <b id="dlyAval" style="color:var(--accent)">—</b></span>
+          <span>B: <b id="dlyBval" style="color:var(--accent)">—</b></span>
+        </div>
+        <div id="dlyDiff" style="text-align:center;font-size:14px;color:var(--text);min-height:22px;margin-top:6px">—</div>
+      </div>
       <button id="dlyClose">סגור</button>
     </div>
     
@@ -1254,12 +1268,17 @@ function setGainEl(fill,lbl,db){
 }
 function setGain(id, db){ setGainEl(document.getElementById(id+'Fill'), document.getElementById(id+'Gain'), db); }
 
-function measureDelay(){
+function measureDelay(){ runDelayCapture(document.getElementById('dlyMeasBtn'), (res)=>{
+  const st=document.getElementById('dlyStatus');
+  if(res==null){ st.textContent='לא הצלחתי — ודא שמנגן אות רחב־פס ושכניסה 2 מקבלת רפרנס.'; return; }
+  const ms=res.ms, dist=Math.abs(ms)/1000*343;
+  st.innerHTML='דיליי ≈ <b>'+ms.toFixed(2)+' ms</b><br><span style="font-size:11px;color:var(--dim)">≈ '+dist.toFixed(2)+' מ\' · '+(ms>=0?'המיק\' מאחר אחרי הרפרנס':'המיק\' מקדים את הרפרנס')+'</span>';
+}); }
+function runDelayCapture(btn, cb){
   if(!running||!analyserRef||!source){ alert('צריך כרטיס קול עם input סטריאו (מיק\'+רפרנס).'); return; }
   if(dlyState==='measuring') return;
   dlyState='measuring';
-  const btn=document.getElementById('dlyMeasBtn'); btn.textContent='מקליט…'; btn.style.opacity=.5;
-  document.getElementById('dlyStatus').textContent='מקליט 2 שניות…';
+  const prevTxt=btn.textContent; btn.textContent='מקליט…'; btn.style.opacity=.5;
   const sr=audioCtx.sampleRate, want=Math.floor(sr*2.0);
   const mic=new Float32Array(want), ref=new Float32Array(want); let pos=0;
   const sp=audioCtx.createScriptProcessor(4096,2,1);
@@ -1271,15 +1290,29 @@ function measureDelay(){
   source.connect(sp); sp.connect(mute); mute.connect(audioCtx.destination);
   setTimeout(()=>{
     try{ source.disconnect(sp); }catch(_){} try{ sp.disconnect(); }catch(_){} try{ mute.disconnect(); }catch(_){}
-    dlyState='idle'; btn.textContent='מדוד שוב (2ש\')'; btn.style.opacity=1;
+    dlyState='idle'; btn.textContent=prevTxt; btn.style.opacity=1;
     const m = tfSwap? ref: mic, r = tfSwap? mic: ref;
-    const res=computeDelay(r, m, sr);
-    const st=document.getElementById('dlyStatus');
-    if(res==null){ st.textContent='לא הצלחתי — ודא שמנגן אות רחב־פס ושכניסה 2 מקבלת רפרנס.'; return; }
-    const ms=res.ms, dist=Math.abs(ms)/1000*343;
-    st.innerHTML='דיליי ≈ <b>'+ms.toFixed(2)+' ms</b><br><span style="font-size:11px;color:var(--dim)">≈ '+dist.toFixed(2)+' מ\' · '+(ms>=0?'המיק\' מאחר אחרי הרפרנס':'המיק\' מקדים את הרפרנס')+'</span>';
+    cb(computeDelay(r, m, sr));
   },2100);
 }
+// speaker A/B comparison
+let dlyA=null, dlyB=null;
+function dlyComputeDiff(){
+  const el=document.getElementById('dlyDiff');
+  document.getElementById('dlyAval').textContent = dlyA==null?'—':dlyA.toFixed(2)+' ms';
+  document.getElementById('dlyBval').textContent = dlyB==null?'—':dlyB.toFixed(2)+' ms';
+  if(dlyA==null||dlyB==null){ el.textContent='—'; return; }
+  const diff=Math.abs(dlyA-dlyB), early = dlyA<dlyB ? 'A' : 'B';
+  el.innerHTML='פער: <b style="color:var(--accent)">'+diff.toFixed(2)+' ms</b> · הוסף דיליי לרמקול <b>'+early+'</b> (המוקדם)';
+}
+document.getElementById('dlyMeasA').addEventListener('click',()=>pickSource(()=>runDelayCapture(document.getElementById('dlyMeasA'),(res)=>{
+  if(res==null){ document.getElementById('dlyDiff').textContent='מדידת A נכשלה — נסה שוב.'; return; }
+  dlyA=res.ms; dlyComputeDiff();
+}),2100));
+document.getElementById('dlyMeasB').addEventListener('click',()=>pickSource(()=>runDelayCapture(document.getElementById('dlyMeasB'),(res)=>{
+  if(res==null){ document.getElementById('dlyDiff').textContent='מדידת B נכשלה — נסה שוב.'; return; }
+  dlyB=res.ms; dlyComputeDiff();
+}),2100));
 
 function computeDelay(ref, mic, sr){
   const L = Math.min(ref.length, mic.length);
@@ -2069,7 +2102,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v83';
+document.getElementById('ver').textContent='v84';
 const HELP={
   mRta:'תצוגת ספקטרום — עוצמה לפי תדר, בזמן אמת.',
   mSpec:'ווטרפול — הספקטרום לאורך זמן.',
