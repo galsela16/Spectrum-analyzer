@@ -537,6 +537,7 @@ let lvlPeak=-120, lvlPeakT=0;
 let weightMode='Z';
 let meterUnit='SPL';
 let meterMode='rms';   // 'rms' (smooth average) | 'peak' (catches transients)
+let activeInId='';     // device id currently in use (for auto-select)
 let weightA=null, weightC=null;
 let leqSumP=0, leqN=0, splMax=-120;
 let dragging=false, dragX0=0, dragX1=0, cursorX=null;
@@ -641,7 +642,7 @@ document.querySelectorAll('#unitSeg button').forEach(b=>b.addEventListener('clic
   document.querySelectorAll('#unitSeg button').forEach(x=>x.classList.remove('on'));
   this.classList.add('on'); meterUnit=this.dataset.u;
 }));
-document.getElementById('inSel').addEventListener('change',e=>switchInput(e.target.value));
+document.getElementById('inSel').addEventListener('change',e=>{ try{localStorage.setItem('rta_inDev',e.target.value);}catch(_){} switchInput(e.target.value); });
 
 function freqForX(px){
   const W=cv.clientWidth;
@@ -1115,8 +1116,8 @@ function updateTfLevels(){
   analyser.getFloatTimeDomainData(timeData);
   if(!timeDataRef || timeDataRef.length!==analyserRef.fftSize) timeDataRef=new Float32Array(analyserRef.fftSize);
   analyserRef.getFloatTimeDomainData(timeDataRef);
-  setGainEl(document.getElementById('tfMicFill'), document.getElementById('tfMicDb'), levelDb(timeData));
-  setGainEl(document.getElementById('tfRefFill'), document.getElementById('tfRefDb'), levelDb(timeDataRef));
+  setGainEl(document.getElementById('tfMicFill'), document.getElementById('tfMicDb'), levelDb(timeData,2048));
+  setGainEl(document.getElementById('tfRefFill'), document.getElementById('tfRefDb'), levelDb(timeDataRef,2048));
   document.getElementById('tfL1').textContent = tfSwap?"כניסה 1 → רפרנס":"כניסה 1 → מיק'";
   document.getElementById('tfL2').textContent = tfSwap?"כניסה 2 → מיק'":"כניסה 2 → רפרנס";
 }
@@ -1228,9 +1229,9 @@ document.querySelectorAll('#meterModeSeg button').forEach(b=>b.addEventListener(
   this.classList.add('on'); meterMode=this.dataset.m;
 }));
 function levelDb(buf,n){
-  n=n||buf.length;
-  if(meterMode==='peak'){ let m=0; for(let i=0;i<n;i++){ const a=Math.abs(buf[i]); if(a>m)m=a; } return 20*Math.log10(m+1e-9); }
-  let s=0; for(let i=0;i<n;i++){ const v=buf[i]; s+=v*v; } return 20*Math.log10(Math.sqrt(s/n)+1e-9);
+  const len=buf.length; n=n||len; const start=Math.max(0,len-n);   // most-recent n samples
+  if(meterMode==='peak'){ let m=0; for(let i=start;i<len;i++){ const a=Math.abs(buf[i]); if(a>m)m=a; } return 20*Math.log10(m+1e-9); }
+  let s=0; for(let i=start;i<len;i++){ const v=buf[i]; s+=v*v; } return 20*Math.log10(Math.sqrt(s/(len-start))+1e-9);
 }
 function peakDb(buf){ let m=0; for(let i=0;i<buf.length;i++){ const a=Math.abs(buf[i]); if(a>m)m=a; } return 20*Math.log10(m+1e-9); }
 function gainClass(db){
@@ -1592,6 +1593,7 @@ async function start(deviceId){
       channelCount: { ideal: 2 }
     };
     if(deviceId && typeof deviceId === 'string') audio.deviceId = { exact: deviceId };
+    activeInId = deviceId || '';
     
     stream = await navigator.mediaDevices.getUserMedia({ audio });
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -1659,6 +1661,13 @@ async function start(deviceId){
   }
 }
 
+const PRO_RE=/mr18|xr18|x[\s-]?air|midas|behringer|scarlett|focusrite|presonus|motu|rme|audient|zoom|ssl|apollo|universal audio|interface|usb audio|audiobox|steinberg|ur[0-9]|clarett/i;
+function pickBestDevice(list, savedId){
+  if(savedId && list.some(d=>d.deviceId===savedId)) return savedId;   // remembered choice
+  const pro=list.find(d=>PRO_RE.test(d.label||''));                    // guess a pro interface
+  if(pro) return pro.deviceId;
+  return list[0] ? list[0].deviceId : '';
+}
 async function populateInputs(){
   try{
     const devs=await navigator.mediaDevices.enumerateDevices();
@@ -1671,7 +1680,11 @@ async function populateInputs(){
       o.value=d.deviceId; o.textContent=d.label||('מיקרופון '+(i+1));
       sel.appendChild(o);
     });
-    if(cur) sel.value=cur;
+    const savedIn=localStorage.getItem('rta_inDev');
+    const bestIn=pickBestDevice(ins, cur||savedIn);
+    if(bestIn) sel.value=bestIn;
+    // if the best device isn't the one we're actually using, switch to it once
+    if(running && bestIn && bestIn!==activeInId){ switchInput(bestIn); return; }
     const outs=devs.filter(d=>d.kind==='audiooutput');
     const osel=document.getElementById('outSel'); const ocur=osel.value;
     osel.innerHTML='';
@@ -1681,7 +1694,8 @@ async function populateInputs(){
       o.value=d.deviceId; o.textContent=d.label||('פלט '+(i+1));
       osel.appendChild(o);
     });
-    if(ocur) osel.value=ocur;
+    const savedOut=localStorage.getItem('rta_outDev');
+    if(ocur) osel.value=ocur; else if(savedOut && outs.some(d=>d.deviceId===savedOut)) osel.value=savedOut;
   }catch(e){}
 }
 let outSinkId=null;
@@ -1693,6 +1707,7 @@ async function applyOutput(deviceId){
   return false;
 }
 document.getElementById('outSel').addEventListener('change',async e=>{
+  try{localStorage.setItem('rta_outDev',e.target.value);}catch(_){}
   const ok=await applyOutput(e.target.value);
   if(!ok) alert('הדפדפן לא תומך בבחירת יציאת פלט. הגדר את הפלט ב־macOS: הגדרות → סאונד → פלט.');
 });
@@ -1809,14 +1824,14 @@ function draw(){
     analyser.getFloatTimeDomainData(timeData);
     if(!timeDataRef || timeDataRef.length!==analyserRef.fftSize) timeDataRef=new Float32Array(analyserRef.fftSize);
     analyserRef.getFloatTimeDomainData(timeDataRef);
-    setGain('dlyMic', levelDb(timeData));
-    setGain('dlyRef', levelDb(timeDataRef));
+    setGain('dlyMic', levelDb(timeData,2048));
+    setGain('dlyRef', levelDb(timeDataRef,2048));
   }
   if(eqPanel.classList.contains('open')){
     const targetData = (eqCh === 2 && timeDataRef) ? timeDataRef : timeData;
     if(eqCh === 2 && analyserRef) analyserRef.getFloatTimeDomainData(timeDataRef);
     else analyser.getFloatTimeDomainData(timeData);
-    setGainEl(document.getElementById('eqMicFill'), document.getElementById('eqMicGain'), levelDb(targetData));
+    setGainEl(document.getElementById('eqMicFill'), document.getElementById('eqMicGain'), levelDb(targetData,2048));
   }
   updateLevel();
   const W=cv.clientWidth,H=cv.clientHeight;
@@ -2054,7 +2069,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v82';
+document.getElementById('ver').textContent='v83';
 const HELP={
   mRta:'תצוגת ספקטרום — עוצמה לפי תדר, בזמן אמת.',
   mSpec:'ווטרפול — הספקטרום לאורך זמן.',
