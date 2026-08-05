@@ -208,7 +208,7 @@
   #tfPanel .sub{font-size:10px;color:var(--dim);letter-spacing:.5px;line-height:1.5}
   .chBar{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text)}
   .chBar .track{flex:1;height:8px;border-radius:4px;background:var(--line);overflow:hidden}
-  .chBar .fill{height:100%;width:0%;background:var(--accent);transition:width .06s}
+  .chBar .fill{height:100%;width:0%;background:var(--accent);transition:width .1s linear}
   .chBar .fill.lo{background:#ff3b6b}
   .chBar .fill.ok{background:#39d98a}
   .chBar .fill.hi{background:#ffb020}
@@ -1223,8 +1223,15 @@ function gainClass(db){
   return ['lo','חלש ('+db.toFixed(0)+')'];
 }
 function setGainEl(fill,lbl,db){
-  const [cls,txt]=gainClass(db);
-  if(fill){ fill.style.width=Math.max(2,Math.min(100,(db+60)/60*100))+'%'; fill.className='fill '+cls; }
+  let s=db;
+  if(fill){
+    s=fill._sdb; if(s==null||!isFinite(s)) s=db;
+    s += (db>s ? 0.5 : 0.08) * (db - s);   // fast attack, slow release — smooth, analog-like
+    fill._sdb=s;
+    fill.style.width=Math.max(2,Math.min(100,(s+60)/60*100))+'%';
+  }
+  const [cls,txt]=gainClass(s);
+  if(fill) fill.className='fill '+cls;
   if(lbl){ lbl.className='gainLbl '+cls; lbl.textContent=txt; }
 }
 function setGain(id, db){ setGainEl(document.getElementById(id+'Fill'), document.getElementById(id+'Gain'), db); }
@@ -2033,7 +2040,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v80';
+document.getElementById('ver').textContent='v81';
 const HELP={
   mRta:'תצוגת ספקטרום — עוצמה לפי תדר, בזמן אמת.',
   mSpec:'ווטרפול — הספקטרום לאורך זמן.',
