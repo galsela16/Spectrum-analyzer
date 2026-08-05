@@ -55,6 +55,7 @@ let leqSumP=0, leqN=0, splMax=-120;
 let dragging=false, dragX0=0, dragX1=0, cursorX=null;
 let genType='pink', genOn=false, genGain=null, genSrc=null, genOsc=null;
 let genDb=-34, genHz=1000, targetMode='flat';
+let _pfx=null;   // per-frame prefix-sum of linear power (perf)
 let genSweepDur=4, sweepTimer=null, sweepStartT=0;
 let pinkComp=false, compChoice=true;
 let rt60State='idle', rt60Samples=[], rt60CutT=0, rtRange=10;
@@ -1489,6 +1490,15 @@ function draw(){
 
 function drawRta(W,H,nyquist,bins,xForFreq){
   ctx.clearRect(0,0,W,H);
+  // build a prefix-sum of linear power ONCE per frame → each band's energy is O(1)
+  // (previously each band re-summed thousands of FFT bins; that was the main CPU cost).
+  if(!_pfx || _pfx.length!==bins+1) _pfx=new Float64Array(bins+1);
+  { let acc=0; _pfx[0]=0; for(let i=0;i<bins;i++){ acc+=Math.pow(10,floatData[i]*0.1); _pfx[i+1]=acc; } }
+  const bandPowDb=(fLo,fHi)=>{
+    let lo=Math.floor(fLo/nyquist*bins), hi=Math.ceil(fHi/nyquist*bins);
+    lo=Math.max(0,lo); hi=Math.min(bins-1,hi); if(hi<lo)hi=lo;
+    return 10*Math.log10((_pfx[hi+1]-_pfx[lo])+1e-12);
+  };
   const meterH = (meterEl && meterEl.style.display!=='none') ? 40 : 6;
   const plotH = H - meterH - 16;
   const labelY = H - meterH - 4;
@@ -1505,7 +1515,7 @@ function drawRta(W,H,nyquist,bins,xForFreq){
   let peakBand=-1,peakVal=0;
   for(let b=0;b<BANDS;b++){
     const fc=ISO[b];
-    const rawDb=bandDb(fc/R,fc*R,nyquist,bins);
+    const rawDb=bandPowDb(fc/R,fc*R);
     lastBandDb[b]=rawDb;
     const compDb = pinkComp ? 3*Math.log2(ISO[b]/1000) : 0;
     let v=norm(rawDb+compDb);
@@ -1710,7 +1720,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v95';
+document.getElementById('ver').textContent='v96';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 function applyAccent(hex){
   document.documentElement.style.setProperty('--accent',hex);
