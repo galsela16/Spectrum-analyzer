@@ -54,7 +54,7 @@ let weightA=null, weightC=null;
 let leqSumP=0, leqN=0, splMax=-120;
 let dragging=false, dragX0=0, dragX1=0, cursorX=null;
 let genType='pink', genOn=false, genGain=null, genSrc=null, genOsc=null;
-let genDb=-34, genHz=1000, targetMode='off';
+let genDb=-34, genHz=1000, targetMode='flat';
 let genSweepDur=4, sweepTimer=null, sweepStartT=0;
 let pinkComp=false, compChoice=true;
 let rt60State='idle', rt60Samples=[], rt60CutT=0, rtRange=10;
@@ -326,11 +326,13 @@ document.getElementById('genOnBtn').addEventListener('click',()=>{ genOn?genStop
   }
 });
 
-document.getElementById('tgtBtn').addEventListener('click',function(){
-  targetMode = targetMode==='off'?'flat':targetMode==='flat'?'house':'off';
-  this.textContent = targetMode==='off'?'יעד':targetMode==='flat'?'יעד: שטוח':'יעד: House';
-  this.classList.toggle('on', targetMode!=='off');
-});
+function setTarget(mode){
+  targetMode=mode;
+  document.querySelectorAll('.tgtSeg button').forEach(b=>b.classList.toggle('on', b.dataset.t===mode));
+  if(eqPositions.length) computeAndShow();
+  if(areas.length) suggestAreaEQ();
+}
+document.querySelectorAll('.tgtSeg button').forEach(b=>b.addEventListener('click',function(){ setTarget(this.dataset.t); }));
 
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',function(){
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
@@ -1182,7 +1184,7 @@ function resetSession(){
   resetDelay();
   fbTrack.clear(); fbPanel.innerHTML='';
   leqSumP=0; leqN=0; splMax=-120; lvlPeak=-120;
-  targetMode='off'; const tb=document.getElementById('tgtBtn'); tb.textContent='יעד'; tb.classList.remove('on');
+  targetMode='flat'; document.querySelectorAll('.tgtSeg button').forEach(b=>b.classList.toggle('on', b.dataset.t==='flat'));
   pinkComp=false; compChoice=true; syncPinkComp();
   weightMode='Z'; const wb=document.getElementById('wgtBtn'); wb.textContent='dBZ'; wb.classList.remove('on'); document.getElementById('wLbl').textContent='Z';
   if(viewMin!==FMIN||viewMax!==FMAX){ viewMin=FMIN; viewMax=FMAX; buildBands(curBpo); document.getElementById('zoomBtn').style.display='none'; }
@@ -1552,7 +1554,7 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     ctx.strokeStyle='rgba(47,155,255,.8)'; ctx.lineWidth=1;
     ctx.strokeRect(xa,0,xb-xa,plotH);
   }
-  if(targetMode!=='off'){
+  if(targetMode!=='off' && (eqPanel.classList.contains('open')||areaPanel.classList.contains('open'))){
     ctx.strokeStyle='rgba(80,230,140,.8)'; ctx.setLineDash([6,5]); ctx.lineWidth=2; ctx.beginPath();
     for(let b=0;b<BANDS;b++){
       const t=b/(BANDS-1);
@@ -1705,7 +1707,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v93';
+document.getElementById('ver').textContent='v94';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 function applyAccent(hex){
   document.documentElement.style.setProperty('--accent',hex);
@@ -1741,7 +1743,6 @@ const HELP={
   mRta:'תצוגת ספקטרום — עוצמה לפי תדר, בזמן אמת.',
   mSpec:'ווטרפול — הספקטרום לאורך זמן.',
   genBtn:'גנרטור אותות: רעש ורוד/לבן, סינוס או סוויפ.\nלמדידה ולכיוונון המערכת.',
-  tgtBtn:'עקומת יעד: שטוח או House.\nמה שאליו משווים את המדידה.',
   eqBtn:'מדידת המרחב: מדוד תגובת מערכת\nוקבל תיקון EQ (ממוצע / אזורים).',
   calBtn:'כיולי מיקרופון: טען קובץ כיול (REW)\nלתיקון צביעת המיקרופון.',
   tfBtn:'Transfer Function דו־ערוצי:\nמיק\' מול רפרנס מהמיקסר → תיקון EQ.',
