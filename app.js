@@ -298,11 +298,17 @@ document.getElementById('genLvl').addEventListener('input',e=>{
   el.style.color = genDb>=-16 ? '#ff3b6b' : (genDb>=-24?'#ffd166':'var(--accent)');
   genApplyLevel();
 });
-document.getElementById('genFreq').addEventListener('input',e=>{
-  genHz=parseFloat(e.target.value);
-  document.getElementById('genFreqVal').textContent=(genHz>=1000?(genHz/1000).toFixed(1)+'k':genHz)+'Hz';
+function applyGenHz(hz, from){
+  hz=Math.max(20,Math.min(20000, hz||0));
+  genHz=hz;
+  const slider=document.getElementById('genFreq'), num=document.getElementById('genFreqNum');
+  if(from!=='slider') slider.value=Math.min(16000,hz);
+  if(from!=='num') num.value=Math.round(hz);
+  document.getElementById('genFreqVal').textContent=(genHz>=1000?(genHz/1000).toFixed(genHz%1000?2:1)+'k':genHz)+'Hz';
   if(genOsc) genOsc.frequency.setTargetAtTime(genHz,audioCtx.currentTime,0.02);
-});
+}
+document.getElementById('genFreq').addEventListener('input',e=>applyGenHz(parseFloat(e.target.value),'slider'));
+document.getElementById('genFreqNum').addEventListener('input',e=>applyGenHz(parseFloat(e.target.value),'num'));
 document.getElementById('genOnBtn').addEventListener('click',()=>{ genOn?genStop():genStart(); });
 
 ['eqGenToggleBtn', 'areaGenToggleBtn'].forEach(id=>{
@@ -1699,7 +1705,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v92';
+document.getElementById('ver').textContent='v93';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 function applyAccent(hex){
   document.documentElement.style.setProperty('--accent',hex);
