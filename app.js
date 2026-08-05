@@ -544,7 +544,7 @@ function suggestAreaEQ(){
   const n=GEQ.length;
   const avg=new Array(n);
   for(let k=0;k<n;k++){ let p=0; areas.forEach(a=>p+=Math.pow(10,a.db[k]/10)); avg[k]=10*Math.log10(p/areas.length+1e-12); }
-  const resp=avg.map((d,k)=> d + 3*Math.log2(GEQ[k]/1000) - (micCal?micCalAt(GEQ[k]):0));
+  const resp=avg.map((d,k)=> d - (micCal?micCalAt(GEQ[k]):0));
   const maxR=Math.max(...resp);
   const rel=GEQ.map((f,k)=> resp[k]>maxR-30 && f>=40 && f<=16000);
   let os=0,on=0; for(let k=0;k<n;k++){ if(rel[k]&&GEQ[k]>=200&&GEQ[k]<=4000){ os+=resp[k]-targetDb(GEQ[k]); on++; } }
@@ -959,7 +959,7 @@ function computeAndShow(){
   const binDb=avgPositions();
   const nyq=audioCtx.sampleRate/2, bins=binDb.length, R6=Math.pow(2,1/6);
   if(micCal){ for(let i=0;i<bins;i++) binDb[i]-=micCalAt(i*nyq/bins); }
-  const resp=GEQ.map(fc=> bandDbFromBins(binDb,fc/R6,fc*R6,nyq,bins)+3*Math.log2(fc/1000));
+  const resp=GEQ.map(fc=> bandDbFromBins(binDb,fc/R6,fc*R6,nyq,bins));
   const maxR=Math.max(...resp);
   const rel=GEQ.map((f,k)=> resp[k]>maxR-30 && f>=40 && f<=16000);
   let os=0,on=0; for(let k=0;k<GEQ.length;k++){ if(rel[k]&&GEQ[k]>=200&&GEQ[k]<=4000){ os+=resp[k]-targetDb(GEQ[k]); on++; } }
@@ -1666,7 +1666,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v88';
+document.getElementById('ver').textContent='v89';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 function applyAccent(hex){
   document.documentElement.style.setProperty('--accent',hex);
