@@ -1565,7 +1565,7 @@ async function start(deviceId){
       echoCancellation: false,
       noiseSuppression: false,
       autoGainControl: false,
-      channelCount: { ideal: 2, min: 2 }
+      channelCount: { ideal: 2 }
     };
     if(deviceId && typeof deviceId === 'string') audio.deviceId = { exact: deviceId };
     
@@ -1584,11 +1584,11 @@ async function start(deviceId){
     const track = stream.getAudioTracks()[0];
     const settings = track.getSettings ? track.getSettings() : {};
     chReceived = settings.channelCount || source.channelCount || 1;
-
+    const isSafari=/^((?!chrome|android|crios|fxios).)*safari/i.test(navigator.userAgent);
     const ci = document.getElementById('chCount');
-    if(ci){ 
-      ci.textContent = 'ערוצים: ' + chReceived + (chReceived < 2 ? ' ⚠ מונו — אין ערוץ 2' : ' ✓ סטריאו'); 
-      ci.style.color = chReceived < 2 ? '#ff6b8b' : '#39d98a'; 
+    if(ci){
+      if(chReceived>=2){ ci.textContent='ערוצים: '+chReceived+' ✓ סטריאו'; ci.style.color='#39d98a'; }
+      else { ci.innerHTML='ערוצים: 1 ⚠ מונו — אין ערוץ 2'+(!isSafari?' · לערוץ 2 השתמש ב-Safari':''); ci.style.color='#ff6b8b'; }
     }
 
     analyser = audioCtx.createAnalyser();
@@ -1616,6 +1616,7 @@ async function start(deviceId){
     floatData = new Float32Array(analyser.frequencyBinCount);
     floatDataRef = new Float32Array(analyserRef.frequencyBinCount);
     timeData = new Float32Array(analyser.fftSize);
+    timeDataRef = new Float32Array(analyserRef.fftSize);
     timeDataMeter = new Float32Array(2048);
     
     buildWeighting(audioCtx.sampleRate / 2, analyser.frequencyBinCount);
@@ -1762,11 +1763,13 @@ function draw(){
   raf=requestAnimationFrame(draw);
   analyser.getFloatFrequencyData(floatData);
   if(measState==='measuring' && measAccum){
+    if(eqCh===2 && analyserRef) analyserRef.getFloatFrequencyData(floatDataRef);
     const srcData = (eqCh === 2 && floatDataRef) ? floatDataRef : floatData;
     for(let i=0;i<srcData.length;i++) measAccum[i]+=Math.pow(10,srcData[i]/10);
     measFrames++;
   }
   if(areaState==='measuring' && areaAccum){
+    if(eqCh===2 && analyserRef) analyserRef.getFloatFrequencyData(floatDataRef);
     const srcData = (eqCh === 2 && floatDataRef) ? floatDataRef : floatData;
     for(let i=0;i<srcData.length;i++) areaAccum[i]+=Math.pow(10,srcData[i]/10);
     areaFrames++;
@@ -2030,7 +2033,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v79';
+document.getElementById('ver').textContent='v80';
 const HELP={
   mRta:'תצוגת ספקטרום — עוצמה לפי תדר, בזמן אמת.',
   mSpec:'ווטרפול — הספקטרום לאורך זמן.',
