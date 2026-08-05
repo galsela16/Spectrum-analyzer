@@ -526,6 +526,7 @@ function setGenTypeUI(kind){
 }
 function runWithSource(kind, measureFn, durMs){
   durMs=durMs||5000;
+  if(kind==='sweep') durMs=Math.max(durMs, genSweepDur*1000+600);   // ensure a full sweep is captured
   if(kind==='external'){ measureFn(); return; }
   const prevOn=genOn, prevType=genType;
   genType=kind; setGenTypeUI(kind); genStart();
@@ -790,7 +791,9 @@ function runDelayCapture(btn, cb){
   if(dlyState==='measuring') return;
   dlyState='measuring';
   const prevTxt=btn.textContent; btn.textContent='מקליט…'; btn.style.opacity=.5;
-  const sr=audioCtx.sampleRate, want=Math.floor(sr*2.0);
+  const sr=audioCtx.sampleRate;
+  const captureSec = (genOn && genType==='sweep') ? Math.min(10, genSweepDur+0.6) : 2.0;   // cover a full sweep if used
+  const want=Math.floor(sr*captureSec);
   const mic=new Float32Array(want), ref=new Float32Array(want); let pos=0;
   let workletNode;
   try {
@@ -818,7 +821,7 @@ function runDelayCapture(btn, cb){
     dlyState='idle'; btn.textContent=prevTxt; btn.style.opacity=1;
     const m = tfSwap? ref: mic, r = tfSwap? mic: ref;
     cb(computeDelay(r, m, sr));
-  },2100);
+  }, captureSec*1000+100);
 }
 // speaker A/B comparison
 let dlyA=null, dlyB=null;
@@ -1042,7 +1045,7 @@ function startRT60(){
   const prevGenOn = genOn;
   const restoreType=genType; genType='pink';
   if(!genOn){ genStart(); }
-  const boost=Math.max(genDb,-20);
+  const boost=Math.max(genDb,-6);   // RT60 needs a strong steady state well above the noise floor
   if(genGain) genGain.gain.setTargetAtTime(Math.pow(10,boost/20),audioCtx.currentTime,0.1);
 
   setTimeout(()=>{
@@ -1077,7 +1080,9 @@ function analyzeRT60(){
   const reg=post.filter(x=>x.db<=hi && x.db>=lo);
   const needRange=rtRange;
   if(reg.length<5 || (hi-lo)<Math.min(8,needRange)){
-    rtStatus.innerHTML='אין דעיכה למדוד — האות חלש/החדר שקט.<br><span style="font-size:11px;color:var(--dim)">הורד "טווח דעיכה נדרש" או העלה עוצמה.</span>';
+    rtStatus.innerHTML='אין דעיכה למדוד ('+(hi-lo>0?(hi-lo).toFixed(0):'0')+'dB בלבד).'+
+      '<br><span style="font-size:11px;color:var(--dim)">רמת אות: '+steady.toFixed(0)+'dB · רעש רקע: '+noise.toFixed(0)+'dB.<br>'+
+      (steady-noise<15?'העלה עוצמת PA (האות קרוב מדי לרעש הרקע).':'הורד "טווח דעיכה נדרש".')+'</span>';
     drawRTPlot(post, steady, null, 0); return;
   }
   let n=reg.length, st=0,sd=0,std=0,stt=0;
@@ -1660,7 +1665,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v86';
+document.getElementById('ver').textContent='v87';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 function applyAccent(hex){
   document.documentElement.style.setProperty('--accent',hex);

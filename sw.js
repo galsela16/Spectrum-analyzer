@@ -1,8 +1,10 @@
 // bump CACHE version whenever you change files
-const CACHE = 'rta-v33';
+const CACHE = 'rta-v87';
 const ASSETS = [
   './',
   './index.html',
+  './app.js',
+  './recorder-worklet.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
@@ -20,12 +22,13 @@ self.addEventListener('activate', e => {
   );
 });
 
-// HTML: network-first (so new deploys show up immediately, offline falls back to cache)
-// other assets: cache-first for speed
+// code (html/js/worklets): network-first so new deploys show up immediately; offline falls back to cache.
+// other assets (icons/manifest): cache-first for speed.
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
-  const isDoc = e.request.mode === 'navigate' || e.request.destination === 'document';
-  if (isDoc) {
+  const d = e.request.destination;
+  const codeLike = e.request.mode === 'navigate' || d === 'document' || d === 'script' || d === 'worker' || d === 'audioworklet' || e.request.url.endsWith('.js');
+  if (codeLike) {
     e.respondWith(
       fetch(e.request).then(r => {
         const copy = r.clone();
