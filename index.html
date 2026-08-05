@@ -435,6 +435,13 @@
       </div>
       <button class="toggle on" id="peakBtn">Peak Hold</button>
       <button class="toggle" id="avgBtn">מיצוע</button>
+      <div class="ctrl" style="flex:0 0 auto;align-items:flex-start;min-width:auto">
+        <label>מדים</label>
+        <div class="seg" id="meterModeSeg">
+          <button data-m="rms" class="on">RMS (חלק)</button>
+          <button data-m="peak">Peak</button>
+        </div>
+      </div>
       <button class="toggle" id="freezeBtn">הקפא</button>
       <button class="toggle on" id="fbBtn">גלאי פידבק</button>
       <div class="ctrl">
@@ -529,6 +536,7 @@ let fbProm=14;
 let lvlPeak=-120, lvlPeakT=0;
 let weightMode='Z';
 let meterUnit='SPL';
+let meterMode='rms';   // 'rms' (smooth average) | 'peak' (catches transients)
 let weightA=null, weightC=null;
 let leqSumP=0, leqN=0, splMax=-120;
 let dragging=false, dragX0=0, dragX1=0, cursorX=null;
@@ -1107,8 +1115,8 @@ function updateTfLevels(){
   analyser.getFloatTimeDomainData(timeData);
   if(!timeDataRef || timeDataRef.length!==analyserRef.fftSize) timeDataRef=new Float32Array(analyserRef.fftSize);
   analyserRef.getFloatTimeDomainData(timeDataRef);
-  setGainEl(document.getElementById('tfMicFill'), document.getElementById('tfMicDb'), peakDb(timeData));
-  setGainEl(document.getElementById('tfRefFill'), document.getElementById('tfRefDb'), peakDb(timeDataRef));
+  setGainEl(document.getElementById('tfMicFill'), document.getElementById('tfMicDb'), levelDb(timeData));
+  setGainEl(document.getElementById('tfRefFill'), document.getElementById('tfRefDb'), levelDb(timeDataRef));
   document.getElementById('tfL1').textContent = tfSwap?"כניסה 1 → רפרנס":"כניסה 1 → מיק'";
   document.getElementById('tfL2').textContent = tfSwap?"כניסה 2 → מיק'":"כניסה 2 → רפרנס";
 }
@@ -1215,6 +1223,15 @@ function fft(re,im,inv){
 }
 
 let dlyState='idle', timeDataRef=null;
+document.querySelectorAll('#meterModeSeg button').forEach(b=>b.addEventListener('click',function(){
+  document.querySelectorAll('#meterModeSeg button').forEach(x=>x.classList.remove('on'));
+  this.classList.add('on'); meterMode=this.dataset.m;
+}));
+function levelDb(buf,n){
+  n=n||buf.length;
+  if(meterMode==='peak'){ let m=0; for(let i=0;i<n;i++){ const a=Math.abs(buf[i]); if(a>m)m=a; } return 20*Math.log10(m+1e-9); }
+  let s=0; for(let i=0;i<n;i++){ const v=buf[i]; s+=v*v; } return 20*Math.log10(Math.sqrt(s/n)+1e-9);
+}
 function peakDb(buf){ let m=0; for(let i=0;i<buf.length;i++){ const a=Math.abs(buf[i]); if(a>m)m=a; } return 20*Math.log10(m+1e-9); }
 function gainClass(db){
   if(db>=-1) return ['clip','קליפ!'];
@@ -1226,7 +1243,7 @@ function setGainEl(fill,lbl,db){
   let s=db;
   if(fill){
     s=fill._sdb; if(s==null||!isFinite(s)) s=db;
-    s += (db>s ? 0.5 : 0.08) * (db - s);   // fast attack, slow release — smooth, analog-like
+    s += (db>s ? 0.55 : 0.035) * (db - s);   // same attack/release as the main meter
     fill._sdb=s;
     fill.style.width=Math.max(2,Math.min(100,(s+60)/60*100))+'%';
   }
@@ -1724,10 +1741,7 @@ function bandDb(fLo,fHi,nyquist,bins){
 function updateLevel(){
   if(!analyserMeter) return;
   analyserMeter.getFloatTimeDomainData(timeDataMeter);
-  let sum = 0;
-  for(let i = 0; i < 2048; i++){ const s = timeDataMeter[i]; sum += s * s; }
-  const rms = Math.sqrt(sum / 2048);
-  const dbfs = 20 * Math.log10(rms + 1e-9);
+  const dbfs = levelDb(timeDataMeter, 2048);
 
   if (dbfs > smoothedDbfs) {
     smoothedDbfs += (dbfs - smoothedDbfs) * 0.55; // Fast Attack
@@ -1795,14 +1809,14 @@ function draw(){
     analyser.getFloatTimeDomainData(timeData);
     if(!timeDataRef || timeDataRef.length!==analyserRef.fftSize) timeDataRef=new Float32Array(analyserRef.fftSize);
     analyserRef.getFloatTimeDomainData(timeDataRef);
-    setGain('dlyMic', peakDb(timeData));
-    setGain('dlyRef', peakDb(timeDataRef));
+    setGain('dlyMic', levelDb(timeData));
+    setGain('dlyRef', levelDb(timeDataRef));
   }
   if(eqPanel.classList.contains('open')){
     const targetData = (eqCh === 2 && timeDataRef) ? timeDataRef : timeData;
     if(eqCh === 2 && analyserRef) analyserRef.getFloatTimeDomainData(timeDataRef);
     else analyser.getFloatTimeDomainData(timeData);
-    setGainEl(document.getElementById('eqMicFill'), document.getElementById('eqMicGain'), peakDb(targetData));
+    setGainEl(document.getElementById('eqMicFill'), document.getElementById('eqMicGain'), levelDb(targetData));
   }
   updateLevel();
   const W=cv.clientWidth,H=cv.clientHeight;
@@ -2040,7 +2054,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v81';
+document.getElementById('ver').textContent='v82';
 const HELP={
   mRta:'תצוגת ספקטרום — עוצמה לפי תדר, בזמן אמת.',
   mSpec:'ווטרפול — הספקטרום לאורך זמן.',
