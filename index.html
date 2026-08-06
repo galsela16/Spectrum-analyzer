@@ -295,15 +295,15 @@
     </div>
     
     <div id="eqPanel">
-      <h3>מדידת המרחב</h3>
+      <h3>מדידת תגובה</h3>
+      <div class="seg respModeSeg" style="align-self:center">
+        <button data-rm="single" class="on">חד־ערוצי (מיק')</button>
+        <button data-rm="dual">דו־ערוצי (מיק'+רפרנס)</button>
+      </div>
       <div style="display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;">
         <div class="seg" id="eqModeSwitchA">
           <button class="on">ממוצע</button>
           <button data-go="area">אזורים</button>
-        </div>
-        <div class="seg" id="eqChSeg">
-          <button data-ch="1" class="on">כניסה 1 (מיק')</button>
-          <button data-ch="2">כניסה 2 (רפרנס)</button>
         </div>
       </div>
       <div class="sub" id="eqSub">מיקומים שנמדדו: 0</div>
@@ -369,7 +369,11 @@
     </div>
     
     <div id="tfPanel">
-      <h3>Transfer Function דו־ערוצי → תיקון גרפיק EQ</h3>
+      <h3>מדידת תגובה</h3>
+      <div class="seg respModeSeg" style="align-self:center">
+        <button data-rm="single">חד־ערוצי (מיק')</button>
+        <button data-rm="dual" class="on">דו־ערוצי (מיק'+רפרנס)</button>
+      </div>
       <div class="sub">ערוץ 1 = מיקרופון מדידה · ערוץ 2 = רפרנס מהמיקסר. שלח תוכן/רעש ורוד דרך המערכת, ומדוד.</div>
       <div class="chBar"><span id="tfL1" style="min-width:96px">כניסה 1 → מיק'</span><div class="track"><div class="fill" id="tfMicFill"></div></div><span id="tfMicDb">—</span></div>
       <div class="chBar"><span id="tfL2" style="min-width:96px">כניסה 2 → רפרנס</span><div class="track"><div class="fill" id="tfRefFill"></div></div><span id="tfRefDb">—</span></div>
@@ -510,9 +514,8 @@
 
     <div class="tabpage" data-page="tune">
       <button class="toggle" id="genBtn">גנרטור</button>
-      <button class="toggle" id="eqBtn">מדידת המרחב</button>
+      <button class="toggle" id="eqBtn">מדידת תגובה</button>
       <button class="toggle" id="calBtn">כיול מיק'</button>
-      <button class="toggle" id="tfBtn">TF ‏2־ערוצי</button>
       <button class="toggle" id="dlyBtn">דיליי</button>
       <button class="toggle" id="rtBtn">RT60</button>
       <div class="ctrl" style="flex:0 0 auto">

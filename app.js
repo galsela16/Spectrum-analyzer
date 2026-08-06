@@ -354,6 +354,11 @@ document.querySelectorAll('#genCompSeg button').forEach(b=>b.addEventListener('c
 const eqPanel=document.getElementById('eqPanel');
 document.getElementById('eqClose').addEventListener('click',closeModals);
 document.getElementById('eqBtn').addEventListener('click',()=>{ showModal(eqPanel); updateEqUI(); });
+// unified response tool: single-channel (spatial) ↔ dual-channel (TF)
+document.querySelectorAll('.respModeSeg button').forEach(b=>b.addEventListener('click',function(){
+  if(this.dataset.rm==='dual'){ showModal(tfPanel); if(typeof tfResult!=='undefined' && tfResult) renderTFList(); }
+  else { showModal(eqPanel); updateEqUI(); }
+}));
 document.querySelectorAll('#eqModeSwitchA button').forEach(b=>b.addEventListener('click',function(){
   if(this.dataset.go==='area'){ openAreas(); }
 }));
@@ -635,10 +640,6 @@ function renderAreaList(){
 }
 
 const tfPanel=document.getElementById('tfPanel');
-document.getElementById('tfBtn').addEventListener('click',()=>{ 
-  showModal(tfPanel); 
-  if(tfResult) renderTFList(); 
-});
 document.getElementById('tfClose').addEventListener('click',closeModals);
 document.getElementById('tfSwapBtn').addEventListener('click',function(){ tfSwap=!tfSwap; this.classList.toggle('on',tfSwap); });
 document.getElementById('tfMeasBtn').addEventListener('click',()=>pickSource(tfMeasure,6000));
@@ -1740,7 +1741,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v99';
+document.getElementById('ver').textContent='v100';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 function applyAccent(hex){
   document.documentElement.style.setProperty('--accent',hex);
@@ -1776,7 +1777,7 @@ const HELP={
   mRta:'תצוגת ספקטרום — עוצמה לפי תדר, בזמן אמת.',
   mSpec:'ווטרפול — הספקטרום לאורך זמן.',
   genBtn:'גנרטור אותות: רעש ורוד/לבן, סינוס או סוויפ.\nלמדידה ולכיוונון המערכת.',
-  eqBtn:'מדידת המרחב: מדוד תגובת מערכת\nוקבל תיקון EQ (ממוצע / אזורים).',
+  eqBtn:'מדידת תגובה: חד־ערוצי או דו־ערוצי (TF).',
   calBtn:'כיולי מיקרופון: טען קובץ כיול (REW)\nלתיקון צביעת המיקרופון.',
   tfBtn:'Transfer Function דו־ערוצי:\nמיק\' מול רפרנס מהמיקסר → תיקון EQ.',
   dlyBtn:'מדידת דיליי דו־ערוצי: זמן ההשהיה\nבין רמקולים (סאב מול טופ).',
