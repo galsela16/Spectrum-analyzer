@@ -1162,7 +1162,7 @@ function drawRTPlot(post, steady, slope, intercept){
   }
 }
 document.getElementById('res').addEventListener('input',e=>{
-  const bpo=parseInt(e.target.value,10);
+  const bpo=Math.max(3,Math.min(24,parseInt(e.target.value,10)));
   document.getElementById('resVal').textContent='1/'+bpo+' אוקטבה';
   buildBands(bpo);
 });
@@ -1720,7 +1720,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v96';
+document.getElementById('ver').textContent='v97';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 function applyAccent(hex){
   document.documentElement.style.setProperty('--accent',hex);
