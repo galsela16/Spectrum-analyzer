@@ -63,6 +63,7 @@ let rt60State='idle', rt60Samples=[], rt60CutT=0, rtRange=10;
 let eqMarks=null;
 let eqCurveData=null;
 let eqMode='graphic', lastEqCorr=null;
+let tfMode='graphic';
 let eqCh = 1;
 const AREA_COLORS=['#2f9bff','#ffa53b','#ff5cc8','#50e68c'];
 const AREA_NAMES=['צפון','דרום','מזרח','מערב'];
@@ -336,6 +337,7 @@ function setTarget(mode){
   document.querySelectorAll('.tgtSeg button').forEach(b=>b.classList.toggle('on', b.dataset.t===mode));
   if(eqPositions.length) computeAndShow();
   if(areas.length) suggestAreaEQ();
+  if(typeof tfFrames!=='undefined' && tfFrames) tfCompute();
 }
 document.querySelectorAll('.tgtSeg button').forEach(b=>b.addEventListener('click',function(){ setTarget(this.dataset.t); }));
 
@@ -373,6 +375,10 @@ document.getElementById('eqMeasBtn').addEventListener('click',()=>pickSource(mea
 document.querySelectorAll('#eqModeSeg button').forEach(b=>b.addEventListener('click',function(){
   document.querySelectorAll('#eqModeSeg button').forEach(x=>x.classList.remove('on'));
   this.classList.add('on'); eqMode=this.dataset.m; renderEqResult();
+}));
+document.querySelectorAll('#tfModeSeg button').forEach(b=>b.addEventListener('click',function(){
+  document.querySelectorAll('#tfModeSeg button').forEach(x=>x.classList.remove('on'));
+  this.classList.add('on'); tfMode=this.dataset.m; if(tfResult) renderTFList();
 }));
 document.getElementById('eqResetBtn').addEventListener('click',()=>{ eqPositions=[]; eqMarks=null; document.getElementById('eqList').innerHTML=''; document.getElementById('eqPosList').innerHTML=''; updateEqUI(); });
 
@@ -706,6 +712,20 @@ function renderTFList(){
   cv2.style.display = 'block'; 
   drawGEQ(cv2, GEQ, tfResult.corr);
   eqCurveData = { freqs: GEQ.slice(), corr: tfResult.corr.slice() };
+
+  if(tfMode==='param'){
+    const list=paramFromCorr(tfResult.corr);
+    let html='<div class="sub" style="margin-bottom:6px;color:var(--text);font-weight:600;">EQ פרמטרי (יעד '+(targetMode==='house'?'House':'שטוח')+'):</div>';
+    if(list.length){
+      html+=list.map(s=>{
+        const f=s.f>=1000?(s.f/1000).toFixed(2)+'kHz':Math.round(s.f)+'Hz';
+        const g=(s.gain>0?'+':'')+s.gain.toFixed(1)+'dB';
+        return '<div class="eqRow '+s.type+'"><span class="f">'+f+'</span><span class="g">'+g+'</span><span class="q">Q '+s.q.toFixed(1)+'</span></div>';
+      }).join('');
+    } else html+='<div class="sub">מאוזן 👌</div>';
+    box.innerHTML=html;
+    return;
+  }
 
   let html = '<div class="sub" style="margin-bottom:6px; color:var(--text); font-weight:600;">ערכי תיקון לגרפיק-EQ (31 פסים):</div>';
   html += '<div class="tfGrid">';
@@ -1741,7 +1761,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v100';
+document.getElementById('ver').textContent='v101';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 function applyAccent(hex){
   document.documentElement.style.setProperty('--accent',hex);

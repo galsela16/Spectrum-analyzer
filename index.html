@@ -383,6 +383,17 @@
         <button class="toggle" id="tfCsvBtn">CSV</button>
       </div>
       <canvas id="tfCanvas" width="400" height="150" style="display:none"></canvas>
+      <div class="seg" id="tfModeSeg" style="align-self:center">
+        <button data-m="graphic" class="on">גרפיק</button>
+        <button data-m="param">פרמטרי</button>
+      </div>
+      <div class="ctrl" style="flex:0 0 auto;align-items:center;min-width:auto">
+        <label style="justify-content:center">עקומת יעד</label>
+        <div class="seg tgtSeg" style="align-self:center">
+          <button data-t="flat" class="on">שטוח</button>
+          <button data-t="house">House</button>
+        </div>
+      </div>
       <div id="tfGeqList"></div>
       <div class="sub" id="tfInfo">התוצאה: כמה dB להזיז בכל פס בגרפיק־EQ (31 פסים). ירוק=הזז, אפור=לא אמין (רפרנס חלש).</div>
       <button id="tfClose">סגור</button>
