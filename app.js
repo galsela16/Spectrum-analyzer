@@ -1446,8 +1446,12 @@ function updateLevel(){
   document.getElementById('splMax').textContent=fmt(splMax);
 }
 
+let _lastDraw=0;
 function draw(){
   raf=requestAnimationFrame(draw);
+  const now=performance.now();
+  if(now-_lastDraw < 32) return;   // ~30fps cap — halves the render/compute load, imperceptible on an audio graph
+  _lastDraw=now;
   updateSignalTint();
   analyser.getFloatFrequencyData(floatData);
   if(measState==='measuring' && measAccum){
@@ -1736,7 +1740,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v98';
+document.getElementById('ver').textContent='v99';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 function applyAccent(hex){
   document.documentElement.style.setProperty('--accent',hex);
