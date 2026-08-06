@@ -55,6 +55,7 @@ let leqSumP=0, leqN=0, splMax=-120;
 let dragging=false, dragX0=0, dragX1=0, cursorX=null;
 let genType='pink', genOn=false, genGain=null, genSrc=null, genOsc=null;
 let genDb=-34, genHz=1000, targetMode='flat';
+let fftSize=32768;   // FFT resolution (accuracy vs speed)
 let _pfx=null;   // per-frame prefix-sum of linear power (perf)
 let genSweepDur=4, sweepTimer=null, sweepStartT=0;
 let pinkComp=false, compChoice=true;
@@ -1166,6 +1167,21 @@ document.getElementById('res').addEventListener('input',e=>{
   document.getElementById('resVal').textContent='1/'+bpo+' אוקטבה';
   buildBands(bpo);
 });
+function setFft(n){
+  fftSize=n;
+  if(analyser){
+    analyser.fftSize=n; analyserRef.fftSize=n;
+    floatData=new Float32Array(analyser.frequencyBinCount);
+    floatDataRef=new Float32Array(analyserRef.frequencyBinCount);
+    timeData=new Float32Array(analyser.fftSize);
+    timeDataRef=new Float32Array(analyserRef.fftSize);
+    _pfx=null;
+  }
+}
+document.querySelectorAll('#fftSeg button').forEach(b=>b.addEventListener('click',function(){
+  document.querySelectorAll('#fftSeg button').forEach(x=>x.classList.remove('on'));
+  this.classList.add('on'); setFft(parseInt(this.dataset.n,10));
+}));
 document.getElementById('mRta').addEventListener('click',()=>setMode('rta'));
 document.getElementById('mSpec').addEventListener('click',()=>setMode('spec'));
 document.getElementById('startBtn').addEventListener('click',()=>start());
@@ -1253,13 +1269,13 @@ async function start(deviceId){
     }
 
     analyser = audioCtx.createAnalyser();
-    analyser.fftSize = 32768;
+    analyser.fftSize = fftSize;
     analyser.smoothingTimeConstant = parseFloat(document.getElementById('smooth').value);
     analyser.minDecibels = -100; 
     analyser.maxDecibels = -10;
 
     analyserRef = audioCtx.createAnalyser();
-    analyserRef.fftSize = 32768; 
+    analyserRef.fftSize = fftSize; 
     analyserRef.smoothingTimeConstant = 0.3;
     analyserRef.minDecibels = -100; 
     analyserRef.maxDecibels = -10;
@@ -1720,7 +1736,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v97';
+document.getElementById('ver').textContent='v98';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 function applyAccent(hex){
   document.documentElement.style.setProperty('--accent',hex);
