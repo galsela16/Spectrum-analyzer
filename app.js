@@ -59,7 +59,7 @@ let fftSize=32768;   // FFT resolution (accuracy vs speed)
 let _pfx=null;   // per-frame prefix-sum of linear power (perf)
 let genSweepDur=4, sweepTimer=null, sweepStartT=0;
 let pinkComp=false, compChoice=true;
-let rt60State='idle', rt60Samples=[], rt60CutT=0, rtRange=10, rt60Timer=null;
+let rt60State='idle', rt60Samples=[], rt60CutT=0, rtRange=10, rt60Timer=null, rtLevel=-6;
 let eqMarks=null;
 let eqCurveData=null;
 let eqMode='graphic', lastEqCorr=null;
@@ -1114,6 +1114,10 @@ document.getElementById('rtRange').addEventListener('input',e=>{
   document.getElementById('rtRangeVal').textContent=rtRange+'dB';
   if(rt60Samples.length) analyzeRT60();
 });
+document.getElementById('rtLevel').addEventListener('input',e=>{
+  rtLevel=parseInt(e.target.value,10);
+  document.getElementById('rtLevelVal').textContent=rtLevel+'dB';
+});
 document.getElementById('rtBtn').addEventListener('click',startRT60);
 
 function startRT60(){
@@ -1123,12 +1127,17 @@ function startRT60(){
   const prevGenOn = genOn;
   const restoreType=genType; genType='pink';
   if(!genOn){ genStart(); }
-  const boost=Math.max(genDb,-6);   // RT60 needs a strong steady state well above the noise floor
+  const boost=rtLevel;   // RT60 playback level (user-set; needs a strong steady state)
   if(genGain) genGain.gain.setTargetAtTime(Math.pow(10,boost/20),audioCtx.currentTime,0.1);
+  const prevSmooth=analyser.smoothingTimeConstant; analyser.smoothingTimeConstant=0;  // no smearing of the decay
 
   setTimeout(()=>{
     rtStatus.innerHTML='מודד דעיכה…';
     rt60Samples=[]; rt60State='capture';
+    const nyq=audioCtx.sampleRate/2;
+    const bandEdges=RT_BANDS.map(fc=>{ const bins=floatData.length;
+      let lo=Math.floor((fc/1.4142)/nyq*bins), hi=Math.ceil((fc*1.4142)/nyq*bins);
+      return [Math.max(0,lo),Math.min(bins-1,hi)]; });
     // dedicated high-rate sampler (~100/s), independent of the 30fps draw cap — captures fast decays cleanly
     if(rt60Timer) clearInterval(rt60Timer);
     rt60Timer=setInterval(()=>{
@@ -1136,7 +1145,9 @@ function startRT60(){
       analyser.getFloatTimeDomainData(timeData);
       let s2=0, N=Math.min(2048,timeData.length);
       for(let i=timeData.length-N;i<timeData.length;i++){ const v=timeData[i]; s2+=v*v; }
-      rt60Samples.push({t:performance.now(), db:20*Math.log10(Math.sqrt(s2/N)+1e-9)});
+      analyser.getFloatFrequencyData(floatData);
+      const bands=bandEdges.map(([lo,hi])=>{ let p=0; for(let i=lo;i<=hi;i++) p+=Math.pow(10,floatData[i]/10); return 10*Math.log10(p+1e-12); });
+      rt60Samples.push({t:performance.now(), db:20*Math.log10(Math.sqrt(s2/N)+1e-9), bands});
     },10);
     setTimeout(()=>{
       const t=audioCtx.currentTime;
@@ -1147,6 +1158,7 @@ function startRT60(){
       setTimeout(()=>{
         rt60State='idle'; 
         if(rt60Timer){ clearInterval(rt60Timer); rt60Timer=null; }
+        analyser.smoothingTimeConstant=prevSmooth;
         if(!prevGenOn) genStop(); 
         genType=restoreType;
         analyzeRT60();
@@ -1155,7 +1167,57 @@ function startRT60(){
   },1200);
 }
 
+const RT_BANDS=[125,250,500,1000,2000,4000];
+// analyze one decay series → {rt60, span} or null
+function analyzeDecay(series, cutT, needRange){
+  const pre=series.filter(x=>x.t<cutT);
+  const steady = pre.length? pre.reduce((a,x)=>a+x.db,0)/pre.length : Math.max(...series.map(x=>x.db));
+  const post=series.filter(x=>x.t>=cutT).map(x=>({t:(x.t-cutT)/1000, db:x.db}));
+  if(post.length<10) return null;
+  const tail=post.slice(-Math.max(5,Math.floor(post.length*0.25)));
+  const noise=tail.reduce((a,x)=>a+x.db,0)/tail.length;
+  const hi=steady-5, lo=noise+5;
+  const reg=post.filter(x=>x.db<=hi && x.db>=lo);
+  if(reg.length<5 || (hi-lo)<Math.min(8,needRange)) return {rt60:null, span:hi-lo, steady, noise, post};
+  let n=reg.length, st=0,sd=0,std=0,stt=0;
+  reg.forEach(p=>{ st+=p.t; sd+=p.db; std+=p.t*p.db; stt+=p.t*p.t; });
+  const slope=(n*std - st*sd)/(n*stt - st*st);
+  const intercept=(sd - slope*st)/n;
+  const rt60=-60/slope;
+  return { rt60:(slope<0 && rt60>0.05 && rt60<10)?rt60:null, span:hi-lo, steady, noise, post, slope, intercept };
+}
 function analyzeRT60(){
+  const s=rt60Samples;
+  if(s.length<20){ rtStatus.innerHTML='מדידה נכשלה — נדגמו רק '+s.length+' דגימות.<br><span style="font-size:11px;color:var(--dim)">ודא שהמיקרופון פעיל ונסה שוב.</span>'; return; }
+  const bb=analyzeDecay(s.map(x=>({t:x.t,db:x.db})), rt60CutT, rtRange);
+  if(!bb || bb.post.length<10){ rtStatus.innerHTML='מדידה נכשלה — לא נלכדה דעיכה.'; return; }
+  // per-octave-band RT60
+  let bandsHtml='';
+  if(s[0].bands){
+    bandsHtml='<div class="tfGrid" style="margin-top:8px">';
+    RT_BANDS.forEach((fc,bi)=>{
+      const series=s.map(x=>({t:x.t, db:x.bands[bi]}));
+      const r=analyzeDecay(series, rt60CutT, rtRange);
+      const fStr=fc>=1000?(fc/1000)+'k':fc+'';
+      const val=(r&&r.rt60)?r.rt60.toFixed(2)+'ש\'':'—';
+      const cls=(r&&r.rt60)?(r.rt60>0.8?'cut':(r.rt60<0.3?'off':'boost')):'off';
+      bandsHtml+='<div class="tfItem '+cls+'"><span class="f">'+fStr+'Hz</span><span class="g">'+val+'</span></div>';
+    });
+    bandsHtml+='</div>';
+  }
+  if(bb.rt60){
+    const approx=bb.span<rtRange;
+    rtStatus.innerHTML='RT60 ≈ <b>'+bb.rt60.toFixed(2)+' ש\'</b> <span style="font-size:11px;color:var(--dim)">(רחב־פס · טווח '+bb.span.toFixed(0)+'dB)</span>'+
+      (approx?'<br><span style="font-size:10px;color:var(--warn)">משוער — טווח דעיכה קטן</span>':'')+bandsHtml;
+    drawRTPlot(bb.post, bb.steady, bb.slope, bb.intercept);
+  } else {
+    rtStatus.innerHTML='אין דעיכה רחב־פס למדוד ('+(bb.span>0?bb.span.toFixed(0):'0')+'dB).'+
+      '<br><span style="font-size:11px;color:var(--dim)">רמת אות: '+bb.steady.toFixed(0)+'dB · רעש רקע: '+bb.noise.toFixed(0)+'dB.<br>'+
+      (bb.steady-bb.noise<15?'העלה עוצמת PA (האות קרוב מדי לרעש הרקע).':'הורד "טווח דעיכה נדרש".')+'</span>'+bandsHtml;
+    drawRTPlot(bb.post, bb.steady, null, 0);
+  }
+}
+function analyzeRT60_OLD(){
   const s=rt60Samples;
   if(s.length<20){ rtStatus.innerHTML='מדידה נכשלה — נדגמו רק '+s.length+' דגימות.<br><span style="font-size:11px;color:var(--dim)">ודא שהמיקרופון פעיל ונסה שוב.</span>'; return; }
   const pre=s.filter(x=>x.t<rt60CutT);
@@ -1797,7 +1859,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v106';
+document.getElementById('ver').textContent='v107';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 function applyAccent(hex){
   document.documentElement.style.setProperty('--accent',hex);

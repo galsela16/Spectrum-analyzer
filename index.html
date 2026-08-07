@@ -297,6 +297,10 @@
       <h3 style="font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600">מדידת RT60</h3>
       <div id="rtStatus">לחץ RT60 כדי למדוד</div>
       <div class="chBar"><span style="min-width:64px">עוצמה</span><div class="track"><div class="fill" id="rtLvlFill"></div></div><span class="gainLbl" id="rtLvlGain">—</span></div>
+      <div class="ctrl" style="width:100%">
+        <label>עוצמת מדידה <b id="rtLevelVal">-6dB</b></label>
+        <input type="range" id="rtLevel" min="-20" max="-2" step="1" value="-6">
+      </div>
       <div class="sub" style="text-align:center">בזמן המדידה האות עולה אוטומטית ל-‎6dB- (RT60 צריך אות חזק).</div>
       <div class="ctrl" style="width:100%">
         <label>טווח דעיכה נדרש <b id="rtRangeVal">10dB</b></label>
