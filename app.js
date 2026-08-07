@@ -1863,7 +1863,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v109';
+document.getElementById('ver').textContent='v110';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 function applyAccent(hex){
   document.documentElement.style.setProperty('--accent',hex);

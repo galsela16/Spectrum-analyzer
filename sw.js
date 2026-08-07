@@ -1,11 +1,17 @@
 // bump CACHE version whenever you change files
-const CACHE = 'rta-v109';
+const CACHE = 'rta-v110';
 const ASSETS = [
   './',
   './index.html',
   './app.js',
   './recorder-worklet.js',
   './manifest.webmanifest',
+  './fonts/heebo-hebrew-400-normal.woff2',
+  './fonts/heebo-hebrew-600-normal.woff2',
+  './fonts/heebo-hebrew-700-normal.woff2',
+  './fonts/heebo-latin-400-normal.woff2',
+  './fonts/heebo-latin-600-normal.woff2',
+  './fonts/heebo-latin-700-normal.woff2',
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-512-maskable.png'
