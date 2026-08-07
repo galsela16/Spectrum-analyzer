@@ -58,6 +58,7 @@ let genDb=-34, genHz=1000, targetMode='flat';
 let fftSize=32768;   // FFT resolution (accuracy vs speed)
 let _pfx=null;   // per-frame prefix-sum of linear power (perf)
 let _pfxRef=null;   // prefix-sum for the reference overlay
+let tfOverlay=false;   // keep mic/ref curves on the main graph even when the panel is closed
 let genSweepDur=4, sweepTimer=null, sweepStartT=0;
 let pinkComp=false, compChoice=true;
 let rt60State='idle', rt60Samples=[], rt60CutT=0, rtRange=10, rt60Timer=null, rtLevel=-6;
@@ -661,6 +662,7 @@ function renderAreaList(){
 const tfPanel=document.getElementById('tfPanel');
 document.getElementById('tfClose').addEventListener('click',closeModals);
 document.getElementById('tfSwapBtn').addEventListener('click',function(){ tfSwap=!tfSwap; this.classList.toggle('on',tfSwap); });
+document.getElementById('tfOverlayBtn').addEventListener('click',function(){ tfOverlay=!tfOverlay; this.classList.toggle('on',tfOverlay); });
 document.getElementById('tfMeasBtn').addEventListener('click',()=>pickSource(tfMeasure,6000));
 document.getElementById('tfCsvBtn').addEventListener('click',tfExportCsv);
 
@@ -1707,7 +1709,7 @@ function drawRta(W,H,nyquist,bins,xForFreq){
   [0.25,0.5,0.75].forEach(p=>{ctx.globalAlpha=.3;ctx.strokeStyle='#2b3646';ctx.beginPath();ctx.moveTo(0,plotH*p);ctx.lineTo(W,plotH*p);ctx.stroke();ctx.globalAlpha=1;});
 
   const bw=W/BANDS, gap=Math.max(0.5,bw*0.12);
-  const tfOpen = (typeof tfPanel!=='undefined' && tfPanel.classList.contains('open') && floatDataRef && analyserRef);
+  const tfOpen = ((tfOverlay || (typeof tfPanel!=='undefined' && tfPanel.classList.contains('open'))) && floatDataRef && analyserRef);
   let peakBand=-1,peakVal=0;
   const micPts=[];
   for(let b=0;b<BANDS;b++){
@@ -1940,7 +1942,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v116';
+document.getElementById('ver').textContent='v117';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
@@ -2028,6 +2030,7 @@ const HELP={
   // בדיקת רמות
   gainGenBtn:'נגן רעש ורוד לבדיקת הרמות.',
   gainOutLvl:'עוצמת האות היוצא לבדיקה.',
+  tfOverlayBtn:'משאיר את עקומות המיק\' והרפרנס על הגרף\nהראשי גם כשהפאנל סגור.',
   combBtn:'בדיקת ביטולי פאזה (comb): מזהה אדוות\nתקופתיות בגרף ומעריך את הפרש הזמן שגורם להן.'
 };
 let helpMode=false;
