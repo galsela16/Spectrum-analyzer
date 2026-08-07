@@ -662,7 +662,14 @@ function renderAreaList(){
 const tfPanel=document.getElementById('tfPanel');
 document.getElementById('tfClose').addEventListener('click',closeModals);
 document.getElementById('tfSwapBtn').addEventListener('click',function(){ tfSwap=!tfSwap; this.classList.toggle('on',tfSwap); });
-document.getElementById('tfOverlayBtn').addEventListener('click',function(){ tfOverlay=!tfOverlay; this.classList.toggle('on',tfOverlay); });
+function setTfOverlay(on){
+  tfOverlay=on;
+  const a=document.getElementById('tfOverlayBtn'), b=document.getElementById('tfOverlayHdr');
+  if(a) a.classList.toggle('on',on);
+  if(b) b.classList.toggle('on',on);
+}
+document.getElementById('tfOverlayBtn').addEventListener('click',()=>setTfOverlay(!tfOverlay));
+document.getElementById('tfOverlayHdr').addEventListener('click',()=>setTfOverlay(!tfOverlay));
 document.getElementById('tfMeasBtn').addEventListener('click',()=>pickSource(tfMeasure,6000));
 document.getElementById('tfCsvBtn').addEventListener('click',tfExportCsv);
 
@@ -1942,7 +1949,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v117';
+document.getElementById('ver').textContent='v118';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
@@ -2030,6 +2037,7 @@ const HELP={
   // בדיקת רמות
   gainGenBtn:'נגן רעש ורוד לבדיקת הרמות.',
   gainOutLvl:'עוצמת האות היוצא לבדיקה.',
+  tfOverlayHdr:'הצג/הסתר את עקומות המיק\' והרפרנס\nיחד על הגרף הראשי.',
   tfOverlayBtn:'משאיר את עקומות המיק\' והרפרנס על הגרף\nהראשי גם כשהפאנל סגור.',
   combBtn:'בדיקת ביטולי פאזה (comb): מזהה אדוות\nתקופתיות בגרף ומעריך את הפרש הזמן שגורם להן.'
 };
