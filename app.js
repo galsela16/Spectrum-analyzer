@@ -1118,11 +1118,15 @@ document.getElementById('rtLevel').addEventListener('input',e=>{
   rtLevel=parseInt(e.target.value,10);
   document.getElementById('rtLevelVal').textContent=rtLevel+'dB';
 });
-document.getElementById('rtBtn').addEventListener('click',startRT60);
-
-function startRT60(){
+document.getElementById('rtRunBtn').addEventListener('click',startRT60);
+document.getElementById('rtBtn').addEventListener('click',()=>{
   if(!running||!audioCtx){ alert('קודם הפעל את המיקרופון.'); return; }
   showModal(rtPanel);
+  rtStatus.innerHTML='כוונן עוצמה, ואז לחץ "התחל מדידה".';
+});
+function startRT60(){
+  if(!running||!audioCtx){ alert('קודם הפעל את המיקרופון.'); return; }
+  if(rt60State==='capture') return;
   rtStatus.innerHTML='מכין… משמיע רעש ורוד';
   const prevGenOn = genOn;
   const restoreType=genType; genType='pink';
@@ -1859,7 +1863,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v107';
+document.getElementById('ver').textContent='v108';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 function applyAccent(hex){
   document.documentElement.style.setProperty('--accent',hex);
