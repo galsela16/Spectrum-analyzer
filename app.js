@@ -59,7 +59,7 @@ let fftSize=32768;   // FFT resolution (accuracy vs speed)
 let _pfx=null;   // per-frame prefix-sum of linear power (perf)
 let genSweepDur=4, sweepTimer=null, sweepStartT=0;
 let pinkComp=false, compChoice=true;
-let rt60State='idle', rt60Samples=[], rt60CutT=0, rtRange=10;
+let rt60State='idle', rt60Samples=[], rt60CutT=0, rtRange=10, rt60Timer=null;
 let eqMarks=null;
 let eqCurveData=null;
 let eqMode='graphic', lastEqCorr=null;
@@ -1129,6 +1129,15 @@ function startRT60(){
   setTimeout(()=>{
     rtStatus.innerHTML='מודד דעיכה…';
     rt60Samples=[]; rt60State='capture';
+    // dedicated high-rate sampler (~100/s), independent of the 30fps draw cap — captures fast decays cleanly
+    if(rt60Timer) clearInterval(rt60Timer);
+    rt60Timer=setInterval(()=>{
+      if(rt60State!=='capture' || !analyser) return;
+      analyser.getFloatTimeDomainData(timeData);
+      let s2=0, N=Math.min(2048,timeData.length);
+      for(let i=timeData.length-N;i<timeData.length;i++){ const v=timeData[i]; s2+=v*v; }
+      rt60Samples.push({t:performance.now(), db:20*Math.log10(Math.sqrt(s2/N)+1e-9)});
+    },10);
     setTimeout(()=>{
       const t=audioCtx.currentTime;
       if(genGain){ try{ genGain.gain.cancelScheduledValues(t);
@@ -1137,6 +1146,7 @@ function startRT60(){
       rt60CutT=performance.now();
       setTimeout(()=>{
         rt60State='idle'; 
+        if(rt60Timer){ clearInterval(rt60Timer); rt60Timer=null; }
         if(!prevGenOn) genStop(); 
         genType=restoreType;
         analyzeRT60();
@@ -1147,11 +1157,11 @@ function startRT60(){
 
 function analyzeRT60(){
   const s=rt60Samples;
-  if(s.length<20){ rtStatus.textContent='מדידה נכשלה — נסה שוב'; return; }
+  if(s.length<20){ rtStatus.innerHTML='מדידה נכשלה — נדגמו רק '+s.length+' דגימות.<br><span style="font-size:11px;color:var(--dim)">ודא שהמיקרופון פעיל ונסה שוב.</span>'; return; }
   const pre=s.filter(x=>x.t<rt60CutT);
   const steady = pre.length? pre.reduce((a,x)=>a+x.db,0)/pre.length : Math.max(...s.map(x=>x.db));
   const post=s.filter(x=>x.t>=rt60CutT).map(x=>({t:(x.t-rt60CutT)/1000, db:x.db}));
-  if(post.length<10){ rtStatus.textContent='מדידה נכשלה — נסה שוב'; return; }
+  if(post.length<10){ rtStatus.innerHTML='מדידה נכשלה — לא נלכדה דעיכה ('+post.length+' דגימות אחרי הניתוק).'; return; }
   const tail=post.slice(-Math.max(5,Math.floor(post.length*0.25)));
   const noise=tail.reduce((a,x)=>a+x.db,0)/tail.length;
   const hi=steady-5, lo=noise+5;
@@ -1447,11 +1457,6 @@ function updateLevel(){
     smoothedDbfs += (dbfs - smoothedDbfs) * 0.035; // Slow & Smooth Decay
   }
 
-  if(rt60State==='capture'){
-    let s2=0, N=Math.min(2048,timeData.length);
-    for(let i=timeData.length-N;i<timeData.length;i++){ const v=timeData[i]; s2+=v*v; }
-    rt60Samples.push({t:performance.now(), db:20*Math.log10(Math.sqrt(s2/N)+1e-9)});
-  }
   const now=performance.now();
   if(smoothedDbfs>lvlPeak || now-lvlPeakT>1500){ lvlPeak=smoothedDbfs; lvlPeakT=now; }
   const pct=v=>Math.max(0,Math.min(100,(v+60)/60*100));
@@ -1792,7 +1797,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v105';
+document.getElementById('ver').textContent='v106';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 function applyAccent(hex){
   document.documentElement.style.setProperty('--accent',hex);
