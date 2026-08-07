@@ -330,19 +330,6 @@
       <button id="rtClose">סגור</button>
     </div>
     
-    <div id="gainPanel">
-      <h3>בדיקת רמות (לפני מדידה)</h3>
-      <div class="sub">ודא רמות תקינות לפני שמתחילים. נגן רעש ורוד, כוונן במיקסר, וודא שהמיקרופון ב"טוב" (ירוק).</div>
-      <button id="gainGenBtn" class="toggle" style="align-self:center">▶ רעש ורוד</button>
-      <div class="ctrl" style="min-width:130px">
-        <label>עוצמת אות יוצא <b id="gainOutVal">-34dB</b></label>
-        <input type="range" id="gainOutLvl" min="-46" max="-8" step="1" value="-34">
-      </div>
-      <div class="chBar"><span style="min-width:96px">אות יוצא</span><div class="track"><div class="fill" id="gainOutFill"></div></div><span class="gainLbl" id="gainOutGain">—</span></div>
-      <div class="chBar"><span style="min-width:96px">מיקרופון</span><div class="track"><div class="fill" id="gainMicFill"></div></div><span class="gainLbl" id="gainMicGain">—</span></div>
-      <div class="sub" id="gainTip" style="text-align:center;min-height:20px">—</div>
-      <button id="gainClose">סגור</button>
-    </div>
     <div id="eqPanel">
       <h3>מדידת תגובה</h3>
       <div class="seg respModeSeg" style="align-self:center">
@@ -542,11 +529,16 @@
         </div>
       </div>
       <button id="genOnBtn">▶ הפעל אות</button>
+      <div style="border-top:1px solid var(--line);margin-top:2px;padding-top:8px">
+        <div class="sub" style="text-align:center;margin-bottom:6px">בדיקת רמות — ודא שהמיקרופון ב"טוב" (ירוק) לפני מדידה</div>
+        <div class="chBar"><span style="min-width:64px">מיקרופון</span><div class="track"><div class="fill" id="gainMicFill"></div></div><span class="gainLbl" id="gainMicGain">—</span></div>
+        <div class="sub" id="gainTip" style="text-align:center;min-height:16px;margin-top:4px">—</div>
+      </div>
       <div class="warn">⚠ עוצמה גבוהה עלולה להזיק לרמקולים (בעיקר טוויטרים) ולאוזניים. התחל נמוך ועלה בהדרגה.</div>
     </div>
     <div class="tabbar">
       <button class="tab on" data-p="view">תצוגה</button>
-      <button class="tab" data-p="tune">כיוונון</button>
+      <button class="tab" data-p="tune">מדידה</button>
       <button class="tab" data-p="io">I/O</button>
       <button class="toggle" id="stopBtn" style="display:none;margin-inline-start:auto">אפס סשן</button>
     </div>
@@ -587,9 +579,7 @@
 
     <div class="tabpage" data-page="tune">
       <button class="toggle" id="genBtn">גנרטור</button>
-      <button class="toggle" id="gainBtn">בדיקת רמות</button>
       <button class="toggle" id="eqBtn">מדידת תגובה</button>
-      <button class="toggle" id="calBtn">כיול מיק'</button>
       <button class="toggle" id="dlyBtn">דיליי</button>
       <button class="toggle" id="rtBtn">RT60</button>
       <div class="ctrl" style="flex:0 0 auto">
@@ -616,6 +606,7 @@
       <button class="toggle" id="csvBtn">CSV</button>
       <select class="inp" id="inSel" title="מקור קלט"><option>מיקרופון ברירת מחדל</option></select>
       <select class="inp" id="outSel" title="יציאת פלט (אות הגנרטור)"><option>פלט ברירת מחדל</option></select>
+      <button class="toggle" id="calBtn">כיול מיק'</button>
       <span id="chCount" class="sub" style="align-self:center;font-size:11px">—</span>
     </div>
   </footer>

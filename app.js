@@ -264,7 +264,7 @@ function genStart(){
 }
 
 function syncInlineGenBtns(){
-  ['eqGenToggleBtn', 'areaGenToggleBtn', 'gainGenBtn'].forEach(id=>{
+  ['eqGenToggleBtn', 'areaGenToggleBtn'].forEach(id=>{
     const b = document.getElementById(id);
     if(b){
       b.classList.toggle('on', genOn && genType==='pink');
@@ -320,7 +320,7 @@ document.getElementById('genFreq').addEventListener('input',e=>applyGenHz(parseF
 document.getElementById('genFreqNum').addEventListener('input',e=>applyGenHz(parseFloat(e.target.value),'num'));
 document.getElementById('genOnBtn').addEventListener('click',()=>{ genOn?genStop():genStart(); });
 
-['eqGenToggleBtn', 'areaGenToggleBtn', 'gainGenBtn'].forEach(id=>{
+['eqGenToggleBtn', 'areaGenToggleBtn'].forEach(id=>{
   const el = document.getElementById(id);
   if(el){
     el.addEventListener('click', function(){
@@ -498,17 +498,6 @@ async function addCalFromFile(file){
 }
 const calPanel=document.getElementById('calPanel');
 document.getElementById('calBtn').addEventListener('click',()=>{ renderCalList(); showModal(calPanel); });
-document.getElementById('gainBtn').addEventListener('click',()=>{ showModal(gainPanel); });
-document.getElementById('gainClose').addEventListener('click',closeModals);
-(function(){
-  const s=document.getElementById('gainOutLvl'), v=document.getElementById('gainOutVal');
-  if(s){ s.value=genDb; if(v) v.textContent=genDb+'dB';
-    s.addEventListener('input',e=>{ genDb=parseInt(e.target.value,10); if(v) v.textContent=genDb+'dB';
-      const gl=document.getElementById('genLvl'), gv=document.getElementById('genLvlVal'); if(gl) gl.value=genDb; if(gv) gv.textContent=genDb+'dB';
-      if(genGain) genGain.gain.setTargetAtTime(Math.pow(10,genDb/20),audioCtx.currentTime,0.02);
-    });
-  }
-})();
 document.getElementById('calClose').addEventListener('click',closeModals);
 document.getElementById('calAdd').addEventListener('change',e=>{ if(e.target.files[0]) addCalFromFile(e.target.files[0]); e.target.value=''; });
 document.getElementById('calPasteBtn').addEventListener('click',()=>{
@@ -528,12 +517,12 @@ document.getElementById('calResetBtn').addEventListener('click',()=>{
 });
 
 const modalBg=document.getElementById('modalBg');
-['rtPanel','eqPanel','calPanel','tfPanel','areaPanel','dlyPanel','gainPanel'].forEach(id=>{
+['rtPanel','eqPanel','calPanel','tfPanel','areaPanel','dlyPanel'].forEach(id=>{
   const p=document.getElementById(id); if(p) modalBg.appendChild(p);
 });
 function showModal(p){ closeModals(); p.classList.add('open'); modalBg.classList.add('show'); }
 function closeModals(){
-  ['rtPanel','eqPanel','calPanel','tfPanel','areaPanel','dlyPanel','gainPanel'].forEach(id=>document.getElementById(id).classList.remove('open'));
+  ['rtPanel','eqPanel','calPanel','tfPanel','areaPanel','dlyPanel'].forEach(id=>document.getElementById(id).classList.remove('open'));
   modalBg.classList.remove('show');
 }
 modalBg.addEventListener('click',e=>{ if(e.target===modalBg) closeModals(); });
@@ -1660,15 +1649,14 @@ function draw(){
     else analyser.getFloatTimeDomainData(timeData);
     setGainEl(document.getElementById('eqMicFill'), document.getElementById('eqMicGain'), levelDb(targetData,2048));
   }
-  if(gainPanel.classList.contains('open')){
+  if(typeof genPanel!=='undefined' && genPanel.classList.contains('open')){
     analyser.getFloatTimeDomainData(timeData);
     const micDb=levelDb(timeData,2048);
     setGainEl(document.getElementById('gainMicFill'), document.getElementById('gainMicGain'), micDb);
-    setGainEl(document.getElementById('gainOutFill'), document.getElementById('gainOutGain'), genOn?genDb:-120);
     const tip=document.getElementById('gainTip');
     if(tip){
       let msg, col='var(--dim)';
-      if(!genOn) msg='נגן רעש ורוד כדי לבדוק את הרמות.';
+      if(!genOn) msg='נגן אות כדי לבדוק את הרמות.';
       else if(micDb>=-1){ msg='⚠ קליפ! הורד את גיין המיק\' במיקסר.'; col='#ff6b8b'; }
       else if(micDb>=-8){ msg='חזק — אפשר להוריד מעט גיין מיק\'.'; col='#ffd166'; }
       else if(micDb>=-40){ msg='✓ רמה טובה — אפשר למדוד.'; col='#39d98a'; }
@@ -1950,7 +1938,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v120';
+document.getElementById('ver').textContent='v121';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
@@ -1991,7 +1979,6 @@ const HELP={
   swatches:'צבע האפליקציה — משנה גם את צבע הברים בגרף.',
   helpBtn:'מצב עזרה: רחף על כל כפתור לקבל הסבר.',
   genBtn:'גנרטור אותות: רעש ורוד/לבן, סינוס או סוויפ.\nלמדידה ולכיוונון המערכת.',
-  gainBtn:'בדיקת רמות: לפני מדידה — ודא שהאות\nהיוצא והמיקרופון מכוונים נכון.',
   eqBtn:'מדידת תגובה: חד־ערוצי (מיק\' מול יעד)\nאו דו־ערוצי (מיק\'+רפרנס = TF).',
   calBtn:'כיולי מיקרופון: טען קובץ כיול (REW)\nלתיקון צביעת המיקרופון.',
   dlyBtn:'מדידת דיליי: זמן ההשהיה בין רמקולים.\nיישור סאב/טופ עם רמקול עוגן.',
@@ -2036,8 +2023,6 @@ const HELP={
   rtLevel:'עוצמת המדידה. כוונן לפני שמתחיל.',
   rtRange:'טווח דעיכה נדרש. נמוך יותר = קל\nלמדוד בחדר שקט, פחות מדויק.',
   // בדיקת רמות
-  gainGenBtn:'נגן רעש ורוד לבדיקת הרמות.',
-  gainOutLvl:'עוצמת האות היוצא לבדיקה.',
   tfOverlayHdr:'הצג/הסתר את עקומות המיק\' והרפרנס\nיחד על הגרף הראשי.',
   tfOverlayBtn:'משאיר את עקומות המיק\' והרפרנס על הגרף\nהראשי גם כשהפאנל סגור.',
   combBtn:'בדיקת ביטולי פאזה (comb): מזהה אדוות\nתקופתיות בגרף ומעריך את הפרש הזמן שגורם להן.'
