@@ -356,6 +356,10 @@
       </div>
       <div class="sub" id="eqSub">מיקומים שנמדדו: 0</div>
       <div id="eqPosList" style="display:flex;flex-direction:column;gap:5px;max-height:132px;overflow-y:auto"></div>
+      <div style="border-top:1px solid var(--line);padding-top:8px">
+        <button id="combBtn" class="toggle" style="align-self:center">בדוק ביטולי פאזה (comb)</button>
+        <div id="combResult" style="text-align:center;font-size:12px;margin-top:6px;min-height:18px">—</div>
+      </div>
       <div class="chBar"><span style="min-width:64px">גיין מיק'</span><div class="track"><div class="fill" id="eqMicFill"></div></div><span class="gainLbl" id="eqMicGain">—</span></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
         <button id="eqMeasBtn" class="toggle">מדוד מיקום (5ש')</button>
@@ -425,6 +429,14 @@
       <div class="sub">ערוץ 1 = מיקרופון מדידה · ערוץ 2 = רפרנס מהמיקסר. שלח תוכן/רעש ורוד דרך המערכת, ומדוד.</div>
       <div class="chBar"><span id="tfL1" style="min-width:96px">כניסה 1 → מיק'</span><div class="track"><div class="fill" id="tfMicFill"></div></div><span id="tfMicDb">—</span></div>
       <div class="chBar"><span id="tfL2" style="min-width:96px">כניסה 2 → רפרנס</span><div class="track"><div class="fill" id="tfRefFill"></div></div><span id="tfRefDb">—</span></div>
+      <div style="border-top:1px solid var(--line);margin-top:4px;padding-top:8px">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--dim)"><span>הפוך פאזה</span><span>לא מתואם</span><span>בפאזה</span></div>
+        <div class="track" style="height:14px;position:relative;margin-top:3px">
+          <div id="tfCorrFill" style="position:absolute;top:0;bottom:0;background:var(--accent);border-radius:3px;width:0;right:50%"></div>
+          <div style="position:absolute;top:0;bottom:0;right:50%;width:1px;background:var(--dim);opacity:.5"></div>
+        </div>
+        <div style="text-align:center;font-size:12px;margin-top:4px">קורלציה: <b id="tfCorrVal" style="color:var(--accent)">—</b> <span id="tfCorrTip" style="font-size:10px;color:var(--dim)"></span></div>
+      </div>
       <div id="tfBtns">
         <button class="toggle" id="tfSwapBtn">החלף ערוצים</button>
         <button class="toggle" id="tfMeasBtn">מדוד (6ש')</button>
