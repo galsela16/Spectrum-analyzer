@@ -261,7 +261,7 @@ function genStart(){
 }
 
 function syncInlineGenBtns(){
-  ['eqGenToggleBtn', 'areaGenToggleBtn'].forEach(id=>{
+  ['eqGenToggleBtn', 'areaGenToggleBtn', 'gainGenBtn'].forEach(id=>{
     const b = document.getElementById(id);
     if(b){
       b.classList.toggle('on', genOn && genType==='pink');
@@ -317,7 +317,7 @@ document.getElementById('genFreq').addEventListener('input',e=>applyGenHz(parseF
 document.getElementById('genFreqNum').addEventListener('input',e=>applyGenHz(parseFloat(e.target.value),'num'));
 document.getElementById('genOnBtn').addEventListener('click',()=>{ genOn?genStop():genStart(); });
 
-['eqGenToggleBtn', 'areaGenToggleBtn'].forEach(id=>{
+['eqGenToggleBtn', 'areaGenToggleBtn', 'gainGenBtn'].forEach(id=>{
   const el = document.getElementById(id);
   if(el){
     el.addEventListener('click', function(){
@@ -494,6 +494,17 @@ async function addCalFromFile(file){
 }
 const calPanel=document.getElementById('calPanel');
 document.getElementById('calBtn').addEventListener('click',()=>{ renderCalList(); showModal(calPanel); });
+document.getElementById('gainBtn').addEventListener('click',()=>{ showModal(gainPanel); });
+document.getElementById('gainClose').addEventListener('click',closeModals);
+(function(){
+  const s=document.getElementById('gainOutLvl'), v=document.getElementById('gainOutVal');
+  if(s){ s.value=genDb; if(v) v.textContent=genDb+'dB';
+    s.addEventListener('input',e=>{ genDb=parseInt(e.target.value,10); if(v) v.textContent=genDb+'dB';
+      const gl=document.getElementById('genLvl'), gv=document.getElementById('genLvlVal'); if(gl) gl.value=genDb; if(gv) gv.textContent=genDb+'dB';
+      if(genGain) genGain.gain.setTargetAtTime(Math.pow(10,genDb/20),audioCtx.currentTime,0.02);
+    });
+  }
+})();
 document.getElementById('calClose').addEventListener('click',closeModals);
 document.getElementById('calAdd').addEventListener('change',e=>{ if(e.target.files[0]) addCalFromFile(e.target.files[0]); e.target.value=''; });
 document.getElementById('calPasteBtn').addEventListener('click',()=>{
@@ -513,12 +524,12 @@ document.getElementById('calResetBtn').addEventListener('click',()=>{
 });
 
 const modalBg=document.getElementById('modalBg');
-['rtPanel','eqPanel','calPanel','tfPanel','areaPanel','dlyPanel'].forEach(id=>{
+['rtPanel','eqPanel','calPanel','tfPanel','areaPanel','dlyPanel','gainPanel'].forEach(id=>{
   const p=document.getElementById(id); if(p) modalBg.appendChild(p);
 });
 function showModal(p){ closeModals(); p.classList.add('open'); modalBg.classList.add('show'); }
 function closeModals(){
-  ['rtPanel','eqPanel','calPanel','tfPanel','areaPanel','dlyPanel'].forEach(id=>document.getElementById(id).classList.remove('open'));
+  ['rtPanel','eqPanel','calPanel','tfPanel','areaPanel','dlyPanel','gainPanel'].forEach(id=>document.getElementById(id).classList.remove('open'));
   modalBg.classList.remove('show');
 }
 modalBg.addEventListener('click',e=>{ if(e.target===modalBg) closeModals(); });
@@ -1516,6 +1527,22 @@ function draw(){
     else analyser.getFloatTimeDomainData(timeData);
     setGainEl(document.getElementById('eqMicFill'), document.getElementById('eqMicGain'), levelDb(targetData,2048));
   }
+  if(gainPanel.classList.contains('open')){
+    analyser.getFloatTimeDomainData(timeData);
+    const micDb=levelDb(timeData,2048);
+    setGainEl(document.getElementById('gainMicFill'), document.getElementById('gainMicGain'), micDb);
+    setGainEl(document.getElementById('gainOutFill'), document.getElementById('gainOutGain'), genOn?genDb:-120);
+    const tip=document.getElementById('gainTip');
+    if(tip){
+      let msg, col='var(--dim)';
+      if(!genOn) msg='נגן רעש ורוד כדי לבדוק את הרמות.';
+      else if(micDb>=-1){ msg='⚠ קליפ! הורד את גיין המיק\' במיקסר.'; col='#ff6b8b'; }
+      else if(micDb>=-8){ msg='חזק — אפשר להוריד מעט גיין מיק\'.'; col='#ffd166'; }
+      else if(micDb>=-40){ msg='✓ רמה טובה — אפשר למדוד.'; col='#39d98a'; }
+      else { msg='חלש — הגבר גיין מיק\' במיקסר או העלה עוצמת PA.'; col='#ffd166'; }
+      tip.textContent=msg; tip.style.color=col;
+    }
+  }
   updateLevel();
   const W=cv.clientWidth,H=cv.clientHeight;
   const nyquist=audioCtx.sampleRate/2, bins=floatData.length;
@@ -1761,7 +1788,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v102';
+document.getElementById('ver').textContent='v103';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 function applyAccent(hex){
   document.documentElement.style.setProperty('--accent',hex);
