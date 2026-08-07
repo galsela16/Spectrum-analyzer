@@ -142,6 +142,7 @@
     background:radial-gradient(70% 130% at 50% -10%, rgba(62,166,255,.12), transparent 70%)}
   footer>*{position:relative;z-index:1}
   .ctrl{display:flex;flex-direction:column;gap:6px;flex:1;min-width:110px}
+  .trow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;width:100%}
   .ctrl label{font-size:10px;letter-spacing:1.5px;color:#a8b0bc;text-transform:uppercase;display:flex;justify-content:space-between}
   .ctrl label b{color:var(--accent);font-variant-numeric:tabular-nums;text-shadow:0 0 8px rgba(62,166,255,.5)}
   input[type=range]{-webkit-appearance:none;appearance:none;height:5px;border-radius:5px;outline:none;
@@ -161,7 +162,7 @@
   .tab:hover{border-color:#3a4656;color:#eaf1f8}
   .tab.on{color:#fff;border-color:var(--accent);background:rgba(62,166,255,.16);box-shadow:0 0 16px rgba(62,166,255,.3)}
   .tabpage{flex-basis:100%;display:none;gap:10px;align-items:center;flex-wrap:wrap}
-  .tabpage.active{display:flex}
+  .tabpage.active{display:flex;flex-direction:column;align-items:stretch}
   .seg{display:flex;border:1px solid #2a323d;border-radius:4px;overflow:hidden}
   .seg button{border:none;background:#161b22;color:#c4d0de;font-family:inherit;font-size:12px;
     letter-spacing:.3px;padding:10px 15px;cursor:pointer;transition:.14s;border-inline-start:1px solid #2a323d;font-weight:600}
@@ -544,73 +545,80 @@
     </div>
 
     <div class="tabpage active" data-page="view">
-      <button class="toggle on" id="peakBtn">Peak Hold</button>
-      <button class="toggle" id="avgBtn">מיצוע</button>
-      <button class="toggle" id="freezeBtn">הקפא</button>
-      <button class="toggle on" id="fbBtn">גלאי פידבק</button>
-      <div style="flex-basis:100%;height:0"></div>
-      <div class="ctrl" style="flex:0 0 auto;align-items:flex-start;min-width:auto">
-        <label>מדים</label>
-        <div class="seg" id="meterModeSeg">
-          <button data-m="rms" class="on">RMS (חלק)</button>
-          <button data-m="peak">Peak</button>
+      <div class="trow">
+        <button class="toggle on" id="peakBtn">Peak Hold</button>
+        <button class="toggle" id="avgBtn">מיצוע</button>
+        <button class="toggle" id="freezeBtn">הקפא</button>
+        <button class="toggle on" id="fbBtn">גלאי פידבק</button>
+        <div class="ctrl" style="flex:0 0 auto;align-items:flex-start;min-width:auto">
+          <label>מדים</label>
+          <div class="seg" id="meterModeSeg">
+            <button data-m="rms" class="on">RMS (חלק)</button>
+            <button data-m="peak">Peak</button>
+          </div>
+        </div>
+        <div class="ctrl" style="flex:0 0 auto;align-items:flex-start;min-width:auto">
+          <label>FFT (דיוק ↔ מהירות)</label>
+          <div class="seg" id="fftSeg">
+            <button data-n="8192">מהיר</button>
+            <button data-n="16384">מאוזן</button>
+            <button data-n="32768" class="on">מדויק</button>
+          </div>
         </div>
       </div>
-      <div class="ctrl" style="flex:0 0 auto;align-items:flex-start;min-width:auto">
-        <label>FFT (דיוק ↔ מהירות)</label>
-        <div class="seg" id="fftSeg">
-          <button data-n="8192">מהיר</button>
-          <button data-n="16384">מאוזן</button>
-          <button data-n="32768" class="on">מדויק</button>
+      <div class="trow">
+        <div class="ctrl">
+          <label>רזולוציה <b id="resVal">1/6 אוקטבה</b></label>
+          <input type="range" id="res" min="3" max="24" step="1" value="6">
         </div>
-      </div>
-      <div style="flex-basis:100%;height:0"></div>
-      <div class="ctrl">
-        <label>רזולוציה <b id="resVal">1/6 אוקטבה</b></label>
-        <input type="range" id="res" min="3" max="24" step="1" value="6">
-      </div>
-      <div class="ctrl">
-        <label>החלקה <b id="smoothVal">0.7</b></label>
-        <input type="range" id="smooth" min="0" max="0.92" step="0.02" value="0.7">
-      </div>
-      <div class="ctrl">
-        <label>רגישות פידבק <b id="fbSensVal">בינונית</b></label>
-        <input type="range" id="fbSens" min="6" max="20" step="1" value="12">
+        <div class="ctrl">
+          <label>החלקה <b id="smoothVal">0.7</b></label>
+          <input type="range" id="smooth" min="0" max="0.92" step="0.02" value="0.7">
+        </div>
+        <div class="ctrl">
+          <label>רגישות פידבק <b id="fbSensVal">בינונית</b></label>
+          <input type="range" id="fbSens" min="6" max="20" step="1" value="12">
+        </div>
       </div>
     </div>
 
     <div class="tabpage" data-page="tune">
-      <button class="toggle" id="genBtn">גנרטור</button>
-      <button class="toggle" id="eqBtn">מדידת תגובה</button>
-      <button class="toggle" id="dlyBtn">דיליי</button>
-      <button class="toggle" id="rtBtn">RT60</button>
-      <div style="flex-basis:100%;height:0"></div>
-      <div class="ctrl" style="flex:0 0 auto">
-        <label>יחידת מד</label>
-        <div class="seg" id="unitSeg">
-          <button data-u="SPL" class="on">dB SPL</button>
-          <button data-u="dBFS">dBFS</button>
+      <div class="trow">
+        <button class="toggle" id="genBtn">גנרטור</button>
+        <button class="toggle" id="eqBtn">מדידת תגובה</button>
+        <button class="toggle" id="dlyBtn">דיליי</button>
+        <button class="toggle" id="rtBtn">RT60</button>
+      </div>
+      <div class="trow">
+        <div class="ctrl" style="flex:0 0 auto">
+          <label>יחידת מד</label>
+          <div class="seg" id="unitSeg">
+            <button data-u="SPL" class="on">dB SPL</button>
+            <button data-u="dBFS">dBFS</button>
+          </div>
         </div>
+        <div class="ctrl">
+          <label>רצפת רעש <b id="floorVal">-85dB</b></label>
+          <input type="range" id="floor" min="-100" max="-50" step="1" value="-85">
+        </div>
+        <div class="ctrl">
+          <label>כיול SPL <b id="calVal">+0dB</b></label>
+          <input type="range" id="cal" min="0" max="130" step="1" value="0">
+        </div>
+        <button class="toggle" id="wgtBtn">dBZ</button>
+        <button class="toggle" id="leqBtn">אפס Leq</button>
       </div>
-      <div class="ctrl">
-        <label>רצפת רעש <b id="floorVal">-85dB</b></label>
-        <input type="range" id="floor" min="-100" max="-50" step="1" value="-85">
-      </div>
-      <div class="ctrl">
-        <label>כיול SPL <b id="calVal">+0dB</b></label>
-        <input type="range" id="cal" min="0" max="130" step="1" value="0">
-      </div>
-      <button class="toggle" id="wgtBtn">dBZ</button>
-      <button class="toggle" id="leqBtn">אפס Leq</button>
     </div>
 
     <div class="tabpage" data-page="io">
-      <button class="toggle" id="pngBtn">PNG</button>
-      <button class="toggle" id="csvBtn">CSV</button>
-      <select class="inp" id="inSel" title="מקור קלט"><option>מיקרופון ברירת מחדל</option></select>
-      <select class="inp" id="outSel" title="יציאת פלט (אות הגנרטור)"><option>פלט ברירת מחדל</option></select>
-      <button class="toggle" id="calBtn">כיול מיק'</button>
-      <span id="chCount" class="sub" style="align-self:center;font-size:11px">—</span>
+      <div class="trow">
+        <select class="inp" id="inSel" title="מקור קלט"><option>מיקרופון ברירת מחדל</option></select>
+        <select class="inp" id="outSel" title="יציאת פלט (אות הגנרטור)"><option>פלט ברירת מחדל</option></select>
+        <button class="toggle" id="calBtn">כיול מיק'</button>
+        <span id="chCount" class="sub" style="align-self:center;font-size:11px">—</span>
+        <button class="toggle" id="pngBtn">PNG</button>
+        <button class="toggle" id="csvBtn">CSV</button>
+      </div>
     </div>
   </footer>
 <script src="app.js"></script>
