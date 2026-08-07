@@ -39,7 +39,7 @@ let floatData;
 let timeData, timeDataMeter;
 const GEQ=[20,25,31.5,40,50,63,80,100,125,160,200,250,315,400,500,630,800,1000,
            1250,1600,2000,2500,3150,4000,5000,6300,8000,10000,12500,16000,20000];
-let tfState='idle', tfSwap=false, tfMic=null, tfRef=null, tfDiffSum=null, tfDiffSq=null, tfFrames=0, tfResult=null;
+let tfState='idle', tfSwap=false, tfMic=null, tfRef=null, tfDiffSum=null, tfDiffSq=null, tfFrames=0, tfResult=null, _tfCorr=0;
 let running=false, mode='rta';
 let peakHold=true, fbOn=true, avgOn=false;
 let floorDb=-85, ceilDb=-15;
@@ -57,6 +57,7 @@ let genType='pink', genOn=false, genGain=null, genSrc=null, genOsc=null;
 let genDb=-34, genHz=1000, targetMode='flat';
 let fftSize=32768;   // FFT resolution (accuracy vs speed)
 let _pfx=null;   // per-frame prefix-sum of linear power (perf)
+let _pfxRef=null;   // prefix-sum for the reference overlay
 let genSweepDur=4, sweepTimer=null, sweepStartT=0;
 let pinkComp=false, compChoice=true;
 let rt60State='idle', rt60Samples=[], rt60CutT=0, rtRange=10, rt60Timer=null, rtLevel=-6;
@@ -381,6 +382,7 @@ document.querySelectorAll('#tfModeSeg button').forEach(b=>b.addEventListener('cl
   this.classList.add('on'); tfMode=this.dataset.m; if(tfResult) renderTFList();
 }));
 document.getElementById('eqResetBtn').addEventListener('click',()=>{ eqPositions=[]; eqMarks=null; document.getElementById('eqList').innerHTML=''; document.getElementById('eqPosList').innerHTML=''; updateEqUI(); });
+document.getElementById('combBtn').addEventListener('click',runCombCheck);
 
 function updateEqUI(){
   const meas = measState==='measuring';
@@ -663,6 +665,39 @@ document.getElementById('tfMeasBtn').addEventListener('click',()=>pickSource(tfM
 document.getElementById('tfCsvBtn').addEventListener('click',tfExportCsv);
 
 function chLevel(arr){ let p=0; for(let i=1;i<arr.length;i++) p+=Math.pow(10,arr[i]/10); return 10*Math.log10(p+1e-12); }
+function detectComb(){
+  if(!floatData || !audioCtx) return null;
+  const bins=floatData.length, nyq=audioCtx.sampleRate/2;
+  const loF=200, hiF=8000, M=600;   // resample spectrum to a linear grid (comb is periodic in linear Hz)
+  const grid=new Float64Array(M);
+  for(let i=0;i<M;i++){ const f=loF+(hiF-loF)*i/(M-1); const b=Math.round(f/nyq*bins); grid[i]=floatData[Math.max(0,Math.min(bins-1,b))]; }
+  const W=25, rip=new Float64Array(M);   // detrend → keep only the ripple
+  for(let i=0;i<M;i++){ let s=0,c=0; for(let j=-W;j<=W;j++){const k=i+j; if(k>=0&&k<M){s+=grid[k];c++;}} rip[i]=grid[i]-s/c; }
+  let mean=0; for(let i=0;i<M;i++) mean+=rip[i]; mean/=M; for(let i=0;i<M;i++) rip[i]-=mean;
+  let norm=0; for(let i=0;i<M;i++) norm+=rip[i]*rip[i];
+  if(norm<1e-9) return null;
+  let best={lag:0,val:0};   // autocorrelation → periodicity
+  for(let lag=4;lag<M/2;lag++){ let s=0; for(let i=0;i<M-lag;i++) s+=rip[i]*rip[i+lag]; const v=s/norm; if(v>best.val) best={lag,val:v}; }
+  const dfPerPoint=(hiF-loF)/(M-1);
+  const spacingHz=best.lag*dfPerPoint;
+  const delayMs=spacingHz>0?1000/spacingHz:0;
+  let depth=0; for(let i=0;i<M;i++) depth+=rip[i]*rip[i]; depth=Math.sqrt(depth/M)*2;
+  return {spacingHz, delayMs, strength:best.val, depth};
+}
+function runCombCheck(){
+  const el=document.getElementById('combResult'); if(!el) return;
+  const r=detectComb();
+  if(!r){ el.innerHTML='<span style="color:var(--dim)">אין מספיק אות. נגן רעש ורוד ונסה שוב.</span>'; return; }
+  const detected = r.strength>0.28 && r.depth>1.5;
+  if(detected){
+    const dist=r.delayMs/1000*343;
+    el.innerHTML='⚠ <b style="color:var(--warn)">זוהה ביטול (comb)</b><br>'+
+      '<span style="font-size:11px;color:var(--dim)">מרווח ~'+Math.round(r.spacingHz)+'Hz → הפרש זמן ~'+r.delayMs.toFixed(2)+'ms (~'+dist.toFixed(2)+'מ\').<br>'+
+      'מקור אפשרי: החזר מקיר/רצפה או שני רמקולים לא מיושרים.</span>';
+  } else {
+    el.innerHTML='<b style="color:#39d98a">✓ לא זוהה ביטול משמעותי</b><br><span style="font-size:11px;color:var(--dim)">התגובה חלקה יחסית.</span>';
+  }
+}
 function updateTfLevels(){
   if(!floatDataRef || !analyserRef) return;
   analyser.getFloatTimeDomainData(timeData);
@@ -672,6 +707,23 @@ function updateTfLevels(){
   setGainEl(document.getElementById('tfRefFill'), document.getElementById('tfRefDb'), levelDb(timeDataRef,2048));
   document.getElementById('tfL1').textContent = tfSwap?"כניסה 1 → רפרנס":"כניסה 1 → מיק'";
   document.getElementById('tfL2').textContent = tfSwap?"כניסה 2 → מיק'":"כניסה 2 → רפרנס";
+  // phase correlation (Pearson) between the two channels over the recent window
+  const N=2048, oa=timeData.length-N, ob=timeDataRef.length-N;
+  let sa=0,sb=0,saa=0,sbb=0,sab=0;
+  for(let i=0;i<N;i++){ const x=timeData[oa+i], y=timeDataRef[ob+i]; sa+=x;sb+=y;saa+=x*x;sbb+=y*y;sab+=x*y; }
+  const cov=sab-sa*sb/N, va=saa-sa*sa/N, vb=sbb-sb*sb/N, den=Math.sqrt(va*vb);
+  let r = den>1e-9 ? cov/den : 0;
+  _tfCorr += ((r||0)-_tfCorr)*0.15;   // smooth
+  const fill=document.getElementById('tfCorrFill'), val=document.getElementById('tfCorrVal'), tip=document.getElementById('tfCorrTip');
+  if(fill){
+    const w=Math.abs(_tfCorr)*50;
+    fill.style.width=w+'%';
+    if(_tfCorr>=0){ fill.style.right='50%'; fill.style.left='auto'; } else { fill.style.left='50%'; fill.style.right='auto'; }
+    const col=_tfCorr>0.4?'#39d98a':_tfCorr<-0.2?'#ff6b8b':'#ffd166';
+    fill.style.background=col;
+    if(val){ val.textContent=_tfCorr.toFixed(2); val.style.color=col; }
+    if(tip){ tip.textContent = va<1e-6||vb<1e-6 ? '(אין אות)' : _tfCorr<-0.2?'⚠ פולריות הפוכה?' : _tfCorr>0.6?'✓':' '; }
+  }
 }
 function tfMeasure(){
   if(!running||!analyserRef){ alert('הפעל מיקרופון עם כרטיס קול (input סטריאו).'); return; }
@@ -1675,6 +1727,19 @@ function drawRta(W,H,nyquist,bins,xForFreq){
       ctx.fillStyle='rgba(255,255,255,.85)'; ctx.fillRect(x,py-2,barW,2);
     }
   }
+  if(typeof tfPanel!=='undefined' && tfPanel.classList.contains('open') && floatDataRef && analyserRef){
+    analyserRef.getFloatFrequencyData(floatDataRef);
+    if(!_pfxRef || _pfxRef.length!==bins+1) _pfxRef=new Float64Array(bins+1);
+    { let acc=0; _pfxRef[0]=0; for(let i=0;i<bins;i++){ acc+=Math.pow(10,floatDataRef[i]*0.1); _pfxRef[i+1]=acc; } }
+    const refBandDb=(fLo,fHi)=>{ let lo=Math.floor(fLo/nyquist*bins),hi=Math.ceil(fHi/nyquist*bins); lo=Math.max(0,lo);hi=Math.min(bins-1,hi);if(hi<lo)hi=lo; return 10*Math.log10((_pfxRef[hi+1]-_pfxRef[lo])+1e-12); };
+    ctx.strokeStyle='#ffb020'; ctx.lineWidth=2; ctx.beginPath();
+    for(let b=0;b<BANDS;b++){ const fc=ISO[b]; const rd=refBandDb(fc/R,fc*R); const comp=pinkComp?3*Math.log2(fc/1000):0;
+      const v=norm(rd+comp); const x=b*bw+bw/2, y=plotH-v*plotH; b===0?ctx.moveTo(x,y):ctx.lineTo(x,y); }
+    ctx.stroke();
+    ctx.font='10px monospace'; ctx.textAlign='start';
+    ctx.fillStyle='#ffb020'; ctx.fillText('— '+(tfSwap?"מיק'":'רפרנס'), 8, 13);
+    ctx.fillStyle='rgba('+accentRgb.join(',')+',1)'; ctx.fillText('▮ '+(tfSwap?'רפרנס':"מיק'"), 8, 26);
+  }
   if(snapCurve && snapCurve.length===BANDS){
     ctx.strokeStyle='#ffb020'; ctx.lineWidth=2; ctx.beginPath();
     for(let b=0;b<BANDS;b++){
@@ -1863,7 +1928,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v113';
+document.getElementById('ver').textContent='v115';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
@@ -1950,7 +2015,8 @@ const HELP={
   rtRange:'טווח דעיכה נדרש. נמוך יותר = קל\nלמדוד בחדר שקט, פחות מדויק.',
   // בדיקת רמות
   gainGenBtn:'נגן רעש ורוד לבדיקת הרמות.',
-  gainOutLvl:'עוצמת האות היוצא לבדיקה.'
+  gainOutLvl:'עוצמת האות היוצא לבדיקה.',
+  combBtn:'בדיקת ביטולי פאזה (comb): מזהה אדוות\nתקופתיות בגרף ומעריך את הפרש הזמן שגורם להן.'
 };
 let helpMode=false;
 const helpTip=document.createElement('div'); helpTip.id='helpTip'; document.body.appendChild(helpTip);
