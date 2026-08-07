@@ -4,7 +4,7 @@ let viewMin=20, viewMax=20000;
 let curBpo=6;
 let ISO=[], BANDS=0, R=1;
 let peaks=[];
-let avgBuf=[], snapCurve=null, lastV=[], lastBandDb=[];
+let avgBuf=[], snapCurve=null, lastV=[], lastBandDb=[], frozen=false;
 function buildBands(bpo){
   curBpo=bpo;
   ISO=[];
@@ -16,7 +16,7 @@ function buildBands(bpo){
   avgBuf=new Array(BANDS).fill(0);
   lastV=new Array(BANDS).fill(0);
   lastBandDb=new Array(BANDS).fill(-120);
-  snapCurve=null;
+  snapCurve=null; frozen=false;
   const clr=document.getElementById('freezeBtn'); if(clr){clr.classList.remove('on');clr.textContent='הקפא';}
 }
 buildBands(6);
@@ -124,8 +124,9 @@ document.getElementById('avgBtn').addEventListener('click',function(){
   avgOn=!avgOn; this.classList.toggle('on',avgOn); if(avgOn) avgBuf.fill(0);
 });
 document.getElementById('freezeBtn').addEventListener('click',function(){
-  if(snapCurve){ snapCurve=null; this.classList.remove('on'); this.textContent='הקפא'; }
-  else { snapCurve=lastV.slice(); this.classList.add('on'); this.textContent='נקה הקפאה'; }
+  frozen=!frozen;
+  if(frozen){ snapCurve=lastV.slice(); this.classList.add('on'); this.textContent='הפשר תצוגה'; }
+  else { snapCurve=null; this.classList.remove('on'); this.textContent='הקפא'; }
 });
 document.getElementById('pngBtn').addEventListener('click',exportPNG);
 document.getElementById('csvBtn').addEventListener('click',exportCSV);
@@ -1359,7 +1360,7 @@ function resetSession(){
   if(audioCtx && audioCtx.state==='suspended') audioCtx.resume();
   const tr = stream && stream.getAudioTracks && stream.getAudioTracks()[0];
   if(running && (!tr || tr.readyState==='ended')){ stop(); start(); return; }
-  peaks.fill(0); avgBuf.fill(0); snapCurve=null;
+  peaks.fill(0); avgBuf.fill(0); snapCurve=null; frozen=false;
   const fz=document.getElementById('freezeBtn'); fz.classList.remove('on'); fz.textContent='הקפא';
   eqPositions=[]; eqMarks=null; eqCurveData=null; lastEqCorr=null;
   { const pl=document.getElementById('eqPosList'); if(pl) pl.innerHTML=''; const el=document.getElementById('eqList'); if(el) el.innerHTML=''; }
@@ -1617,7 +1618,7 @@ function draw(){
   if(now-_lastDraw < 32) return;   // ~30fps cap — halves the render/compute load, imperceptible on an audio graph
   _lastDraw=now;
   updateSignalTint();
-  analyser.getFloatFrequencyData(floatData);
+  if(!frozen) analyser.getFloatFrequencyData(floatData);   // frozen → hold the last spectrum static
   if(measState==='measuring' && measAccum){
     if(eqCh===2 && analyserRef) analyserRef.getFloatFrequencyData(floatDataRef);
     const srcData = (eqCh === 2 && floatDataRef) ? floatDataRef : floatData;
@@ -1741,7 +1742,7 @@ function drawRta(W,H,nyquist,bins,xForFreq){
   }
   if(tfOpen){
     // reference curve points
-    analyserRef.getFloatFrequencyData(floatDataRef);
+    if(!frozen) analyserRef.getFloatFrequencyData(floatDataRef);
     if(!_pfxRef || _pfxRef.length!==bins+1) _pfxRef=new Float64Array(bins+1);
     { let acc=0; _pfxRef[0]=0; for(let i=0;i<bins;i++){ acc+=Math.pow(10,floatDataRef[i]*0.1); _pfxRef[i+1]=acc; } }
     const refBandDb=(fLo,fHi)=>{ let lo=Math.floor(fLo/nyquist*bins),hi=Math.ceil(fHi/nyquist*bins); lo=Math.max(0,lo);hi=Math.min(bins-1,hi);if(hi<lo)hi=lo; return 10*Math.log10((_pfxRef[hi+1]-_pfxRef[lo])+1e-12); };
@@ -1949,7 +1950,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v119';
+document.getElementById('ver').textContent='v120';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
