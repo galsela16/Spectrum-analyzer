@@ -1863,7 +1863,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v111';
+document.getElementById('ver').textContent='v112';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
@@ -1901,16 +1901,20 @@ function updateSignalTint(){
 const HELP={
   mRta:'תצוגת ספקטרום — עוצמה לפי תדר, בזמן אמת.',
   mSpec:'ווטרפול — הספקטרום לאורך זמן.',
+  swatches:'צבע האפליקציה — משנה גם את צבע הברים בגרף.',
+  helpBtn:'מצב עזרה: רחף על כל כפתור לקבל הסבר.',
   genBtn:'גנרטור אותות: רעש ורוד/לבן, סינוס או סוויפ.\nלמדידה ולכיוונון המערכת.',
-  eqBtn:'מדידת תגובה: חד־ערוצי או דו־ערוצי (TF).',
+  gainBtn:'בדיקת רמות: לפני מדידה — ודא שהאות\nהיוצא והמיקרופון מכוונים נכון.',
+  eqBtn:'מדידת תגובה: חד־ערוצי (מיק\' מול יעד)\nאו דו־ערוצי (מיק\'+רפרנס = TF).',
   calBtn:'כיולי מיקרופון: טען קובץ כיול (REW)\nלתיקון צביעת המיקרופון.',
-  tfBtn:'Transfer Function דו־ערוצי:\nמיק\' מול רפרנס מהמיקסר → תיקון EQ.',
-  dlyBtn:'מדידת דיליי דו־ערוצי: זמן ההשהיה\nבין רמקולים (סאב מול טופ).',
-  rtBtn:'RT60: מדידת זמן הדהוד החדר.\nדורש עוצמה וחדר אמיתי.',
+  dlyBtn:'מדידת דיליי: זמן ההשהיה בין רמקולים.\nיישור סאב/טופ עם רמקול עוגן.',
+  rtBtn:'RT60: מדידת זמן הדהוד החדר,\nלפי רצועות אוקטבה. דורש חדר אמיתי.',
   wgtBtn:'שקלול המד: dBZ (טכני), dBA (חוק/אוזן),\ndBC (עם בס). לחיצה מחליפה.',
   leqBtn:'אפס Leq: מתחיל מדידת ממוצע עוצמה\nמחדש מהרגע הזה.',
   peakBtn:'Peak Hold: משאיר את השיאים על המסך.',
   avgBtn:'מיצוע: מייצב את התצוגה לאורך זמן.',
+  meterModeSeg:'מדים: RMS (ממוצע חלק) או Peak (שיאים).\nמשפיע על כל המדים.',
+  fftSeg:'FFT: דיוק מול מהירות. מדויק = בס טוב יותר,\nמהיר = ביצועים טובים יותר.',
   freezeBtn:'הקפא: שומר עקומה להשוואה,\nעם סימון תדרי הפיקים.',
   fbBtn:'גלאי פידבק: מזהה תדרים שמתחילים\nלשרוק, עם המלצת חיתוך.',
   stopBtn:'אפס סשן: מנקה מדידות והגדרות\nבלי לכבות את המיקרופון.',
@@ -1922,10 +1926,31 @@ const HELP={
   floor:'רצפת רעש: הסף התחתון של התצוגה.',
   cal:'כיול SPL: התאם למד ייחוס\nכדי לקבל dB SPL אמיתי.',
   genLvl:'עוצמת אות הגנרטור. התחל נמוך!',
-  genFreq:'תדר הסינוס.',
+  genFreq:'תדר הסינוס (סליידר).',
+  genFreqNum:'הקלד תדר סינוס מדויק.',
   genSweep:'משך מחזור הסוויפ.',
   smooth:'החלקה: מרכך קפיצות בתצוגה.',
-  res:'רזולוציה: פסים לאוקטבה.'
+  res:'רזולוציה: פסים לאוקטבה (1/3 עד 1/24).',
+  // מדידת תגובה
+  respModeSeg:'חד־ערוצי (מיק\' מול יעד) או\nדו־ערוצי (מיק\'+רפרנס = TF אמיתי).',
+  eqModeSeg:'תצוגת התיקון: גרפיק (31 פסים)\nאו פרמטרי (תדר/גיין/Q).',
+  tfModeSeg:'תצוגת התיקון: גרפיק או פרמטרי.',
+  tgtSeg:'עקומת יעד: שטוח (ניטרלי) או\nHouse (בס מעט מוגבר, טרבל יורד).',
+  eqMeasBtn:'מדוד מיקום חדש (5ש\'). מדוד כמה\nמיקומים — התיקון הוא הממוצע.',
+  eqResetBtn:'נקה את כל המיקומים.',
+  areaMeasBtn:'מדוד אזור חדש (עד 4). להשוואת\nצדדים שונים של המעגל.',
+  areaEqBtn:'חשב תיקון EQ ממוצע לכל האזורים.',
+  // דיליי
+  dlyMeasBtn:'מדוד דיליי בודד (מיק\' מול רפרנס).',
+  dlyCountSeg:'מספר רמקולים ליישור (2/4/6).',
+  dlyReset:'נקה את מדידות הדיליי.',
+  // RT60
+  rtRunBtn:'התחל מדידת RT60 (מנגן רעש ופוסק).',
+  rtLevel:'עוצמת המדידה. כוונן לפני שמתחיל.',
+  rtRange:'טווח דעיכה נדרש. נמוך יותר = קל\nלמדוד בחדר שקט, פחות מדויק.',
+  // בדיקת רמות
+  gainGenBtn:'נגן רעש ורוד לבדיקת הרמות.',
+  gainOutLvl:'עוצמת האות היוצא לבדיקה.'
 };
 let helpMode=false;
 const helpTip=document.createElement('div'); helpTip.id='helpTip'; document.body.appendChild(helpTip);
@@ -1935,7 +1960,10 @@ document.getElementById('helpBtn').addEventListener('click',function(){
 });
 document.addEventListener('mousemove',e=>{
   if(!helpMode) return;
-  const el=e.target.closest('[id]'); const txt=el?HELP[el.id]:null;
+  // resolve by id first, then by a known class (controls that repeat across panels, e.g. tgtSeg)
+  let txt=null;
+  const idEl=e.target.closest('[id]'); if(idEl) txt=HELP[idEl.id];
+  if(!txt){ const cEl=e.target.closest('.tgtSeg'); if(cEl) txt=HELP.tgtSeg; }
   if(txt){ helpTip.textContent=txt; helpTip.style.whiteSpace='pre-line'; helpTip.style.display='block';
     let x=Math.min(e.clientX+14, innerWidth-helpTip.offsetWidth-10), y=Math.min(e.clientY+16, innerHeight-helpTip.offsetHeight-10);
     helpTip.style.left=x+'px'; helpTip.style.top=y+'px';
