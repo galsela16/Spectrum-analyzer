@@ -307,7 +307,7 @@
         </div>
       </div>
       <div class="sub" id="eqSub">מיקומים שנמדדו: 0</div>
-      <div id="eqPosList" style="display:flex;flex-direction:column;gap:5px"></div>
+      <div id="eqPosList" style="display:flex;flex-direction:column;gap:5px;max-height:132px;overflow-y:auto"></div>
       <div class="chBar"><span style="min-width:64px">גיין מיק'</span><div class="track"><div class="fill" id="eqMicFill"></div></div><span class="gainLbl" id="eqMicGain">—</span></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
         <button id="eqMeasBtn" class="toggle">מדוד מיקום (5ש')</button>
@@ -349,7 +349,7 @@
           <button data-t="house">House</button>
         </div>
       </div>
-      <div id="areaList"></div>
+      <div id="areaList" style="max-height:132px;overflow-y:auto"></div>
       <button id="areaEqBtn" class="toggle" style="align-self:center">הצע EQ ממוצע לכל האזורים</button>
       <canvas id="areaEqCanvas" style="width:100%;height:150px;background:#0b0f16;border:1px solid var(--line);border-radius:4px;display:none"></canvas>
       <div id="areaEqList"></div>
@@ -419,7 +419,7 @@
           </div>
         </div>
         <div class="sub" style="margin-bottom:8px">מדוד כל רמקול בתורו <b>מאותו מיקום מיקרופון</b>. בחר רמקול עוגן (◎), והאפליקציה תחשב כמה דיליי להוסיף לכל אחד.</div>
-        <div id="dlySpk" style="display:flex;flex-direction:column;gap:6px"></div>
+        <div id="dlySpk" style="display:flex;flex-direction:column;gap:6px;max-height:230px;overflow-y:auto"></div>
       </div>
       <div style="display:flex;gap:8px;justify-content:center">
         <button id="dlyReset" class="toggle">אפס דיליי</button>
