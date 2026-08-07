@@ -274,8 +274,8 @@ function syncInlineGenBtns(){
 
 function syncPinkComp(){
   const wrap=document.getElementById('genCompWrap');
-  if(wrap) wrap.style.display = (genType==='pink') ? 'flex' : 'none';
-  pinkComp = (genOn && genType==='pink' && compChoice);
+  if(wrap) wrap.style.display='none';   // power-summed bands already show pink flat — comp is unneeded and was misleading
+  pinkComp = false;
 }
 function genApplyLevel(){
   if(genGain){ genGain.gain.setTargetAtTime(Math.pow(10,genDb/20),audioCtx.currentTime,0.1); }
@@ -292,7 +292,7 @@ document.querySelectorAll('#genType button').forEach(b=>b.addEventListener('clic
   this.classList.add('on'); genType=this.dataset.t;
   document.getElementById('genFreqWrap').style.display = genType==='sine'?'flex':'none';
   document.getElementById('genSweepWrap').style.display = genType==='sweep'?'flex':'none';
-  document.getElementById('genCompWrap').style.display = genType==='pink'?'flex':'none';
+  document.getElementById('genCompWrap').style.display = 'none';
   if(genOn) genStart();
   else syncPinkComp();
 }));
@@ -1949,7 +1949,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v118';
+document.getElementById('ver').textContent='v119';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
