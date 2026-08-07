@@ -1667,7 +1667,7 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     if(v>peakVal){peakVal=v;peakBand=b;}
     const x=b*bw+gap/2, barW=bw-gap;
     const barH=v*plotH, y=plotH-barH;
-    let col= v<0.85?'rgba(62,166,255,'+(0.4+v).toFixed(2)+')' : '#ff3b6b';
+    let col= v<0.85?'rgba('+accentRgb[0]+','+accentRgb[1]+','+accentRgb[2]+','+(0.4+v).toFixed(2)+')' : '#ff3b6b';
     ctx.fillStyle=col; ctx.fillRect(x,y,barW,barH);
     if(peakHold){
       if(v>=peaks[b]) peaks[b]=v; else peaks[b]=Math.max(0,peaks[b]-0.005);
@@ -1863,11 +1863,14 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v110';
+document.getElementById('ver').textContent='v111';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
+let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
   document.documentElement.style.setProperty('--accent',hex);
   document.documentElement.style.setProperty('--amber',hex);
+  const m=/^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex);
+  if(m) accentRgb=[parseInt(m[1],16),parseInt(m[2],16),parseInt(m[3],16)];
   try{ localStorage.setItem('rta_accent',hex); }catch(_){}
 }
 (function initAccent(){
