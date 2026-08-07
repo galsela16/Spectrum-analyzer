@@ -463,8 +463,8 @@ function renderCalList(){
 function parseCalText(text, fname){
   text=String(text||'').replace(/^\uFEFF/,'');
   const F=[],G=[];
-  const numRe='([+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)';
-  const lineRe=new RegExp('^\s*'+numRe+'[\s,;\t]+'+numRe);
+  // freq  gain  (optional extra columns) — separated by space/tab/comma/semicolon
+  const lineRe=/^([+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)[\s,;]+([+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/;
   text.split(/\r?\n/).forEach(line=>{
     const m=line.trim().match(lineRe);
     if(m){ const f=parseFloat(m[1]), g=parseFloat(m[2]);
@@ -1863,7 +1863,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v112';
+document.getElementById('ver').textContent='v113';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
