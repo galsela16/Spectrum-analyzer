@@ -1543,6 +1543,10 @@ function draw(){
       tip.textContent=msg; tip.style.color=col;
     }
   }
+  if(rtPanel.classList.contains('open')){
+    analyser.getFloatTimeDomainData(timeData);
+    setGainEl(document.getElementById('rtLvlFill'), document.getElementById('rtLvlGain'), levelDb(timeData,2048));
+  }
   updateLevel();
   const W=cv.clientWidth,H=cv.clientHeight;
   const nyquist=audioCtx.sampleRate/2, bins=floatData.length;
@@ -1788,7 +1792,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v104';
+document.getElementById('ver').textContent='v105';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 function applyAccent(hex){
   document.documentElement.style.setProperty('--accent',hex);
