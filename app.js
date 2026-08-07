@@ -1707,7 +1707,9 @@ function drawRta(W,H,nyquist,bins,xForFreq){
   [0.25,0.5,0.75].forEach(p=>{ctx.globalAlpha=.3;ctx.strokeStyle='#2b3646';ctx.beginPath();ctx.moveTo(0,plotH*p);ctx.lineTo(W,plotH*p);ctx.stroke();ctx.globalAlpha=1;});
 
   const bw=W/BANDS, gap=Math.max(0.5,bw*0.12);
+  const tfOpen = (typeof tfPanel!=='undefined' && tfPanel.classList.contains('open') && floatDataRef && analyserRef);
   let peakBand=-1,peakVal=0;
+  const micPts=[];
   for(let b=0;b<BANDS;b++){
     const fc=ISO[b];
     const rawDb=bandPowDb(fc/R,fc*R);
@@ -1717,6 +1719,7 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     if(avgOn){ avgBuf[b]=avgBuf[b]*0.9+v*0.1; v=avgBuf[b]; } else { avgBuf[b]=v; }
     lastV[b]=v;
     if(v>peakVal){peakVal=v;peakBand=b;}
+    if(tfOpen){ micPts.push([b*bw+bw/2, plotH - v*plotH]); continue; }
     const x=b*bw+gap/2, barW=bw-gap;
     const barH=v*plotH, y=plotH-barH;
     let col= v<0.85?'rgba('+accentRgb[0]+','+accentRgb[1]+','+accentRgb[2]+','+(0.4+v).toFixed(2)+')' : '#ff3b6b';
@@ -1727,18 +1730,27 @@ function drawRta(W,H,nyquist,bins,xForFreq){
       ctx.fillStyle='rgba(255,255,255,.85)'; ctx.fillRect(x,py-2,barW,2);
     }
   }
-  if(typeof tfPanel!=='undefined' && tfPanel.classList.contains('open') && floatDataRef && analyserRef){
+  if(tfOpen){
+    // reference curve points
     analyserRef.getFloatFrequencyData(floatDataRef);
     if(!_pfxRef || _pfxRef.length!==bins+1) _pfxRef=new Float64Array(bins+1);
     { let acc=0; _pfxRef[0]=0; for(let i=0;i<bins;i++){ acc+=Math.pow(10,floatDataRef[i]*0.1); _pfxRef[i+1]=acc; } }
     const refBandDb=(fLo,fHi)=>{ let lo=Math.floor(fLo/nyquist*bins),hi=Math.ceil(fHi/nyquist*bins); lo=Math.max(0,lo);hi=Math.min(bins-1,hi);if(hi<lo)hi=lo; return 10*Math.log10((_pfxRef[hi+1]-_pfxRef[lo])+1e-12); };
-    ctx.strokeStyle='#ffb020'; ctx.lineWidth=2; ctx.beginPath();
+    const refPts=[];
     for(let b=0;b<BANDS;b++){ const fc=ISO[b]; const rd=refBandDb(fc/R,fc*R); const comp=pinkComp?3*Math.log2(fc/1000):0;
-      const v=norm(rd+comp); const x=b*bw+bw/2, y=plotH-v*plotH; b===0?ctx.moveTo(x,y):ctx.lineTo(x,y); }
-    ctx.stroke();
-    ctx.font='10px monospace'; ctx.textAlign='start';
-    ctx.fillStyle='#ffb020'; ctx.fillText('— '+(tfSwap?"מיק'":'רפרנס'), 8, 13);
-    ctx.fillStyle='rgba('+accentRgb.join(',')+',1)'; ctx.fillText('▮ '+(tfSwap?'רפרנס':"מיק'"), 8, 26);
+      refPts.push([b*bw+bw/2, plotH - norm(rd+comp)*plotH]); }
+    // mic: filled area + line (accent color)
+    ctx.beginPath(); micPts.forEach(([x,y],i)=> i?ctx.lineTo(x,y):ctx.moveTo(x,y)); ctx.lineTo(micPts[BANDS-1][0],plotH); ctx.lineTo(micPts[0][0],plotH); ctx.closePath();
+    ctx.fillStyle='rgba('+accentRgb.join(',')+',0.13)'; ctx.fill();
+    ctx.beginPath(); micPts.forEach(([x,y],i)=> i?ctx.lineTo(x,y):ctx.moveTo(x,y));
+    ctx.strokeStyle='rgb('+accentRgb.join(',')+')'; ctx.lineWidth=2.5; ctx.lineJoin='round'; ctx.stroke();
+    // reference: line (amber)
+    ctx.beginPath(); refPts.forEach(([x,y],i)=> i?ctx.lineTo(x,y):ctx.moveTo(x,y));
+    ctx.strokeStyle='#ffb020'; ctx.lineWidth=2.5; ctx.lineJoin='round'; ctx.stroke();
+    // legend
+    ctx.font='11px monospace'; ctx.textAlign='start';
+    ctx.fillStyle='rgb('+accentRgb.join(',')+')'; ctx.fillText('— '+(tfSwap?'רפרנס':"מיקרופון"), 10, 14);
+    ctx.fillStyle='#ffb020'; ctx.fillText('— '+(tfSwap?"מיקרופון":'רפרנס'), 10, 28);
   }
   if(snapCurve && snapCurve.length===BANDS){
     ctx.strokeStyle='#ffb020'; ctx.lineWidth=2; ctx.beginPath();
@@ -1928,7 +1940,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v115';
+document.getElementById('ver').textContent='v116';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
