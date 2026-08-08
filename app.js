@@ -722,12 +722,27 @@ function updateTfLevels(){
   setGainEl(document.getElementById('tfRefFill'), document.getElementById('tfRefDb'), levelDb(timeDataRef,2048));
   document.getElementById('tfL1').textContent = tfSwap?"כניסה 1 → רפרנס":"כניסה 1 → מיק'";
   document.getElementById('tfL2').textContent = tfSwap?"כניסה 2 → מיק'":"כניסה 2 → רפרנס";
-  // phase correlation (Pearson) between the two channels over the recent window
-  const N=2048, oa=timeData.length-N, ob=timeDataRef.length-N;
-  let sa=0,sb=0,saa=0,sbb=0,sab=0;
-  for(let i=0;i<N;i++){ const x=timeData[oa+i], y=timeDataRef[ob+i]; sa+=x;sb+=y;saa+=x*x;sbb+=y*y;sab+=x*y; }
-  const cov=sab-sa*sb/N, va=saa-sa*sa/N, vb=sbb-sb*sb/N, den=Math.sqrt(va*vb);
-  let r = den>1e-9 ? cov/den : 0;
+  // Phase correlation between mic and reference. The mic always lags the reference by
+  // the acoustic flight time, and even a fraction of a millisecond de-correlates the
+  // two completely — so we scan backwards through the reference for the best alignment.
+  // Without this the meter reads ~0 at any real mic distance and can never show polarity.
+  const N=1024, maxLag=Math.min(4800, timeDataRef.length-N-1);   // up to ~100ms @48k (~34m)
+  const oa=timeData.length-N;
+  let bestAbs=0, r=0, bestLag=0;
+  const corrAt=(ob)=>{
+    let sa=0,sb=0,saa=0,sbb=0,sab=0;
+    for(let i=0;i<N;i++){ const x=timeData[oa+i], y=timeDataRef[ob+i]; sa+=x;sb+=y;saa+=x*x;sbb+=y*y;sab+=x*y; }
+    const cov=sab-sa*sb/N, va=saa-sa*sa/N, vb=sbb-sb*sb/N, den=Math.sqrt(va*vb);
+    return den>1e-9 ? cov/den : 0;
+  };
+  for(let lag=0; lag<=maxLag; lag+=4){          // coarse scan
+    const ob=timeDataRef.length-N-lag; if(ob<0) break;
+    const c=corrAt(ob); if(Math.abs(c)>bestAbs){ bestAbs=Math.abs(c); r=c; bestLag=lag; }
+  }
+  for(let lag=Math.max(0,bestLag-6); lag<=Math.min(maxLag,bestLag+6); lag++){   // refine
+    const ob=timeDataRef.length-N-lag; if(ob<0) continue;
+    const c=corrAt(ob); if(Math.abs(c)>bestAbs){ bestAbs=Math.abs(c); r=c; }
+  }
   _tfCorr += ((r||0)-_tfCorr)*0.15;   // smooth
   const fill=document.getElementById('tfCorrFill'), val=document.getElementById('tfCorrVal'), tip=document.getElementById('tfCorrTip');
   if(fill){
@@ -1965,7 +1980,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v137';
+document.getElementById('ver').textContent='v138';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
