@@ -17,6 +17,8 @@ function buildBands(bpo){
   lastV=new Array(BANDS).fill(0);
   lastBandDb=new Array(BANDS).fill(-120);
   snapCurve=null; frozen=false;
+  if(typeof refCurve!=="undefined"){ refCurve=null;
+    const rb=document.getElementById("refCurveBtn"); if(rb){ rb.classList.remove("on"); rb.textContent="שמור כ״לפני״"; } }
   const clr=document.getElementById('freezeBtn'); if(clr){clr.classList.remove('on');clr.textContent='הקפא';}
 }
 buildBands(6);
@@ -351,6 +353,7 @@ document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',function
 }));
 
 const eqPanel=document.getElementById('eqPanel');
+const savePanel=document.getElementById('savePanel');
 document.getElementById('eqClose').addEventListener('click',closeModals);
 document.getElementById('eqBtn').addEventListener('click',()=>{ showModal(eqPanel); updateEqUI(); });
 // unified response tool: single-channel (spatial) ↔ dual-channel (TF)
@@ -517,7 +520,7 @@ document.getElementById('calResetBtn').addEventListener('click',()=>{
 });
 
 const modalBg=document.getElementById('modalBg');
-['rtPanel','eqPanel','calPanel','tfPanel','areaPanel','dlyPanel'].forEach(id=>{
+['rtPanel','eqPanel','calPanel','tfPanel','areaPanel','dlyPanel','savePanel'].forEach(id=>{
   const p=document.getElementById(id); if(p) modalBg.appendChild(p);
 });
 function showModal(p){ closeModals(); p.classList.add('open'); modalBg.classList.add('show'); }
@@ -531,7 +534,7 @@ function abortRT60(){
 }
 function closeModals(){
   abortRT60();   // don't leave a measurement (and the generator) running in the background
-  ['rtPanel','eqPanel','calPanel','tfPanel','areaPanel','dlyPanel'].forEach(id=>document.getElementById(id).classList.remove('open'));
+  ['rtPanel','eqPanel','calPanel','tfPanel','areaPanel','dlyPanel','savePanel'].forEach(id=>document.getElementById(id).classList.remove('open'));
   modalBg.classList.remove('show');
 }
 modalBg.addEventListener('click',e=>{ if(e.target===modalBg) closeModals(); });
@@ -1793,6 +1796,13 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     ctx.fillStyle='rgb('+accentRgb.join(',')+')'; ctx.fillText('— '+(tfSwap?'רפרנס':"מיקרופון"), 10, 14);
     ctx.fillStyle='#ffb020'; ctx.fillText('— '+(tfSwap?"מיקרופון":'רפרנס'), 10, 28);
   }
+  if(refCurve && refCurve.v && refCurve.bands===BANDS){
+    ctx.strokeStyle='#b57bff'; ctx.lineWidth=2; ctx.setLineDash([5,4]); ctx.beginPath();
+    for(let b=0;b<BANDS;b++){ const x=b*bw+bw/2, yy=plotH-refCurve.v[b]*plotH; b===0?ctx.moveTo(x,yy):ctx.lineTo(x,yy); }
+    ctx.stroke(); ctx.setLineDash([]);
+    ctx.fillStyle='#b57bff'; ctx.font='11px monospace'; ctx.textAlign='start';
+    ctx.fillText('- - לפני', 10, tfOpen?42:14);
+  }
   if(snapCurve && snapCurve.length===BANDS){
     ctx.strokeStyle='#ffb020'; ctx.lineWidth=2; ctx.beginPath();
     for(let b=0;b<BANDS;b++){
@@ -1980,7 +1990,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v138';
+document.getElementById('ver').textContent='v139';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
@@ -1991,6 +2001,78 @@ function applyAccent(hex){
   try{ localStorage.setItem('rta_accent',hex); }catch(_){}
 }
 function lsGet(k){ try{ return localStorage.getItem(k); }catch(_){ return null; } }
+// ---- before/after: keep a reference curve of the response prior to EQ changes ----
+let refCurve=null;
+document.getElementById('refCurveBtn').addEventListener('click',function(){
+  if(refCurve){ refCurve=null; this.classList.remove('on'); this.textContent='שמור כ״לפני״'; return; }
+  if(!running || !lastV.length){ alert('הפעל מיקרופון ונגן אות לפני שמירת עקומת ייחוס.'); return; }
+  refCurve={ v:lastV.slice(), bands:BANDS };
+  this.classList.add('on'); this.textContent='נקה ״לפני״';
+});
+
+// ---- saved measurements ----
+const SAVE_KEY='rta_saves';
+let saves=[];
+function loadSaves(){ try{ const r=lsGet(SAVE_KEY); saves=r?JSON.parse(r):[]; }catch(_){ saves=[]; } }
+function persistSaves(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(saves)); }catch(_){ alert('לא ניתן לשמור (אחסון מלא או חסום).'); } }
+function snapshotState(name){
+  return {
+    id:'s'+Date.now(), name:name, date:new Date().toISOString().slice(0,10),
+    target:targetMode,
+    positions:eqPositions.map(p=>({name:p.name, data:Array.from(p.data)})),
+    areas:areas.map(a=>({name:a.name, color:a.color, db:Array.from(a.db), show:a.show})),
+    speakers:dlySpeakers.map(s=>({name:s.name, ms:s.ms})),
+    anchor:dlyAnchor,
+    calName: micCal ? (micCalList.find(c=>c.id===activeCalId)||{}).name||null : null
+  };
+}
+function renderSaveList(){
+  const box=document.getElementById('saveList'); if(!box) return;
+  if(!saves.length){ box.innerHTML='<div class="sub">אין מדידות שמורות עדיין.</div>'; return; }
+  box.innerHTML=saves.map(s=>{
+    const bits=[];
+    if(s.positions&&s.positions.length) bits.push(s.positions.length+' מיקומים');
+    if(s.areas&&s.areas.length) bits.push(s.areas.length+' אזורים');
+    if(s.speakers&&s.speakers.some(x=>x.ms!=null)) bits.push('דיליי');
+    return '<div class="saveRow"><span class="nm" title="'+s.name.replace(/"/g,'&quot;')+'">'+s.name+
+      '</span><span class="meta">'+s.date+(bits.length?' · '+bits.join(' · '):'')+'</span>'+
+      '<button data-load="'+s.id+'">טען</button><button data-rm="'+s.id+'">מחק</button></div>';
+  }).join('');
+  box.querySelectorAll('[data-load]').forEach(b=>b.addEventListener('click',()=>loadSave(b.dataset.load)));
+  box.querySelectorAll('[data-rm]').forEach(b=>b.addEventListener('click',()=>{
+    const s=saves.find(x=>x.id===b.dataset.rm);
+    if(!confirm('למחוק את "'+(s?s.name:'')+'"?')) return;
+    saves=saves.filter(x=>x.id!==b.dataset.rm); persistSaves(); renderSaveList();
+  }));
+}
+function loadSave(id){
+  const s=saves.find(x=>x.id===id); if(!s) return;
+  if(measureBusy()){ alert('מדידה פעילה — המתן לסיומה.'); return; }
+  if((eqPositions.length||areas.length) && !confirm('לטעון "'+s.name+'"? המדידות הנוכחיות יוחלפו.')) return;
+  eqPositions=(s.positions||[]).map(p=>({name:p.name, data:Float32Array.from(p.data)}));
+  areas=(s.areas||[]).map(a=>({name:a.name, color:a.color, db:Float32Array.from(a.db), show:a.show!==false}));
+  if(s.speakers&&s.speakers.length){ dlySpeakers=s.speakers.map(x=>({name:x.name, ms:x.ms})); dlyAnchor=s.anchor||0; }
+  if(s.target) setTarget(s.target);
+  renderEqList(); renderDlySpk(); updateEqUI();
+  if(eqPositions.length) computeAndShow();
+  if(areas.length){ renderAreaList(); suggestAreaEQ(); }
+  closeModals();
+  if(s.calName && (!micCal || (micCalList.find(c=>c.id===activeCalId)||{}).name!==s.calName))
+    alert('שים לב: המדידה נשמרה עם כיול "'+s.calName+'". ודא שאותו כיול פעיל.');
+}
+document.getElementById('saveBtn').addEventListener('click',()=>{ renderSaveList(); showModal(savePanel); });
+document.getElementById('saveClose').addEventListener('click',closeModals);
+document.getElementById('saveNowBtn').addEventListener('click',()=>{
+  const inp=document.getElementById('saveName');
+  const name=(inp.value||'').trim();
+  if(!name){ alert('תן שם למדידה.'); inp.focus(); return; }
+  if(!eqPositions.length && !areas.length && !dlySpeakers.some(s=>s.ms!=null)){
+    alert('אין מה לשמור — בצע מדידה קודם.'); return; }
+  saves.unshift(snapshotState(name));
+  if(saves.length>40) saves=saves.slice(0,40);
+  persistSaves(); renderSaveList(); inp.value='';
+});
+loadSaves();
 (function initAccent(){
   const saved=lsGet('rta_accent');
   if(saved){ applyAccent(saved);
@@ -2068,6 +2150,8 @@ const HELP={
   // בדיקת רמות
   tfOverlayHdr:'הצג/הסתר את עקומות המיק\' והרפרנס\nיחד על הגרף הראשי.',
   tfOverlayBtn:'משאיר את עקומות המיק\' והרפרנס על הגרף\nהראשי גם כשהפאנל סגור.',
+  saveBtn:'מדידות שמורות: שמור וטען מדידות\nלפי מקום ותאריך.',
+  refCurveBtn:'שומר את התגובה הנוכחית כעקומת ״לפני״\nכדי להשוות אחרי שינוי EQ.',
   combBtn:'בדיקת ביטולי פאזה (comb): מזהה אדוות\nתקופתיות בגרף ומעריך את הפרש הזמן שגורם להן.'
 };
 let helpMode=false;

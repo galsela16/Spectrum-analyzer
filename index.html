@@ -200,6 +200,20 @@
   #gainClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
     font-size:12px;padding:8px 20px;border-radius:4px;cursor:pointer;align-self:center}
 
+  #savePanel{position:relative;display:none;
+    flex-direction:column;gap:12px;width:min(94%,420px);max-height:calc(100dvh - 32px);overflow:auto;padding:16px 18px;border:1px solid var(--accent);
+    border-radius:6px;background:rgba(13,17,23,.96);box-shadow:0 12px 48px rgba(0,0,0,.8)}
+  #savePanel.open{display:flex}
+  #savePanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
+  #savePanel .sub{font-size:10px;color:var(--dim);letter-spacing:.5px;line-height:1.5}
+  #saveClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
+    font-size:12px;padding:8px 20px;border-radius:4px;cursor:pointer;align-self:center}
+  .saveRow{display:flex;align-items:center;gap:8px;padding:7px 9px;border:1px solid var(--line);border-radius:4px;background:#0c1017;font-size:12px}
+  .saveRow .nm{flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .saveRow .meta{font-size:10px;color:var(--dim)}
+  .saveRow button{border:1px solid var(--line);background:#161b22;color:#c4d0de;font-family:inherit;font-size:11px;padding:4px 8px;border-radius:3px;cursor:pointer}
+  .saveRow button:hover{border-color:var(--accent);color:var(--accent)}
+
   #eqPanel{position:relative;display:none;
     flex-direction:column;gap:12px;width:min(94%,520px);max-height:calc(100dvh - 32px);overflow:auto;padding:16px 18px;border:1px solid var(--accent);
     border-radius:6px;background:rgba(13,17,23,.96);box-shadow:0 12px 48px rgba(0,0,0,.8)}
@@ -332,6 +346,16 @@
       <button id="rtClose">סגור</button>
     </div>
     
+    <div id="savePanel">
+      <h3>מדידות שמורות</h3>
+      <div class="sub">שומר את המיקומים, האזורים, הדיליי והיעד — כדי לחזור למקום ולהשוות.</div>
+      <div style="display:flex;gap:6px">
+        <input id="saveName" placeholder="שם (למשל: אולם הכפר · 15/8)" style="flex:1;background:#0c1017;border:1px solid var(--line);border-radius:4px;color:var(--text);font-family:inherit;font-size:12px;padding:8px">
+        <button id="saveNowBtn" class="toggle">שמור</button>
+      </div>
+      <div id="saveList" style="display:flex;flex-direction:column;gap:5px;max-height:190px;overflow-y:auto"></div>
+      <button id="saveClose">סגור</button>
+    </div>
     <div id="eqPanel">
       <h3>מדידת תגובה</h3>
       <div class="seg respModeSeg" style="align-self:center">
@@ -582,6 +606,8 @@
         <button class="toggle" id="eqBtn">מדידת תגובה</button>
         <button class="toggle" id="dlyBtn">דיליי</button>
         <button class="toggle" id="rtBtn">RT60</button>
+        <button class="toggle" id="saveBtn">מדידות שמורות</button>
+        <button class="toggle" id="refCurveBtn" title="שומר את התגובה הנוכחית כ'לפני' להשוואה">שמור כ״לפני״</button>
       </div>
       <div class="trow">
         <div class="ctrl" style="flex:0 0 auto">
