@@ -394,10 +394,24 @@ function targetDb(f){
 }
 function showGeqDock(title){
   const dock=document.getElementById('geqDock'); if(!dock) return;
-  dock.style.display='block';
+  dock.style.display='block'; syncGeqBtn();
   const t=document.getElementById('geqDockTitle'); if(t&&title) t.textContent=title;
 }
-function hideGeqDock(){ const d=document.getElementById('geqDock'); if(d) d.style.display='none'; }
+function hideGeqDock(){ const d=document.getElementById('geqDock'); if(d) d.style.display='none'; syncGeqBtn(); }
+function syncGeqBtn(){
+  const b=document.getElementById('geqShowBtn'), d=document.getElementById('geqDock');
+  if(b&&d) b.classList.toggle('on', d.style.display!=='none');
+}
+document.getElementById('geqShowBtn').addEventListener('click',function(){
+  const d=document.getElementById('geqDock');
+  if(d.style.display==='none' || !d.style.display){
+    if(!eqCurveData){ alert('אין עדיין תיקון להצגה — בצע מדידת תגובה קודם.'); return; }
+    d.style.display='block'; d.classList.remove('collapsed');
+    document.getElementById('geqDockToggle').textContent='▼';
+    drawGEQ(document.getElementById('eqCurveCanvas'), eqCurveData.freqs, eqCurveData.corr);
+  } else d.style.display='none';
+  syncGeqBtn();
+});
 document.getElementById('geqDockToggle').addEventListener('click',function(){
   const d=document.getElementById('geqDock');
   d.classList.toggle('collapsed');
@@ -2027,7 +2041,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v147';
+document.getElementById('ver').textContent='v148';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
@@ -2188,6 +2202,7 @@ const HELP={
   tfOverlayBtn:'משאיר את עקומות המיק\' והרפרנס על הגרף\nהראשי גם כשהפאנל סגור.',
   saveBtn:'מדידות שמורות: שמור וטען מדידות\nלפי מקום ותאריך.',
   refCurveBtn:'שומר את התגובה הנוכחית כעקומת ״לפני״\nכדי להשוות אחרי שינוי EQ.',
+  geqShowBtn:'הצג/הסתר את תצוגת תיקון ה-EQ\n(בנק הפיידרים מתחת לגרף).',
   combBtn:'בדיקת ביטולי פאזה (comb): מזהה אדוות\nתקופתיות בגרף ומעריך את הפרש הזמן שגורם להן.'
 };
 let helpMode=false;
