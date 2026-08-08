@@ -70,7 +70,6 @@ function db2lin(db){
 let _pfxRef=null;   // prefix-sum for the reference overlay
 let tfOverlay=false;   // keep mic/ref curves on the main graph even when the panel is closed
 let genSweepDur=4, sweepTimer=null, sweepStartT=0;
-let pinkComp=false, compChoice=true;
 let rt60State='idle', rt60Samples=[], rt60CutT=0, rtRange=10, rt60Timer=null, rtLevel=-6;
 let eqMarks=null;
 let eqCurveData=null;
@@ -237,7 +236,6 @@ function genStop(){
   genSrc=null; genOsc=null; genGain=null; genOn=false;
   const btn=document.getElementById('genOnBtn'); if(btn){btn.classList.remove('on'); btn.textContent='▶ הפעל אות';}
   syncInlineGenBtns();
-  syncPinkComp();
 }
 function scheduleSweepCycle(){
   if(!genOn || genType!=='sweep' || !genOsc) return;
@@ -269,7 +267,6 @@ function genStart(){
   genOn=true;
   if(genType==='sweep') scheduleSweepCycle();
   syncInlineGenBtns();
-  syncPinkComp();
   const btn=document.getElementById('genOnBtn'); if(btn){btn.classList.add('on'); btn.textContent='⏹ עצור אות';}
 }
 
@@ -283,11 +280,6 @@ function syncInlineGenBtns(){
   });
 }
 
-function syncPinkComp(){
-  const wrap=document.getElementById('genCompWrap');
-  if(wrap) wrap.style.display='none';   // power-summed bands already show pink flat — comp is unneeded and was misleading
-  pinkComp = false;
-}
 function genApplyLevel(){
   if(genGain){ genGain.gain.setTargetAtTime(Math.pow(10,genDb/20),audioCtx.currentTime,0.1); }
 }
@@ -303,9 +295,7 @@ document.querySelectorAll('#genType button').forEach(b=>b.addEventListener('clic
   this.classList.add('on'); genType=this.dataset.t;
   document.getElementById('genFreqWrap').style.display = genType==='sine'?'flex':'none';
   document.getElementById('genSweepWrap').style.display = genType==='sweep'?'flex':'none';
-  document.getElementById('genCompWrap').style.display = 'none';
   if(genOn) genStart();
-  else syncPinkComp();
 }));
 document.getElementById('genSweep').addEventListener('input',e=>{
   genSweepDur=parseFloat(e.target.value);
@@ -561,7 +551,6 @@ function setGenTypeUI(kind){
   document.querySelectorAll('#genType button').forEach(x=>x.classList.toggle('on', x.dataset.t===kind));
   document.getElementById('genFreqWrap').style.display='none';
   document.getElementById('genSweepWrap').style.display = kind==='sweep'?'flex':'none';
-  document.getElementById('genCompWrap').style.display = kind==='pink'?'flex':'none';
 }
 function runWithSource(kind, measureFn, durMs){
   durMs=durMs||5000;
@@ -1354,7 +1343,6 @@ function resetSession(){
   fbTrack.clear(); fbPanel.innerHTML='';
   leqSumP=0; leqN=0; splMax=-120; lvlPeak=-120;
   targetMode='flat'; document.querySelectorAll('.tgtSeg button').forEach(b=>b.classList.toggle('on', b.dataset.t==='flat'));
-  pinkComp=false; compChoice=true; syncPinkComp();
   weightMode='Z'; const wb=document.getElementById('wgtBtn'); wb.textContent='dBZ'; wb.classList.remove('on'); document.getElementById('wLbl').textContent='Z';
   if(viewMin!==FMIN||viewMax!==FMAX){ viewMin=FMIN; viewMax=FMAX; buildBands(curBpo); document.getElementById('zoomBtn').style.display='none'; }
   if(genOn) genStop();
@@ -1480,7 +1468,7 @@ async function populateInputs(){
       o.value=d.deviceId; o.textContent=d.label||('מיקרופון '+(i+1));
       sel.appendChild(o);
     });
-    const savedIn=localStorage.getItem('rta_inDev');
+    const savedIn=lsGet('rta_inDev');
     const bestIn=pickBestDevice(ins, cur||savedIn);
     if(bestIn) sel.value=bestIn;
     // if the best device isn't the one we're actually using, switch to it once
@@ -1494,7 +1482,7 @@ async function populateInputs(){
       o.value=d.deviceId; o.textContent=d.label||('פלט '+(i+1));
       osel.appendChild(o);
     });
-    const savedOut=localStorage.getItem('rta_outDev');
+    const savedOut=lsGet('rta_outDev');
     if(ocur) osel.value=ocur; else if(savedOut && outs.some(d=>d.deviceId===savedOut)) osel.value=savedOut;
   }catch(e){}
 }
@@ -1575,9 +1563,8 @@ function updateLevel(){
     p += db2lin(floatData[i]+wdb);
   }
   const lvl = 10*Math.log10(p+1e-12) + calib;
-  leqSumP += p; leqN++;
+  if(!frozen){ leqSumP += p; leqN++; if(lvl>splMax) splMax=lvl; }   // frozen data is stale — don't skew Leq/Max
   const leq = 10*Math.log10(leqSumP/Math.max(1,leqN)+1e-12) + calib;
-  if(lvl>splMax) splMax=lvl;
   const unit = calib>0 ? ' dB'+weightMode : '';
   const fmt=x=>x.toFixed(1)+unit;
   document.getElementById('splNow').textContent=fmt(lvl);
@@ -1699,8 +1686,7 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     const fc=ISO[b];
     const rawDb=bandPowDb(fc/R,fc*R);
     lastBandDb[b]=rawDb;
-    const compDb = pinkComp ? 3*Math.log2(ISO[b]/1000) : 0;
-    let v=norm(rawDb+compDb);
+    let v=norm(rawDb);
     if(avgOn){ avgBuf[b]=avgBuf[b]*0.9+v*0.1; v=avgBuf[b]; } else { avgBuf[b]=v; }
     lastV[b]=v;
     if(v>peakVal){peakVal=v;peakBand=b;}
@@ -1722,8 +1708,8 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     { let acc=0; _pfxRef[0]=0; for(let i=0;i<bins;i++){ acc+=db2lin(floatDataRef[i]); _pfxRef[i+1]=acc; } }
     const refBandDb=(fLo,fHi)=>{ let lo=Math.floor(fLo/nyquist*bins),hi=Math.ceil(fHi/nyquist*bins); lo=Math.max(0,lo);hi=Math.min(bins-1,hi);if(hi<lo)hi=lo; return 10*Math.log10((_pfxRef[hi+1]-_pfxRef[lo])+1e-12); };
     const refPts=[];
-    for(let b=0;b<BANDS;b++){ const fc=ISO[b]; const rd=refBandDb(fc/R,fc*R); const comp=pinkComp?3*Math.log2(fc/1000):0;
-      refPts.push([b*bw+bw/2, plotH - norm(rd+comp)*plotH]); }
+    for(let b=0;b<BANDS;b++){ const fc=ISO[b]; const rd=refBandDb(fc/R,fc*R);
+      refPts.push([b*bw+bw/2, plotH - norm(rd)*plotH]); }
     // mic: filled area + line (accent color)
     ctx.beginPath(); micPts.forEach(([x,y],i)=> i?ctx.lineTo(x,y):ctx.moveTo(x,y)); ctx.lineTo(micPts[BANDS-1][0],plotH); ctx.lineTo(micPts[0][0],plotH); ctx.closePath();
     ctx.fillStyle='rgba('+accentRgb.join(',')+',0.13)'; ctx.fill();
@@ -1836,8 +1822,7 @@ function drawRta(W,H,nyquist,bins,xForFreq){
       ctx.strokeStyle=a.color; ctx.lineWidth=2; ctx.beginPath(); let started=false;
       for(let k=0;k<GEQ.length;k++){
         const f=GEQ[k]; if(f<ISO[0]||f>ISO[BANDS-1]) continue;
-        const comp = pinkComp?3*Math.log2(f/1000):0;
-        const x=xForFreq(f), yy=plotH-norm(a.db[k]+comp)*plotH;
+        const x=xForFreq(f), yy=plotH-norm(a.db[k])*plotH;
         started?ctx.lineTo(x,yy):ctx.moveTo(x,yy); started=true;
       }
       ctx.stroke();
@@ -1925,7 +1910,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v131';
+document.getElementById('ver').textContent='v132';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
@@ -1935,8 +1920,9 @@ function applyAccent(hex){
   if(m) accentRgb=[parseInt(m[1],16),parseInt(m[2],16),parseInt(m[3],16)];
   try{ localStorage.setItem('rta_accent',hex); }catch(_){}
 }
+function lsGet(k){ try{ return localStorage.getItem(k); }catch(_){ return null; } }
 (function initAccent(){
-  const saved=localStorage.getItem('rta_accent');
+  const saved=lsGet('rta_accent');
   if(saved){ applyAccent(saved);
     document.querySelectorAll('#swatches .sw').forEach(b=>b.classList.toggle('on', b.dataset.c===saved)); }
 })();
