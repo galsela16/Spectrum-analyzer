@@ -828,7 +828,7 @@ document.getElementById('dlyBtn').addEventListener('click',()=>{ showModal(dlyPa
 document.getElementById('dlyClose').addEventListener('click',closeModals);
 function resetDelay(){
   dlyState='idle';
-  dlySpeakers.forEach((s,i)=>{ s.ms=null; s.name='רמקול '+(i+1); });
+  dlySpeakers.forEach((s,i)=>{ s.ms=null; s.name=dlyName(i); });
   dlyAnchor=0;
   const st=document.getElementById('dlyStatus'); if(st) st.textContent='—';
   renderDlySpk();
@@ -929,11 +929,13 @@ function runDelayCapture(btn, cb){
   }, captureSec*1000+100);
 }
 // multi-speaker alignment (2/4/6), align to a chosen anchor
-let dlySpeakers=[{name:'רמקול 1',ms:null},{name:'רמקול 2',ms:null}];
+const DLY_NAMES=['Top','Sub','FF'];
+function dlyName(i){ return DLY_NAMES[i] || ('רמקול '+(i+1)); }
+let dlySpeakers=[{name:dlyName(0),ms:null},{name:dlyName(1),ms:null}];
 let dlyAnchor=0;
 function setDlyCount(n){
   const cur=dlySpeakers.length;
-  if(n>cur){ for(let i=cur;i<n;i++) dlySpeakers.push({name:'רמקול '+(i+1),ms:null}); }
+  if(n>cur){ for(let i=cur;i<n;i++) dlySpeakers.push({name:dlyName(i),ms:null}); }
   else if(n<cur){ dlySpeakers=dlySpeakers.slice(0,n); if(dlyAnchor>=n) dlyAnchor=0; }
   renderDlySpk();
 }
@@ -949,7 +951,7 @@ function renderDlySpk(){
     }
     return '<div class="calRow" style="gap:6px">'+
       '<span class="dlyAnchor" data-a="'+i+'" title="בחר כעוגן" style="cursor:pointer;font-size:15px;color:'+(i===dlyAnchor?'var(--accent)':'var(--dim)')+'">'+(i===dlyAnchor?'◉':'◎')+'</span>'+
-      '<input class="posName" data-i="'+i+'" value="'+(s.name||('רמקול '+(i+1))).replace(/"/g,'&quot;')+'" style="flex:1">'+
+      '<input class="posName" data-i="'+i+'" value="'+(s.name||dlyName(i)).replace(/"/g,'&quot;')+'" style="flex:1">'+
       '<span style="min-width:64px;font-size:11px;color:var(--dim)">'+(s.ms==null?'—':s.ms.toFixed(2)+'ms')+'</span>'+
       '<button class="toggle dlyMeasOne" data-i="'+i+'" style="padding:6px 10px;font-size:11px">מדוד</button>'+
       '<span style="min-width:74px;font-size:11px;text-align:end">'+add+'</span>'+
@@ -1938,7 +1940,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v127';
+document.getElementById('ver').textContent='v128';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
