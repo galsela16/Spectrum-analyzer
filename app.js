@@ -448,6 +448,8 @@ function renderCalList(){
   box.querySelectorAll('.del').forEach(d=>d.addEventListener('click',e=>{
     e.stopPropagation();
     const id=d.dataset.del;
+    const c=micCalList.find(x=>x.id===id);
+    if(!confirm('למחוק את הכיול "'+(c?c.name:'')+'"?')) return;
     micCalList=micCalList.filter(c=>c.id!==id);
     if(activeCalId===id) activeCalId=null;
     deriveActiveCal(); saveCalStore(); renderCalList();
@@ -1678,7 +1680,9 @@ function draw(){
   else drawSpec(W,H,nyquist,bins,xForFreq);
 
   fbFrameCounter++;
-  if(fbOn && fbFrameCounter % 4 === 0) detectFeedback(nyquist,bins);
+  // frozen data repeats the same frame, which the detector would read as a sustained
+  // (i.e. feedback) tone — skip detection while frozen to avoid false alarms
+  if(fbOn && !frozen && fbFrameCounter % 4 === 0) detectFeedback(nyquist,bins);
 }
 
 function drawRta(W,H,nyquist,bins,xForFreq){
@@ -1938,7 +1942,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v134';
+document.getElementById('ver').textContent='v135';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
@@ -2034,17 +2038,30 @@ document.getElementById('helpBtn').addEventListener('click',function(){
   helpMode=!helpMode; this.classList.toggle('on',helpMode); document.body.classList.toggle('help-on',helpMode);
   if(!helpMode) helpTip.style.display='none';
 });
+function helpTextFor(target){
+  let txt=null;
+  const idEl=target.closest && target.closest('[id]'); if(idEl) txt=HELP[idEl.id];
+  if(!txt && target.closest){ const cEl=target.closest('.tgtSeg'); if(cEl) txt=HELP.tgtSeg; }
+  return txt;
+}
+function showHelpTip(txt,cx,cy){
+  if(!txt){ helpTip.style.display='none'; return; }
+  helpTip.textContent=txt; helpTip.style.whiteSpace='pre-line'; helpTip.style.display='block';
+  const x=Math.max(8,Math.min(cx+14, innerWidth-helpTip.offsetWidth-10));
+  const y=Math.max(8,Math.min(cy+16, innerHeight-helpTip.offsetHeight-10));
+  helpTip.style.left=x+'px'; helpTip.style.top=y+'px';
+}
 document.addEventListener('mousemove',e=>{
   if(!helpMode) return;
-  // resolve by id first, then by a known class (controls that repeat across panels, e.g. tgtSeg)
-  let txt=null;
-  const idEl=e.target.closest('[id]'); if(idEl) txt=HELP[idEl.id];
-  if(!txt){ const cEl=e.target.closest('.tgtSeg'); if(cEl) txt=HELP.tgtSeg; }
-  if(txt){ helpTip.textContent=txt; helpTip.style.whiteSpace='pre-line'; helpTip.style.display='block';
-    let x=Math.min(e.clientX+14, innerWidth-helpTip.offsetWidth-10), y=Math.min(e.clientY+16, innerHeight-helpTip.offsetHeight-10);
-    helpTip.style.left=x+'px'; helpTip.style.top=y+'px';
-  } else helpTip.style.display='none';
+  showHelpTip(helpTextFor(e.target), e.clientX, e.clientY);
 });
+// touch: in help mode a tap explains the control instead of activating it
+document.addEventListener('pointerdown',e=>{
+  if(!helpMode || e.pointerType==='mouse') return;
+  if(e.target.closest && e.target.closest('#helpBtn')) return;   // let the toggle itself work
+  const txt=helpTextFor(e.target);
+  if(txt){ e.preventDefault(); e.stopPropagation(); showHelpTip(txt, e.clientX, e.clientY); }
+}, true);
 
 (function plexus(){
   const g=document.getElementById('pcbTraces'); if(!g) return;
