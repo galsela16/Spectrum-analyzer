@@ -5,6 +5,7 @@ let curBpo=6;
 let ISO=[], BANDS=0, R=1;
 let peaks=[];
 let avgBuf=[], snapCurve=null, lastV=[], lastBandDb=[], frozen=false;
+let refCurve=null;   // 'before' curve for A/B comparison (declared early: buildBands() touches it)
 function buildBands(bpo){
   curBpo=bpo;
   ISO=[];
@@ -17,8 +18,8 @@ function buildBands(bpo){
   lastV=new Array(BANDS).fill(0);
   lastBandDb=new Array(BANDS).fill(-120);
   snapCurve=null; frozen=false;
-  if(typeof refCurve!=="undefined"){ refCurve=null;
-    const rb=document.getElementById("refCurveBtn"); if(rb){ rb.classList.remove("on"); rb.textContent="שמור כ״לפני״"; } }
+  refCurve=null;
+  { const rb=document.getElementById("refCurveBtn"); if(rb){ rb.classList.remove("on"); rb.textContent="שמור כ״לפני״"; } }
   const clr=document.getElementById('freezeBtn'); if(clr){clr.classList.remove('on');clr.textContent='הקפא';}
 }
 buildBands(6);
@@ -1990,7 +1991,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v139';
+document.getElementById('ver').textContent='v140';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
@@ -2002,7 +2003,6 @@ function applyAccent(hex){
 }
 function lsGet(k){ try{ return localStorage.getItem(k); }catch(_){ return null; } }
 // ---- before/after: keep a reference curve of the response prior to EQ changes ----
-let refCurve=null;
 document.getElementById('refCurveBtn').addEventListener('click',function(){
   if(refCurve){ refCurve=null; this.classList.remove('on'); this.textContent='שמור כ״לפני״'; return; }
   if(!running || !lastV.length){ alert('הפעל מיקרופון ונגן אות לפני שמירת עקומת ייחוס.'); return; }
