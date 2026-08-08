@@ -1121,6 +1121,21 @@ function computeAndShow(){
   const nyq=audioCtx.sampleRate/2, bins=binDb.length, R6=Math.pow(2,1/6);
   if(micCal){ for(let i=0;i<bins;i++) binDb[i]-=micCalAt(i*nyq/bins); }
   const resp=GEQ.map(fc=> bandDbFromBins(binDb,fc/R6,fc*R6,nyq,bins));
+  // reliability guard: a measurement taken with no signal (PA off, mic muted, gain at zero)
+  // still yields a smooth-looking curve from the noise floor. Refuse instead of advising on noise.
+  // Criterion is absolute band level — pink through a good system is deliberately FLAT,
+  // so any "flatness" test here would wrongly reject valid measurements.
+  {
+    const inBand=resp.filter((v,k)=>GEQ[k]>=63&&GEQ[k]<=8000);
+    if(Math.max(...inBand) < -62){
+      const box=document.getElementById('eqList');
+      if(box) box.innerHTML='<div class="sub" style="color:var(--warn)">⚠ לא זוהה אות מדידה.<br>'+
+        '<span style="color:var(--dim)">ודא שרעש ורוד מנוגן דרך המערכת ושגיין המיקרופון פתוח, ומדוד שוב.</span></div>';
+      document.getElementById('eqCurveCanvas').style.display='none';
+      lastEqCorr=null; eqMarks=null; eqCurveData=null;
+      return;
+    }
+  }
   const maxR=Math.max(...resp);
   const rel=GEQ.map((f,k)=> resp[k]>maxR-30 && f>=40 && f<=16000);
   let os=0,on=0; for(let k=0;k<GEQ.length;k++){ if(rel[k]&&GEQ[k]>=200&&GEQ[k]<=4000){ os+=resp[k]-targetDb(GEQ[k]); on++; } }
@@ -1942,7 +1957,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v135';
+document.getElementById('ver').textContent='v136';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
