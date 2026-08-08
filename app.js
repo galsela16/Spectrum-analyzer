@@ -57,6 +57,16 @@ let genType='pink', genOn=false, genGain=null, genSrc=null, genOsc=null;
 let genDb=-34, genHz=1000, targetMode='flat';
 let fftSize=32768;   // FFT resolution (accuracy vs speed)
 let _pfx=null;   // per-frame prefix-sum of linear power (perf)
+// dB→linear lookup: analyser output is clamped to [minDecibels, maxDecibels] (-100..-10),
+// so a small table covering -140..0 dB at 0.25dB steps is exact enough for power sums.
+const _D2L_LO=-140, _D2L_STEP=0.05, _D2L_N=Math.round((0-_D2L_LO)/_D2L_STEP)+1;
+const _d2l=new Float64Array(_D2L_N);
+for(let i=0;i<_D2L_N;i++) _d2l[i]=Math.pow(10,(_D2L_LO+i*_D2L_STEP)*0.1);
+function db2lin(db){
+  if(db<=_D2L_LO) return 0;
+  if(db>=0) return Math.pow(10,db*0.1);
+  return _d2l[(db-_D2L_LO)*(1/_D2L_STEP)|0];
+}
 let _pfxRef=null;   // prefix-sum for the reference overlay
 let tfOverlay=false;   // keep mic/ref curves on the main graph even when the panel is closed
 let genSweepDur=4, sweepTimer=null, sweepStartT=0;
@@ -351,11 +361,6 @@ document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',function
   document.querySelectorAll('.tabpage').forEach(pg=>pg.classList.toggle('active', pg.dataset.page===p));
 }));
 
-document.querySelectorAll('#genCompSeg button').forEach(b=>b.addEventListener('click',function(){
-  document.querySelectorAll('#genCompSeg button').forEach(x=>x.classList.remove('on'));
-  this.classList.add('on'); compChoice=(this.dataset.c==='on'); syncPinkComp();
-}));
-
 const eqPanel=document.getElementById('eqPanel');
 document.getElementById('eqClose').addEventListener('click',closeModals);
 document.getElementById('eqBtn').addEventListener('click',()=>{ showModal(eqPanel); updateEqUI(); });
@@ -368,11 +373,7 @@ document.querySelectorAll('#eqModeSwitchA button').forEach(b=>b.addEventListener
   if(this.dataset.go==='area'){ openAreas(); }
 }));
 
-document.querySelectorAll('#eqChSeg button').forEach(b=>b.addEventListener('click',function(){
-  document.querySelectorAll('#eqChSeg button').forEach(x=>x.classList.remove('on'));
-  this.classList.add('on');
-  eqCh = parseInt(this.dataset.ch, 10);
-}));
+
 
 document.getElementById('eqMeasBtn').addEventListener('click',()=>pickSource(measurePosition,5000));
 document.querySelectorAll('#eqModeSeg button').forEach(b=>b.addEventListener('click',function(){
@@ -663,7 +664,6 @@ document.getElementById('tfOverlayHdr').addEventListener('click',()=>setTfOverla
 document.getElementById('tfMeasBtn').addEventListener('click',()=>pickSource(tfMeasure,6000));
 document.getElementById('tfCsvBtn').addEventListener('click',tfExportCsv);
 
-function chLevel(arr){ let p=0; for(let i=1;i<arr.length;i++) p+=Math.pow(10,arr[i]/10); return 10*Math.log10(p+1e-12); }
 function detectComb(){
   if(!floatData || !audioCtx) return null;
   const bins=floatData.length, nyq=audioCtx.sampleRate/2;
@@ -864,7 +864,6 @@ function levelDb(buf,n){
   if(meterMode==='peak'){ let m=0; for(let i=start;i<len;i++){ const a=Math.abs(buf[i]); if(a>m)m=a; } return 20*Math.log10(m+1e-9); }
   let s=0; for(let i=start;i<len;i++){ const v=buf[i]; s+=v*v; } return 20*Math.log10(Math.sqrt(s/(len-start))+1e-9);
 }
-function peakDb(buf){ let m=0; for(let i=0;i<buf.length;i++){ const a=Math.abs(buf[i]); if(a>m)m=a; } return 20*Math.log10(m+1e-9); }
 function gainClass(db){
   if(db>=-1) return ['clip','קליפ!'];
   if(db>=-8) return ['hi','חזק ('+db.toFixed(0)+')'];
@@ -1081,7 +1080,7 @@ function avgPositions(){
 function bandDbFromBins(bd,fLo,fHi,nyq,bins){
   let lo=Math.floor(fLo/nyq*bins), hi=Math.ceil(fHi/nyq*bins);
   lo=Math.max(0,lo);hi=Math.min(bins-1,hi);if(hi<lo)hi=lo;
-  let p=0; for(let i=lo;i<=hi;i++) p+=Math.pow(10,bd[i]/10);
+  let p=0; for(let i=lo;i<=hi;i++) p+=db2lin(bd[i]);
   return 10*Math.log10(p+1e-12);
 }
 function computeAndShow(){
@@ -1203,7 +1202,7 @@ function startRT60(){
       let s2=0, N=Math.min(2048,timeData.length);
       for(let i=timeData.length-N;i<timeData.length;i++){ const v=timeData[i]; s2+=v*v; }
       analyser.getFloatFrequencyData(floatData);
-      const bands=bandEdges.map(([lo,hi])=>{ let p=0; for(let i=lo;i<=hi;i++) p+=Math.pow(10,floatData[i]/10); return 10*Math.log10(p+1e-12); });
+      const bands=bandEdges.map(([lo,hi])=>{ let p=0; for(let i=lo;i<=hi;i++) p+=db2lin(floatData[i]); return 10*Math.log10(p+1e-12); });
       rt60Samples.push({t:performance.now(), db:20*Math.log10(Math.sqrt(s2/N)+1e-9), bands});
     },10);
     setTimeout(()=>{
@@ -1273,38 +1272,6 @@ function analyzeRT60(){
       (bb.steady-bb.noise<15?'העלה עוצמת PA (האות קרוב מדי לרעש הרקע).':'הורד "טווח דעיכה נדרש".')+'</span>'+bandsHtml;
     drawRTPlot(bb.post, bb.steady, null, 0);
   }
-}
-function analyzeRT60_OLD(){
-  const s=rt60Samples;
-  if(s.length<20){ rtStatus.innerHTML='מדידה נכשלה — נדגמו רק '+s.length+' דגימות.<br><span style="font-size:11px;color:var(--dim)">ודא שהמיקרופון פעיל ונסה שוב.</span>'; return; }
-  const pre=s.filter(x=>x.t<rt60CutT);
-  const steady = pre.length? pre.reduce((a,x)=>a+x.db,0)/pre.length : Math.max(...s.map(x=>x.db));
-  const post=s.filter(x=>x.t>=rt60CutT).map(x=>({t:(x.t-rt60CutT)/1000, db:x.db}));
-  if(post.length<10){ rtStatus.innerHTML='מדידה נכשלה — לא נלכדה דעיכה ('+post.length+' דגימות אחרי הניתוק).'; return; }
-  const tail=post.slice(-Math.max(5,Math.floor(post.length*0.25)));
-  const noise=tail.reduce((a,x)=>a+x.db,0)/tail.length;
-  const hi=steady-5, lo=noise+5;
-  const reg=post.filter(x=>x.db<=hi && x.db>=lo);
-  const needRange=rtRange;
-  if(reg.length<5 || (hi-lo)<Math.min(8,needRange)){
-    rtStatus.innerHTML='אין דעיכה למדוד ('+(hi-lo>0?(hi-lo).toFixed(0):'0')+'dB בלבד).'+
-      '<br><span style="font-size:11px;color:var(--dim)">רמת אות: '+steady.toFixed(0)+'dB · רעש רקע: '+noise.toFixed(0)+'dB.<br>'+
-      (steady-noise<15?'העלה עוצמת PA (האות קרוב מדי לרעש הרקע).':'הורד "טווח דעיכה נדרש".')+'</span>';
-    drawRTPlot(post, steady, null, 0); return;
-  }
-  let n=reg.length, st=0,sd=0,std=0,stt=0;
-  reg.forEach(p=>{ st+=p.t; sd+=p.db; std+=p.t*p.db; stt+=p.t*p.t; });
-  const slope=(n*std - st*sd)/(n*stt - st*st);
-  const intercept=(sd - slope*st)/n;
-  const rt60 = -60/slope;
-  drawRTPlot(post, steady, slope, intercept);
-  const approx = (hi-lo) < needRange;
-  if(slope<0 && rt60>0.05 && rt60<10)
-    rtStatus.innerHTML='RT60 ≈ <b>'+rt60.toFixed(2)+' ש\'</b>'+
-      (approx?' <span style="font-size:11px;color:var(--warn)">(משוער · טווח '+(hi-lo).toFixed(0)+'dB)</span>':
-              ' <span style="font-size:11px;color:var(--dim)">(טווח '+(hi-lo).toFixed(0)+'dB)</span>');
-  else
-    rtStatus.innerHTML='לא הצלחתי למדוד — נסה עוצמה גבוהה יותר';
 }
 function drawRTPlot(post, steady, slope, intercept){
   const c=document.getElementById('rtCanvas'); if(!c) return;
@@ -1556,14 +1523,6 @@ function heat(t){
 }
 function fLabel(f){return f>=1000?(f%1000?(f/1000).toFixed(1):f/1000)+'k':''+f;}
 
-function bandDb(fLo,fHi,nyquist,bins){
-  let lo=Math.floor(fLo/nyquist*bins), hi=Math.ceil(fHi/nyquist*bins);
-  lo=Math.max(0,lo); hi=Math.min(bins-1,hi); if(hi<lo) hi=lo;
-  let p=0;
-  for(let i=lo;i<=hi;i++){ p+=Math.pow(10,floatData[i]/10); }
-  return 10*Math.log10(p+1e-12);
-}
-
 /* התאמת דינמיקת המד: עלייה מהירה לקלט חדש, ודעיכה איטית (Slow Release = 0.035) לתנועה אנלוגית וטבעית */
 function updateLevel(){
   if(!analyserMeter) return;
@@ -1613,13 +1572,13 @@ function draw(){
   if(measState==='measuring' && measAccum){
     if(eqCh===2 && analyserRef) analyserRef.getFloatFrequencyData(floatDataRef);
     const srcData = (eqCh === 2 && floatDataRef) ? floatDataRef : floatData;
-    for(let i=0;i<srcData.length;i++) measAccum[i]+=Math.pow(10,srcData[i]/10);
+    for(let i=0;i<srcData.length;i++) measAccum[i]+=db2lin(srcData[i]);
     measFrames++;
   }
   if(areaState==='measuring' && areaAccum){
     if(eqCh===2 && analyserRef) analyserRef.getFloatFrequencyData(floatDataRef);
     const srcData = (eqCh === 2 && floatDataRef) ? floatDataRef : floatData;
-    for(let i=0;i<srcData.length;i++) areaAccum[i]+=Math.pow(10,srcData[i]/10);
+    for(let i=0;i<srcData.length;i++) areaAccum[i]+=db2lin(srcData[i]);
     areaFrames++;
   }
   if(analyserRef && floatDataRef && (tfState==='measuring' || tfPanel.classList.contains('open'))){
@@ -1688,7 +1647,9 @@ function drawRta(W,H,nyquist,bins,xForFreq){
   // build a prefix-sum of linear power ONCE per frame → each band's energy is O(1)
   // (previously each band re-summed thousands of FFT bins; that was the main CPU cost).
   if(!_pfx || _pfx.length!==bins+1) _pfx=new Float64Array(bins+1);
-  { let acc=0; _pfx[0]=0; for(let i=0;i<bins;i++){ acc+=Math.pow(10,floatData[i]*0.1); _pfx[i+1]=acc; } }
+  // dB→linear via a 0.25dB-step lookup table: replaces ~16k Math.pow() calls per frame,
+  // which was the single biggest per-frame cost (especially at fftSize 32768).
+  { let acc=0; _pfx[0]=0; for(let i=0;i<bins;i++){ acc+=db2lin(floatData[i]); _pfx[i+1]=acc; } }
   const bandPowDb=(fLo,fHi)=>{
     let lo=Math.floor(fLo/nyquist*bins), hi=Math.ceil(fHi/nyquist*bins);
     lo=Math.max(0,lo); hi=Math.min(bins-1,hi); if(hi<lo)hi=lo;
@@ -1734,7 +1695,7 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     // reference curve points
     if(!frozen) analyserRef.getFloatFrequencyData(floatDataRef);
     if(!_pfxRef || _pfxRef.length!==bins+1) _pfxRef=new Float64Array(bins+1);
-    { let acc=0; _pfxRef[0]=0; for(let i=0;i<bins;i++){ acc+=Math.pow(10,floatDataRef[i]*0.1); _pfxRef[i+1]=acc; } }
+    { let acc=0; _pfxRef[0]=0; for(let i=0;i<bins;i++){ acc+=db2lin(floatDataRef[i]); _pfxRef[i+1]=acc; } }
     const refBandDb=(fLo,fHi)=>{ let lo=Math.floor(fLo/nyquist*bins),hi=Math.ceil(fHi/nyquist*bins); lo=Math.max(0,lo);hi=Math.min(bins-1,hi);if(hi<lo)hi=lo; return 10*Math.log10((_pfxRef[hi+1]-_pfxRef[lo])+1e-12); };
     const refPts=[];
     for(let b=0;b<BANDS;b++){ const fc=ISO[b]; const rd=refBandDb(fc/R,fc*R); const comp=pinkComp?3*Math.log2(fc/1000):0;
@@ -1940,7 +1901,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v128';
+document.getElementById('ver').textContent='v129';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
