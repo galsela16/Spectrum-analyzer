@@ -83,15 +83,15 @@ let smoothedDbfs = -120;
 
 function resize(){
   const r=cv.getBoundingClientRect();
-  // cap the backing resolution: keep it crisp on small sizes, but don't render millions of
-  // extra pixels on a full-screen Retina canvas (that's what slows it down when maximized).
-  const MAXW=1800;
-  const dpr=Math.max(1, Math.min(window.devicePixelRatio||1, 2, MAXW/Math.max(1,r.width)));
+  // cap the backing resolution in BOTH dimensions so a maximized Retina canvas doesn't
+  // render millions of extra pixels (the cause of the full-screen slowdown).
+  const MAXW=1440, MAXH=760;
+  const dpr=Math.max(1, Math.min(window.devicePixelRatio||1, 2, MAXW/Math.max(1,r.width), MAXH/Math.max(1,r.height)));
   cv.width=Math.round(r.width*dpr); cv.height=Math.round(r.height*dpr);
   ctx.setTransform(dpr,0,0,dpr,0,0);
   specCanvas=document.createElement('canvas');
-  specCanvas.width=Math.max(2,Math.floor(r.width));
-  specCanvas.height=Math.max(2,Math.floor(r.height));
+  specCanvas.width=Math.max(2,Math.floor(Math.min(r.width,MAXW)));
+  specCanvas.height=Math.max(2,Math.floor(Math.min(r.height,MAXH)));
   specCtx=specCanvas.getContext('2d');
   specCtx.fillStyle='#0d1117'; specCtx.fillRect(0,0,specCanvas.width,specCanvas.height);
 }
@@ -1938,7 +1938,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v126';
+document.getElementById('ver').textContent='v127';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
