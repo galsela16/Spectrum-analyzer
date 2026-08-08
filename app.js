@@ -1193,6 +1193,7 @@ document.getElementById('rtRunBtn').addEventListener('click',startRT60);
 document.getElementById('rtBtn').addEventListener('click',()=>{
   if(!running||!audioCtx){ alert('קודם הפעל את המיקרופון.'); return; }
   showModal(rtPanel);
+  { const c=document.getElementById('rtCanvas'); if(c) c.style.display='none'; }
   rtStatus.innerHTML='כוונן עוצמה, ואז לחץ "התחל מדידה".';
 });
 function startRT60(){
@@ -1294,6 +1295,7 @@ function analyzeRT60(){
 }
 function drawRTPlot(post, steady, slope, intercept){
   const c=document.getElementById('rtCanvas'); if(!c) return;
+  c.style.display='block';   // only shown once there's something to plot
   const x=c.getContext('2d');
   const W=c.width, H=c.height; x.clearRect(0,0,W,H);
   const tMax=Math.max(0.5, post.length?post[post.length-1].t:1);
@@ -1923,7 +1925,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v130';
+document.getElementById('ver').textContent='v131';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
