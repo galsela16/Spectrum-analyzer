@@ -214,6 +214,15 @@
   .saveRow button{border:1px solid var(--line);background:#161b22;color:#c4d0de;font-family:inherit;font-size:11px;padding:4px 8px;border-radius:3px;cursor:pointer}
   .saveRow button:hover{border-color:var(--accent);color:var(--accent)}
 
+  #geqDock{flex:none;margin:0 10px 6px;border:1px solid var(--line);border-radius:5px;background:#12171f;overflow:hidden}
+  #geqDockHead{display:flex;align-items:center;justify-content:space-between;padding:4px 10px;
+    background:#161b22;border-bottom:1px solid var(--line)}
+  #geqDockTitle{font-size:11px;letter-spacing:.5px;color:var(--dim)}
+  #geqDockToggle{border:none;background:transparent;color:var(--dim);font-size:12px;cursor:pointer;padding:2px 6px;border-radius:3px}
+  #geqDockToggle:hover{color:var(--accent);background:rgba(62,166,255,.1)}
+  #eqCurveCanvas{display:block;width:100%;height:234px;background:#12171f}
+  #geqDock.collapsed #eqCurveCanvas{display:none}
+
   #eqPanel{position:relative;display:none;
     flex-direction:column;gap:9px;width:min(94%,520px);max-height:calc(100dvh - 32px);overflow:auto;padding:16px 18px;border:1px solid var(--accent);
     border-radius:6px;background:rgba(13,17,23,.96);box-shadow:0 12px 48px rgba(0,0,0,.8)}
@@ -392,7 +401,6 @@
         </div>
       </div>
       <div class="sub" id="eqCalName"></div>
-      <canvas id="eqCurveCanvas" style="width:100%;height:234px;background:#0b0f16;border:1px solid var(--line);border-radius:4px;display:none"></canvas>
       <div id="eqList" style="max-height:34vh;overflow-y:auto"></div>
       <button id="eqClose">סגור</button>
     </div>
@@ -502,6 +510,14 @@
       </div>
     </div>
     
+    <div id="geqDock" style="display:none">
+      <div id="geqDockHead">
+        <span id="geqDockTitle">תיקון EQ</span>
+        <button id="geqDockToggle" title="הסתר/הצג">▼</button>
+      </div>
+      <canvas id="eqCurveCanvas"></canvas>
+    </div>
+
     <div class="meter" id="meter" style="display:none">
       <div class="meterFill" id="meterFill"></div>
       <div class="meterPeak" id="meterPeak" style="inset-inline-start:0"></div>

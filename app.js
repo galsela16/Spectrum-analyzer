@@ -392,7 +392,20 @@ function targetDb(f){
   if(targetMode==='house') return Math.max(-5,Math.min(6, -1.0*Math.log2(f/250)));
   return 0;
 }
+function showGeqDock(title){
+  const dock=document.getElementById('geqDock'); if(!dock) return;
+  dock.style.display='block';
+  const t=document.getElementById('geqDockTitle'); if(t&&title) t.textContent=title;
+}
+function hideGeqDock(){ const d=document.getElementById('geqDock'); if(d) d.style.display='none'; }
+document.getElementById('geqDockToggle').addEventListener('click',function(){
+  const d=document.getElementById('geqDock');
+  d.classList.toggle('collapsed');
+  this.textContent = d.classList.contains('collapsed') ? '▲' : '▼';
+  if(!d.classList.contains('collapsed') && eqCurveData) drawGEQ(document.getElementById('eqCurveCanvas'), eqCurveData.freqs, eqCurveData.corr);
+});
 function drawGEQ(c, freqs, corr){
+  if(c && c.parentElement && c.parentElement.classList.contains('collapsed')) return;
   // Rendered as a physical graphic-EQ fader bank: one fader per band, knob position =
   // how far to move that band. Matches the device being adjusted, so no mental translation.
   const x=c.getContext('2d');
@@ -852,8 +865,8 @@ function renderTFList(){
   const cv2 = document.getElementById('tfCanvas');
   if(!tfResult){ box.innerHTML = ''; cv2.style.display = 'none'; return; }
   
-  cv2.style.display = 'block'; 
-  drawGEQ(cv2, GEQ, tfResult.corr);
+  showGeqDock('תיקון EQ · דו־ערוצי');
+  drawGEQ(document.getElementById('eqCurveCanvas'), GEQ, tfResult.corr);
   eqCurveData = { freqs: GEQ.slice(), corr: tfResult.corr.slice() };
 
   if(tfMode==='param'){
@@ -1170,7 +1183,7 @@ function renderEqList(){
     const i=+this.dataset.i; if(eqPositions[i]) eqPositions[i].name=this.value; }));
   box.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',function(){
     const i=+this.dataset.del; eqPositions.splice(i,1);
-    if(eqPositions.length) computeAndShow(); else { eqMarks=null; eqCurveData=null; document.getElementById('eqList').innerHTML=''; document.getElementById('eqCurveCanvas').style.display='none'; }
+    if(eqPositions.length) computeAndShow(); else { eqMarks=null; eqCurveData=null; document.getElementById('eqList').innerHTML=''; hideGeqDock(); }
     updateEqUI(); renderEqList();
   }));
 }
@@ -1203,7 +1216,7 @@ function computeAndShow(){
       const box=document.getElementById('eqList');
       if(box) box.innerHTML='<div class="sub" style="color:var(--warn)">⚠ לא זוהה אות מדידה.<br>'+
         '<span style="color:var(--dim)">ודא שרעש ורוד מנוגן דרך המערכת ושגיין המיקרופון פתוח, ומדוד שוב.</span></div>';
-      document.getElementById('eqCurveCanvas').style.display='none';
+      hideGeqDock();
       lastEqCorr=null; eqMarks=null; eqCurveData=null;
       return;
     }
@@ -1220,7 +1233,8 @@ function computeAndShow(){
     return Math.max(maxCut, Math.min(maxBoost, raw));
   });
   eqCurveData={freqs:GEQ.slice(), corr:corr.slice()};
-  document.getElementById('eqCurveCanvas').style.display='none';
+  showGeqDock('תיקון EQ · חד־ערוצי');
+  drawGEQ(document.getElementById('eqCurveCanvas'), GEQ, corr);
   lastEqCorr=corr;
   renderEqResult();
   showModal(eqPanel);
@@ -1444,7 +1458,7 @@ function resetSession(){
   const fz=document.getElementById('freezeBtn'); fz.classList.remove('on'); fz.textContent='הקפא';
   eqPositions=[]; eqMarks=null; eqCurveData=null; lastEqCorr=null;
   { const pl=document.getElementById('eqPosList'); if(pl) pl.innerHTML=''; const el=document.getElementById('eqList'); if(el) el.innerHTML=''; }
-  document.getElementById('eqList').innerHTML=''; document.getElementById('eqCurveCanvas').style.display='none';
+  document.getElementById('eqList').innerHTML=''; hideGeqDock();
   updateEqUI();
   areas=[]; renderAreaList();
   document.getElementById('areaEqCanvas').style.display='none';
@@ -2008,7 +2022,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v145';
+document.getElementById('ver').textContent='v146';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
