@@ -522,7 +522,16 @@ const modalBg=document.getElementById('modalBg');
   const p=document.getElementById(id); if(p) modalBg.appendChild(p);
 });
 function showModal(p){ closeModals(); p.classList.add('open'); modalBg.classList.add('show'); }
+function abortRT60(){
+  if(rt60State!=='capture' && !rt60Timer) return;
+  rt60State='idle';
+  if(rt60Timer){ clearInterval(rt60Timer); rt60Timer=null; }
+  if(analyser) analyser.smoothingTimeConstant=parseFloat(document.getElementById('smooth').value);
+  genStop();
+  if(rtStatus) rtStatus.textContent='המדידה בוטלה.';
+}
 function closeModals(){
+  abortRT60();   // don't leave a measurement (and the generator) running in the background
   ['rtPanel','eqPanel','calPanel','tfPanel','areaPanel','dlyPanel'].forEach(id=>document.getElementById(id).classList.remove('open'));
   modalBg.classList.remove('show');
 }
@@ -572,7 +581,7 @@ function suggestAreaEQ(){
   if(!areas.length){ alert('מדוד לפחות אזור אחד.'); return; }
   const n=GEQ.length;
   const avg=new Array(n);
-  for(let k=0;k<n;k++){ let p=0; areas.forEach(a=>p+=Math.pow(10,a.db[k]/10)); avg[k]=10*Math.log10(p/areas.length+1e-12); }
+  for(let k=0;k<n;k++){ let p=0; areas.forEach(a=>p+=db2lin(a.db[k])); avg[k]=10*Math.log10(p/areas.length+1e-12); }
   const resp=avg.map((d,k)=> d - (micCal?micCalAt(GEQ[k]):0));
   const maxR=Math.max(...resp);
   const rel=GEQ.map((f,k)=> resp[k]>maxR-30 && f>=40 && f<=16000);
@@ -884,9 +893,13 @@ function setGainEl(fill,lbl,db){
 }
 function setGain(id, db){ setGainEl(document.getElementById(id+'Fill'), document.getElementById(id+'Gain'), db); }
 
-function measureDelay(){ runDelayCapture(document.getElementById('dlyMeasBtn'), (res)=>{
+function measureDelay(){ runDelayCapture(document.getElementById('dlyMeasBtn'), (res, silent)=>{
   const st=document.getElementById('dlyStatus');
-  if(res==null){ st.textContent='לא הצלחתי — ודא שמנגן אות רחב־פס ושכניסה 2 מקבלת רפרנס.'; return; }
+  if(res==null){
+    st.textContent = silent==='mic' ? 'המיקרופון לא קלט אות — בדוק גיין/חיבור.'
+                   : silent==='ref' ? 'כניסה 2 (רפרנס) שקטה — ודא ניתוב רפרנס מהמיקסר.'
+                   : 'לא הצלחתי — ודא שמנגן אות רחב־פס ושכניסה 2 מקבלת רפרנס.';
+    return; }
   const ms=res.ms, dist=Math.abs(ms)/1000*343;
   st.innerHTML='דיליי ≈ <b>'+ms.toFixed(2)+' ms</b><br><span style="font-size:11px;color:var(--dim)">≈ '+dist.toFixed(2)+' מ\' · '+(ms>=0?'המיק\' מאחר אחרי הרפרנס':'המיק\' מקדים את הרפרנס')+'</span>';
 }); }
@@ -924,6 +937,10 @@ function runDelayCapture(btn, cb){
     try{ source.disconnect(workletNode); }catch(_){} try{ workletNode.disconnect(); }catch(_){} try{ mute.disconnect(); }catch(_){}
     dlyState='idle'; btn.textContent=prevTxt; btn.style.opacity=1;
     const m = tfSwap? ref: mic, r = tfSwap? mic: ref;
+    // sanity: if either channel is essentially silent, the correlation peak is noise — reject it
+    const rmsOf=(a)=>{ let s=0; for(let i=0;i<a.length;i++) s+=a[i]*a[i]; return Math.sqrt(s/a.length); };
+    const micRms=rmsOf(m), refRms=rmsOf(r);
+    if(micRms<1e-4 || refRms<1e-4){ cb(null, micRms<1e-4?'mic':'ref'); return; }
     cb(computeDelay(r, m, sr));
   }, captureSec*1000+100);
 }
@@ -1073,8 +1090,9 @@ function renderEqList(){
   }));
 }
 function avgPositions(){
+  if(!eqPositions.length) return null;
   const bins=eqPositions[0].data.length, out=new Float32Array(bins);
-  for(let i=0;i<bins;i++){ let p=0; for(const pos of eqPositions) p+=Math.pow(10,pos.data[i]/10); out[i]=10*Math.log10(p/eqPositions.length+1e-12); }
+  for(let i=0;i<bins;i++){ let p=0; for(const pos of eqPositions) p+=db2lin(pos.data[i]); out[i]=10*Math.log10(p/eqPositions.length+1e-12); }
   return out;
 }
 function bandDbFromBins(bd,fLo,fHi,nyq,bins){
@@ -1086,6 +1104,7 @@ function bandDbFromBins(bd,fLo,fHi,nyq,bins){
 function computeAndShow(){
   if(!eqPositions.length){ alert('מדוד לפחות מיקום אחד.'); return; }
   const binDb=avgPositions();
+  if(!binDb) return;
   const nyq=audioCtx.sampleRate/2, bins=binDb.length, R6=Math.pow(2,1/6);
   if(micCal){ for(let i=0;i<bins;i++) binDb[i]-=micCalAt(i*nyq/bins); }
   const resp=GEQ.map(fc=> bandDbFromBins(binDb,fc/R6,fc*R6,nyq,bins));
@@ -1501,6 +1520,9 @@ async function switchInput(deviceId){
 
 function stop(){
   running=false; if(raf) cancelAnimationFrame(raf);
+  // clear any in-flight measurement so nothing is left stuck in a 'measuring' state
+  if(rt60Timer){ clearInterval(rt60Timer); rt60Timer=null; }
+  rt60State='idle'; measState='idle'; areaState='idle'; dlyState='idle';
   analyserRef=null; floatDataRef=null; tfState='idle'; eqCurveData=null;
   genSrc=null; genOsc=null; genGain=null; genOn=false;
   const gb=document.getElementById('genOnBtn'); if(gb){gb.classList.remove('on');gb.textContent='▶ הפעל אות';}
@@ -1548,7 +1570,7 @@ function updateLevel(){
   for(let i=1;i<floatData.length;i++){
     const wdb = w ? w[i] : 0;
     if(wdb<-100) continue;
-    p += Math.pow(10,(floatData[i]+wdb)/10);
+    p += db2lin(floatData[i]+wdb);
   }
   const lvl = 10*Math.log10(p+1e-12) + calib;
   leqSumP += p; leqN++;
@@ -1587,8 +1609,8 @@ function draw(){
       const mic = tfSwap? floatDataRef : floatData;
       const ref = tfSwap? floatData : floatDataRef;
       for(let i=0;i<tfMic.length;i++){
-        tfMic[i]+=Math.pow(10,mic[i]/10);
-        tfRef[i]+=Math.pow(10,ref[i]/10);
+        tfMic[i]+=db2lin(mic[i]);
+        tfRef[i]+=db2lin(ref[i]);
         const diff = mic[i] - ref[i];
         tfDiffSum[i] += diff;
         tfDiffSq[i] += diff * diff;
@@ -1901,7 +1923,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v129';
+document.getElementById('ver').textContent='v130';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
