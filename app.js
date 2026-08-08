@@ -377,7 +377,8 @@ document.querySelectorAll('#tfModeSeg button').forEach(b=>b.addEventListener('cl
   document.querySelectorAll('#tfModeSeg button').forEach(x=>x.classList.remove('on'));
   this.classList.add('on'); tfMode=this.dataset.m; if(tfResult) renderTFList();
 }));
-document.getElementById('eqResetBtn').addEventListener('click',()=>{ eqPositions=[]; eqMarks=null; document.getElementById('eqList').innerHTML=''; document.getElementById('eqPosList').innerHTML=''; updateEqUI(); });
+document.getElementById('eqResetBtn').addEventListener('click',()=>{ eqPositions=[]; eqMarks=null;
+  { const cr=document.getElementById('combResult'); if(cr){ cr.style.display='none'; cr.innerHTML=''; } } document.getElementById('eqList').innerHTML=''; document.getElementById('eqPosList').innerHTML=''; updateEqUI(); });
 document.getElementById('combBtn').addEventListener('click',runCombCheck);
 
 function updateEqUI(){
@@ -701,6 +702,7 @@ function detectComb(){
 }
 function runCombCheck(){
   const el=document.getElementById('combResult'); if(!el) return;
+  el.style.display='block';   // only occupies space once there's a result
   const r=detectComb();
   if(!r){ el.innerHTML='<span style="color:var(--dim)">אין מספיק אות. נגן רעש ורוד ונסה שוב.</span>'; return; }
   const detected = r.strength>0.28 && r.depth>1.5;
@@ -1991,7 +1993,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v140';
+document.getElementById('ver').textContent='v141';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){

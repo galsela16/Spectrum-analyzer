@@ -215,7 +215,7 @@
   .saveRow button:hover{border-color:var(--accent);color:var(--accent)}
 
   #eqPanel{position:relative;display:none;
-    flex-direction:column;gap:12px;width:min(94%,520px);max-height:calc(100dvh - 32px);overflow:auto;padding:16px 18px;border:1px solid var(--accent);
+    flex-direction:column;gap:9px;width:min(94%,520px);max-height:calc(100dvh - 32px);overflow:auto;padding:16px 18px;border:1px solid var(--accent);
     border-radius:6px;background:rgba(13,17,23,.96);box-shadow:0 12px 48px rgba(0,0,0,.8)}
   #eqPanel.open{display:flex}
   #eqPanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
@@ -369,31 +369,31 @@
         </div>
       </div>
       <div class="sub" id="eqSub">מיקומים שנמדדו: 0</div>
-      <div id="eqPosList" style="display:flex;flex-direction:column;gap:5px;max-height:132px;overflow-y:auto"></div>
-      <div style="border-top:1px solid var(--line);padding-top:8px">
-        <button id="combBtn" class="toggle" style="align-self:center">בדוק ביטולי פאזה (comb)</button>
-        <div id="combResult" style="text-align:center;font-size:12px;margin-top:6px;min-height:18px">—</div>
-      </div>
+      <div id="eqPosList" style="display:flex;flex-direction:column;gap:5px;max-height:112px;overflow-y:auto"></div>
       <div class="chBar"><span style="min-width:64px">גיין מיק'</span><div class="track"><div class="fill" id="eqMicFill"></div></div><span class="gainLbl" id="eqMicGain">—</span></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
         <button id="eqMeasBtn" class="toggle">מדוד מיקום (5ש')</button>
         <button id="eqGenToggleBtn" class="toggle">▶ רעש ורוד</button>
         <button id="eqResetBtn" class="toggle">אפס</button>
+        <button id="combBtn" class="toggle">בדוק פאזה</button>
       </div>
-      <div class="seg" id="eqModeSeg" style="align-self:center">
-        <button data-m="graphic" class="on">גרפיק</button>
-        <button data-m="param">פרמטרי</button>
-      </div>
-      <div class="ctrl" style="flex:0 0 auto;align-items:center;min-width:auto">
-        <label style="justify-content:center">עקומת יעד</label>
-        <div class="seg tgtSeg" style="align-self:center">
-          <button data-t="flat" class="on">שטוח</button>
-          <button data-t="house">House</button>
+      <div id="combResult" style="display:none;text-align:center;font-size:12px"></div>
+      <div style="display:flex;gap:14px;align-items:center;justify-content:center;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px">
+        <div class="seg" id="eqModeSeg">
+          <button data-m="graphic" class="on">גרפיק</button>
+          <button data-m="param">פרמטרי</button>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <span class="sub">יעד</span>
+          <div class="seg tgtSeg">
+            <button data-t="flat" class="on">שטוח</button>
+            <button data-t="house">House</button>
+          </div>
         </div>
       </div>
       <div class="sub" id="eqCalName"></div>
-      <canvas id="eqCurveCanvas" style="width:100%;height:160px;background:#0b0f16;border:1px solid var(--line);border-radius:4px;display:none"></canvas>
-      <div id="eqList"></div>
+      <canvas id="eqCurveCanvas" style="width:100%;height:130px;background:#0b0f16;border:1px solid var(--line);border-radius:4px;display:none"></canvas>
+      <div id="eqList" style="max-height:34vh;overflow-y:auto"></div>
       <button id="eqClose">סגור</button>
     </div>
     
