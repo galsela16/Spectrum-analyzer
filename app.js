@@ -1391,6 +1391,7 @@ function buildWeighting(nyquist,bins){
 }
 
 async function start(deviceId){
+  errBox.style.display='none';   // clear any stale error from a previous attempt
   try{
     const audio = {
       echoCancellation: false,
@@ -1419,6 +1420,13 @@ async function start(deviceId){
     source.channelCountMode = 'explicit';
 
     const track = stream.getAudioTracks()[0];
+    // if the interface is unplugged the track ends silently — surface it instead of
+    // leaving a frozen-looking graph with no explanation
+    track.addEventListener('ended',()=>{
+      if(!running) return;
+      errBox.style.display='block';
+      errBox.textContent='מקור הקלט נותק. חבר מחדש ולחץ "אפס סשן".';
+    });
     const settings = track.getSettings ? track.getSettings() : {};
     chReceived = settings.channelCount || source.channelCount || 1;
     const isSafari=/^((?!chrome|android|crios|fxios).)*safari/i.test(navigator.userAgent);
@@ -1930,7 +1938,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v133';
+document.getElementById('ver').textContent='v134';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
@@ -2073,6 +2081,10 @@ document.addEventListener('mousemove',e=>{
 })();
 
 function reviveAudio(){ if(running && audioCtx && audioCtx.state==='suspended') audioCtx.resume(); }
+// keep the device list current when an interface is plugged in or removed mid-session
+if(navigator.mediaDevices && navigator.mediaDevices.addEventListener){
+  navigator.mediaDevices.addEventListener('devicechange',()=>{ if(running) populateInputs(); });
+}
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) reviveAudio(); });
 window.addEventListener('focus',reviveAudio);
 resize();
@@ -2081,5 +2093,18 @@ if('ResizeObserver' in window){
   _ro.observe(document.getElementById('stage'));
 }
 if('serviceWorker' in navigator){
-  window.addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('sw.js').then(reg=>{
+      // tell the user when a newer version has been fetched, so a stale PWA is never a mystery
+      reg.addEventListener('updatefound',()=>{
+        const sw=reg.installing; if(!sw) return;
+        sw.addEventListener('statechange',()=>{
+          if(sw.state==='installed' && navigator.serviceWorker.controller){
+            const el=document.getElementById('ver');
+            if(el){ el.textContent+=' · גרסה חדשה זמינה — רענן'; el.style.color='var(--warn)'; }
+          }
+        });
+      });
+    }).catch(()=>{});
+  });
 }
