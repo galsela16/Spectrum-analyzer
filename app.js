@@ -689,18 +689,26 @@ function detectComb(){
   const spacingHz=best.lag*dfPerPoint;
   const delayMs=spacingHz>0?1000/spacingHz:0;
   let depth=0; for(let i=0;i<M;i++) depth+=rip[i]*rip[i]; depth=Math.sqrt(depth/M)*2;
-  return {spacingHz, delayMs, strength:best.val, depth};
+  // Validated range: the ripple period must fit several cycles inside the 200-8000Hz
+  // analysis window. Outside ~1.5-6ms the autocorrelation locks onto a wrong lag and
+  // reports a confident but wrong delay, so results outside that range are not trusted.
+  const inRange = delayMs>=1.4 && delayMs<=6.5;
+  return {spacingHz, delayMs, strength:best.val, depth, inRange};
 }
 function runCombCheck(){
   const el=document.getElementById('combResult'); if(!el) return;
   const r=detectComb();
   if(!r){ el.innerHTML='<span style="color:var(--dim)">אין מספיק אות. נגן רעש ורוד ונסה שוב.</span>'; return; }
   const detected = r.strength>0.28 && r.depth>1.5;
-  if(detected){
+  if(detected && r.inRange){
     const dist=r.delayMs/1000*343;
     el.innerHTML='⚠ <b style="color:var(--warn)">זוהה ביטול (comb)</b><br>'+
       '<span style="font-size:11px;color:var(--dim)">מרווח ~'+Math.round(r.spacingHz)+'Hz → הפרש זמן ~'+r.delayMs.toFixed(2)+'ms (~'+dist.toFixed(2)+'מ\').<br>'+
       'מקור אפשרי: החזר מקיר/רצפה או שני רמקולים לא מיושרים.</span>';
+  } else if(detected){
+    el.innerHTML='⚠ <b style="color:var(--warn)">נראות אדוות בתגובה</b><br>'+
+      '<span style="font-size:11px;color:var(--dim)">הפרש הזמן מחוץ לטווח שניתן למדוד כאן בוודאות (1.5–6ms).<br>'+
+      'למדידת הפרש זמן מדויק השתמש בכלי הדיליי.</span>';
   } else {
     el.innerHTML='<b style="color:#39d98a">✓ לא זוהה ביטול משמעותי</b><br><span style="font-size:11px;color:var(--dim)">התגובה חלקה יחסית.</span>';
   }
@@ -1957,7 +1965,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v136';
+document.getElementById('ver').textContent='v137';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
