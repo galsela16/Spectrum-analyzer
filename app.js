@@ -77,6 +77,7 @@ let rt60State='idle', rt60Samples=[], rt60CutT=0, rtRange=10, rt60Timer=null, rt
 let eqMarks=null;
 let eqCurveData=null;
 let eqMode='graphic', lastEqCorr=null;
+let cutOnly=false;   // cut-only correction mode (no boosts — saves headroom, protects drivers)
 let tfMode='graphic';
 const AREA_COLORS=['#2f9bff','#ffa53b','#ff5cc8','#50e68c'];
 const AREA_NAMES=['צפון','דרום','מזרח','מערב'];
@@ -345,6 +346,13 @@ function setTarget(mode){
   if(typeof tfFrames!=='undefined' && tfFrames) tfCompute();
 }
 document.querySelectorAll('.tgtSeg button').forEach(b=>b.addEventListener('click',function(){ setTarget(this.dataset.t); }));
+document.querySelectorAll('#cutOnlySeg button').forEach(b=>b.addEventListener('click',function(){
+  document.querySelectorAll('#cutOnlySeg button').forEach(x=>x.classList.remove('on'));
+  this.classList.add('on'); cutOnly=(this.dataset.co==='1');
+  if(eqPositions.length) computeAndShow();
+  if(areas.length) suggestAreaEQ();
+  if(typeof tfFrames!=='undefined' && tfFrames) tfCompute();
+}));
 
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',function(){
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
@@ -668,7 +676,7 @@ function suggestAreaEQ(){
   const corr=GEQ.map((f,k)=> {
     if(!rel[k]) return null;
     const raw = -(resp[k]-targetDb(f)-off);
-    const maxBoost = f > 500 ? 1.5 : 4;
+    const maxBoost = cutOnly ? 0 : (f > 500 ? 1.5 : 4);
     const maxCut = f > 500 ? -4 : -9;
     return Math.max(maxCut, Math.min(maxBoost, raw));
   });
@@ -869,7 +877,7 @@ function tfCompute(){
   const corr=GEQ.map((f,k)=> {
       if(!rel[k]) return null;
       const raw = -(H[k]-targetDb(f)-offset);
-      const maxBoost = f > 500 ? 1.5 : 4;
+      const maxBoost = cutOnly ? 0 : (f > 500 ? 1.5 : 4);
       const maxCut = f > 500 ? -4 : -9;
       return Math.max(maxCut, Math.min(maxBoost, raw));
   });
@@ -1247,7 +1255,7 @@ function computeAndShow(){
   const corr=GEQ.map((f,k)=> {
     if(!rel[k]) return null;
     const raw = -(resp[k]-targetDb(f)-off);
-    const maxBoost = f > 500 ? 1.5 : 4;
+    const maxBoost = cutOnly ? 0 : (f > 500 ? 1.5 : 4);
     const maxCut = f > 500 ? -4 : -9;
     return Math.max(maxCut, Math.min(maxBoost, raw));
   });
@@ -2041,7 +2049,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v148';
+document.getElementById('ver').textContent='v149';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
@@ -2202,6 +2210,7 @@ const HELP={
   tfOverlayBtn:'משאיר את עקומות המיק\' והרפרנס על הגרף\nהראשי גם כשהפאנל סגור.',
   saveBtn:'מדידות שמורות: שמור וטען מדידות\nלפי מקום ותאריך.',
   refCurveBtn:'שומר את התגובה הנוכחית כעקומת ״לפני״\nכדי להשוות אחרי שינוי EQ.',
+  cutOnlySeg:'חיתוך בלבד: EQ מוריד תדרים בלבד,\nבלי הגברות — חוסך הדרוּם ומגן על הדרייברים.',
   geqShowBtn:'הצג/הסתר את תצוגת תיקון ה-EQ\n(בנק הפיידרים מתחת לגרף).',
   combBtn:'בדיקת ביטולי פאזה (comb): מזהה אדוות\nתקופתיות בגרף ומעריך את הפרש הזמן שגורם להן.'
 };
