@@ -396,9 +396,9 @@ function drawGEQ(c, freqs, corr){
   // Rendered as a physical graphic-EQ fader bank: one fader per band, knob position =
   // how far to move that band. Matches the device being adjusted, so no mental translation.
   const x=c.getContext('2d');
-  const W=c.width=c.clientWidth||360, H=190; c.height=H;
+  const W=c.width=c.clientWidth||360, H=234; c.height=H;
   x.clearRect(0,0,W,H);
-  const top=26, bot=H-24, mid=(top+bot)/2, scale=(bot-top)/2/9;   // ±9dB travel
+  const top=34, bot=H-46, mid=(top+bot)/2, scale=(bot-top)/2/9;   // ±9dB travel
   const n=freqs.length, slot=W/n, kw=Math.max(7,Math.min(15,slot*0.72)), kh=9;
 
   x.fillStyle='#12171f'; x.fillRect(0,0,W,H);
@@ -428,20 +428,30 @@ function drawGEQ(c, freqs, corr){
     else x.rect(cx-kw/2, yy-kh/2, kw, kh);
     x.fill(); x.stroke();
     x.fillStyle='rgba(0,0,0,.5)'; x.fillRect(cx-kw/2+1, yy-0.5, kw-2, 1);   // knob line
+    // numeric value beside the knob — needed for precise dialing on a real EQ
+    if(Math.abs(v)>=0.4){
+      const txt=(v>0?'+':'')+ (Math.abs(v)>=10 ? v.toFixed(0) : v.toFixed(1));
+      x.save(); x.translate(cx, v>0 ? yy-kh/2-3 : yy+kh/2+3); x.rotate(-Math.PI/2);
+      x.textAlign = v>0 ? 'left' : 'right';
+      x.font='9px monospace'; x.fillStyle = v>0?'#8ff0b8':'#ff9db1';
+      x.fillText(txt, 0, 3); x.restore();
+    }
   }
-  // value of the strongest band, plus frequency ticks
-  x.textAlign='center'; x.font='9px monospace';
-  const marks=[31.5,63,125,250,500,1000,2000,4000,8000,16000];
-  x.fillStyle='rgba(150,165,180,.85)';
-  for(let k=0;k<n;k++){ const f=freqs[k];
-    if(!marks.some(m=>Math.abs(f/m-1)<0.02)) continue;
-    x.fillText(f>=1000?(f/1000)+'k':String(f), slot*k+slot/2, H-6); }
+  // frequency under every fader (rotated so all 31 fit), plus the strongest band callout
+  x.font='9px monospace';
+  for(let k=0;k<n;k++){
+    const f=freqs[k], cx=slot*k+slot/2;
+    const lbl = f>=1000 ? (f/1000)+'k' : String(f);
+    x.save(); x.translate(cx, bot+6); x.rotate(-Math.PI/2);
+    x.textAlign='right'; x.fillStyle= corr[k]==null ? 'rgba(120,132,146,.6)' : 'rgba(170,185,200,.95)';
+    x.fillText(lbl, 0, 3); x.restore();
+  }
   let worst=null;
   for(let k=0;k<n;k++){ const v=corr[k]; if(v==null) continue; if(!worst||Math.abs(v)>Math.abs(worst.v)) worst={v,k}; }
   if(worst && Math.abs(worst.v)>=0.5){
     const f=freqs[worst.k];
     x.textAlign='right'; x.fillStyle=worst.v>0?'#8ff0b8':'#ff9db1';
-    x.fillText((f>=1000?(f/1000).toFixed(1)+'k':Math.round(f))+'Hz '+(worst.v>0?'+':'')+worst.v.toFixed(1)+'dB', W-4, 12);
+    x.fillText('הכי חריג: '+(f>=1000?(f/1000).toFixed(1)+'k':Math.round(f))+'Hz '+(worst.v>0?'+':'')+worst.v.toFixed(1)+'dB', W-4, 12);
   }
   x.textAlign='left'; x.fillStyle='rgba(150,165,180,.75)';
   x.fillText('הזז כל פס לפי הידית', 4, 12);
@@ -1889,37 +1899,6 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     ctx.fillStyle='rgba(80,230,140,.9)'; ctx.font='10px monospace'; ctx.textAlign='end';
     ctx.fillText(targetMode==='house'?'יעד House':'יעד שטוח', W-8, 12);
   }
-  if(eqCurveData){
-    // Correction shown as a compact GEQ-style strip along the bottom: one bar per band,
-    // up = boost, down = cut. Mirrors a physical graphic EQ instead of floating a second
-    // chart (with its own dB scale) over the spectrum, which was hard to read.
-    const {freqs,corr}=eqCurveData;
-    const stripH=44, z=plotH-6-stripH/2, sc=(stripH/2)/9;   // ±9dB fills the strip
-    ctx.fillStyle='rgba(10,14,20,.72)';
-    ctx.fillRect(0, plotH-6-stripH, W, stripH);
-    ctx.strokeStyle='rgba(255,255,255,.14)'; ctx.lineWidth=1;
-    ctx.beginPath(); ctx.moveTo(0,z); ctx.lineTo(W,z); ctx.stroke();
-    const lo=ISO[0], hi=ISO[BANDS-1];
-    const bwv=Math.max(3, W/freqs.length*0.62);
-    let worst=null;
-    for(let k=0;k<freqs.length;k++){
-      const v=corr[k]; if(v==null) continue;
-      const f=freqs[k]; if(f<lo||f>hi) continue;
-      if(Math.abs(v)<0.4) continue;
-      const x=xForFreq(f), h=Math.max(1.5, Math.min(stripH/2-2, Math.abs(v)*sc));
-      ctx.fillStyle = v>0 ? 'rgba(80,230,140,.85)' : 'rgba(255,90,120,.85)';
-      ctx.fillRect(x-bwv/2, v>0? z-h : z, bwv, h);
-      if(!worst || Math.abs(v)>Math.abs(worst.v)) worst={f,v,x};
-    }
-    ctx.font='9px monospace'; ctx.textAlign='start';
-    ctx.fillStyle='rgba(190,205,220,.75)';
-    ctx.fillText('תיקון EQ', 8, plotH-6-stripH+11);
-    if(worst){   // label only the single most significant band — the rest are readable from the list
-      const lbl=(worst.f>=1000?(worst.f/1000).toFixed(1)+'k':Math.round(worst.f))+'Hz '+(worst.v>0?'+':'')+worst.v.toFixed(1);
-      ctx.textAlign='end'; ctx.fillStyle=worst.v>0?'#8ff0b8':'#ff9db1';
-      ctx.fillText(lbl, W-8, plotH-6-stripH+11);
-    }
-  }
   if(cursorX!=null && cursorX>=0 && cursorX<=W){
     const cf=freqForX(cursorX);
     const bi=Math.max(0,Math.min(BANDS-1,Math.floor(cursorX/bw)));
@@ -2029,7 +2008,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v143';
+document.getElementById('ver').textContent='v145';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
