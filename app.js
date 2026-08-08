@@ -409,10 +409,14 @@ function drawGEQ(c, freqs, corr){
   // Rendered as a physical graphic-EQ fader bank: one fader per band, knob position =
   // how far to move that band. Matches the device being adjusted, so no mental translation.
   const x=c.getContext('2d');
-  const W=c.width=c.clientWidth||360, H=234; c.height=H;
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  const CW=c.clientWidth||360, H=234;
+  c.width=Math.round(CW*dpr); c.height=Math.round(H*dpr);
+  x.setTransform(dpr,0,0,dpr,0,0);
+  const W=CW;
   x.clearRect(0,0,W,H);
   const top=34, bot=H-46, mid=(top+bot)/2, scale=(bot-top)/2/9;   // ±9dB travel
-  const n=freqs.length, slot=W/n, kw=Math.max(7,Math.min(15,slot*0.72)), kh=9;
+  const n=freqs.length, slot=W/n, kw=Math.max(9,Math.min(18,slot*0.80)), kh=11;
 
   x.fillStyle='#12171f'; x.fillRect(0,0,W,H);
   // 0 / ±6 reference lines
@@ -426,21 +430,22 @@ function drawGEQ(c, freqs, corr){
   for(let k=0;k<n;k++){
     const cx=slot*k+slot/2, v=corr[k];
     // fader slot
-    x.strokeStyle='rgba(255,255,255,.13)'; x.lineWidth=Math.max(2,kw*0.28);
+    x.strokeStyle='rgba(255,255,255,.20)'; x.lineWidth=Math.max(3,kw*0.34);
     x.lineCap='round'; x.beginPath(); x.moveTo(cx,top); x.lineTo(cx,bot); x.stroke();
     if(v==null) continue;
     const yy=mid-Math.max(-9,Math.min(9,v))*scale;
     // travel from centre, tinted by direction
-    x.strokeStyle = v>0.4?'rgba(80,230,140,.5)' : v<-0.4?'rgba(255,90,120,.5)' : 'rgba(255,255,255,.18)';
+    x.strokeStyle = v>0.4?'rgba(80,230,140,.75)' : v<-0.4?'rgba(255,90,120,.75)' : 'rgba(255,255,255,.22)';
     x.beginPath(); x.moveTo(cx,mid); x.lineTo(cx,yy); x.stroke();
     // knob
     const col = v>0.4?'#5ce89a' : v<-0.4?'#ff6b8b' : '#9fb0c2';
-    x.fillStyle=col; x.strokeStyle='rgba(0,0,0,.55)'; x.lineWidth=1;
+    x.save(); x.shadowColor='rgba(0,0,0,.6)'; x.shadowBlur=3; x.shadowOffsetY=1;
+    x.fillStyle=col; x.strokeStyle='rgba(0,0,0,.7)'; x.lineWidth=1;
     x.beginPath();
     if(x.roundRect) x.roundRect(cx-kw/2, yy-kh/2, kw, kh, 2);
     else x.rect(cx-kw/2, yy-kh/2, kw, kh);
-    x.fill(); x.stroke();
-    x.fillStyle='rgba(0,0,0,.5)'; x.fillRect(cx-kw/2+1, yy-0.5, kw-2, 1);   // knob line
+    x.fill(); x.stroke(); x.restore();
+    x.fillStyle='rgba(0,0,0,.55)'; x.fillRect(cx-kw/2+2, yy-0.5, kw-4, 1);   // knob line
     // numeric value beside the knob — needed for precise dialing on a real EQ
     if(Math.abs(v)>=0.4){
       const txt=(v>0?'+':'')+ (Math.abs(v)>=10 ? v.toFixed(0) : v.toFixed(1));
@@ -2022,7 +2027,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v146';
+document.getElementById('ver').textContent='v147';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
