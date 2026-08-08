@@ -393,25 +393,58 @@ function targetDb(f){
   return 0;
 }
 function drawGEQ(c, freqs, corr){
+  // Rendered as a physical graphic-EQ fader bank: one fader per band, knob position =
+  // how far to move that band. Matches the device being adjusted, so no mental translation.
   const x=c.getContext('2d');
-  const W=c.width=c.clientWidth||360, H=160; c.height=H;
+  const W=c.width=c.clientWidth||360, H=190; c.height=H;
   x.clearRect(0,0,W,H);
-  const mid=H/2, pad=18, scale=(H/2-pad)/9;
-  const logMin=Math.log(20), logMax=Math.log(20000);
-  const X=f=>((Math.log(f)-logMin)/(logMax-logMin))*W;
-  x.font='9px monospace';
-  [-9,-6,-3,0,3,6,9].forEach(d=>{ const yy=mid-d*scale; x.strokeStyle=d===0?'#4a5768':'#212c38';
-    x.beginPath();x.moveTo(0,yy);x.lineTo(W,yy);x.stroke();
-    if(d%3===0){ x.fillStyle='#8b97a5'; x.textAlign='left'; x.fillText((d>0?'+':'')+d,2,yy-2); } });
-  const pts=[]; for(let k=0;k<freqs.length;k++){ if(corr[k]!=null) pts.push({x:X(freqs[k]), y:mid-corr[k]*scale}); }
-  if(pts.length){
-    x.beginPath(); x.moveTo(pts[0].x,mid); pts.forEach(p=>x.lineTo(p.x,p.y)); x.lineTo(pts[pts.length-1].x,mid); x.closePath();
-    x.fillStyle='rgba(80,230,140,.12)'; x.fill();
-    x.beginPath(); pts.forEach((p,i)=>i?x.lineTo(p.x,p.y):x.moveTo(p.x,p.y));
-    x.strokeStyle='#50e68c'; x.lineWidth=2.5; x.stroke();
+  const top=26, bot=H-24, mid=(top+bot)/2, scale=(bot-top)/2/9;   // ±9dB travel
+  const n=freqs.length, slot=W/n, kw=Math.max(7,Math.min(15,slot*0.72)), kh=9;
+
+  x.fillStyle='#12171f'; x.fillRect(0,0,W,H);
+  // 0 / ±6 reference lines
+  x.font='9px monospace'; x.textAlign='left';
+  [6,0,-6].forEach(d=>{ const yy=mid-d*scale;
+    x.strokeStyle = d===0 ? 'rgba(255,255,255,.30)' : 'rgba(255,255,255,.10)';
+    x.setLineDash(d===0?[]:[2,3]); x.beginPath(); x.moveTo(0,yy); x.lineTo(W,yy); x.stroke();
+    x.fillStyle='rgba(160,175,190,.75)'; x.fillText((d>0?'+':'')+d, 2, yy-2); });
+  x.setLineDash([]);
+
+  for(let k=0;k<n;k++){
+    const cx=slot*k+slot/2, v=corr[k];
+    // fader slot
+    x.strokeStyle='rgba(255,255,255,.13)'; x.lineWidth=Math.max(2,kw*0.28);
+    x.lineCap='round'; x.beginPath(); x.moveTo(cx,top); x.lineTo(cx,bot); x.stroke();
+    if(v==null) continue;
+    const yy=mid-Math.max(-9,Math.min(9,v))*scale;
+    // travel from centre, tinted by direction
+    x.strokeStyle = v>0.4?'rgba(80,230,140,.5)' : v<-0.4?'rgba(255,90,120,.5)' : 'rgba(255,255,255,.18)';
+    x.beginPath(); x.moveTo(cx,mid); x.lineTo(cx,yy); x.stroke();
+    // knob
+    const col = v>0.4?'#5ce89a' : v<-0.4?'#ff6b8b' : '#9fb0c2';
+    x.fillStyle=col; x.strokeStyle='rgba(0,0,0,.55)'; x.lineWidth=1;
+    x.beginPath();
+    if(x.roundRect) x.roundRect(cx-kw/2, yy-kh/2, kw, kh, 2);
+    else x.rect(cx-kw/2, yy-kh/2, kw, kh);
+    x.fill(); x.stroke();
+    x.fillStyle='rgba(0,0,0,.5)'; x.fillRect(cx-kw/2+1, yy-0.5, kw-2, 1);   // knob line
   }
-  x.fillStyle='#8b97a5'; x.textAlign='center';
-  [31.5,100,500,1000,5000,10000].forEach(f=>{ x.fillText(f>=1000?(f/1000)+'k':f, X(f), H-3); });
+  // value of the strongest band, plus frequency ticks
+  x.textAlign='center'; x.font='9px monospace';
+  const marks=[31.5,63,125,250,500,1000,2000,4000,8000,16000];
+  x.fillStyle='rgba(150,165,180,.85)';
+  for(let k=0;k<n;k++){ const f=freqs[k];
+    if(!marks.some(m=>Math.abs(f/m-1)<0.02)) continue;
+    x.fillText(f>=1000?(f/1000)+'k':String(f), slot*k+slot/2, H-6); }
+  let worst=null;
+  for(let k=0;k<n;k++){ const v=corr[k]; if(v==null) continue; if(!worst||Math.abs(v)>Math.abs(worst.v)) worst={v,k}; }
+  if(worst && Math.abs(worst.v)>=0.5){
+    const f=freqs[worst.k];
+    x.textAlign='right'; x.fillStyle=worst.v>0?'#8ff0b8':'#ff9db1';
+    x.fillText((f>=1000?(f/1000).toFixed(1)+'k':Math.round(f))+'Hz '+(worst.v>0?'+':'')+worst.v.toFixed(1)+'dB', W-4, 12);
+  }
+  x.textAlign='left'; x.fillStyle='rgba(150,165,180,.75)';
+  x.fillText('הזז כל פס לפי הידית', 4, 12);
 }
 function micCalAt(f){
   if(!micCal||!micCal.f.length) return 0;
@@ -1857,32 +1890,35 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     ctx.fillText(targetMode==='house'?'יעד House':'יעד שטוח', W-8, 12);
   }
   if(eqCurveData){
+    // Correction shown as a compact GEQ-style strip along the bottom: one bar per band,
+    // up = boost, down = cut. Mirrors a physical graphic EQ instead of floating a second
+    // chart (with its own dB scale) over the spectrum, which was hard to read.
     const {freqs,corr}=eqCurveData;
-    const z=plotH*0.34, sc=(plotH*0.22)/12;
-    ctx.textAlign='end'; ctx.font='9px monospace';
-    [12,6,0,-6,-12].forEach(d=>{ const yy=z-d*sc;
-      ctx.strokeStyle=d===0?'rgba(80,230,140,.55)':'rgba(80,230,140,.16)';
-      ctx.setLineDash(d===0?[]:[2,3]); ctx.beginPath();ctx.moveTo(0,yy);ctx.lineTo(W,yy);ctx.stroke();
-      ctx.fillStyle='rgba(120,220,160,.9)'; ctx.fillText((d>0?'+':'')+d, W-4, yy-2); });
-    ctx.setLineDash([]);
+    const stripH=44, z=plotH-6-stripH/2, sc=(stripH/2)/9;   // ±9dB fills the strip
+    ctx.fillStyle='rgba(10,14,20,.72)';
+    ctx.fillRect(0, plotH-6-stripH, W, stripH);
+    ctx.strokeStyle='rgba(255,255,255,.14)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(0,z); ctx.lineTo(W,z); ctx.stroke();
     const lo=ISO[0], hi=ISO[BANDS-1];
-    ctx.strokeStyle='#50e68c'; ctx.lineWidth=2.5; ctx.beginPath(); let started=false;
-    for(let k=0;k<freqs.length;k++){ if(corr[k]==null) continue; const f=freqs[k]; if(f<lo||f>hi) continue;
-      const x=xForFreq(f), yy=z-Math.max(-12,Math.min(12,corr[k]))*sc;
-      started?ctx.lineTo(x,yy):ctx.moveTo(x,yy); started=true; }
-    ctx.stroke();
-    ctx.font='10px monospace'; ctx.textAlign='center';
-    for(let k=1;k<freqs.length-1;k++){ const v=corr[k]; if(v==null) continue;
-      const pv=corr[k-1], nv=corr[k+1]; if(pv==null||nv==null) continue;
-      const isExt=(v>=pv&&v>nv)||(v<=pv&&v<nv);
-      if(!isExt||Math.abs(v)<2) continue; const f=freqs[k]; if(f<lo||f>hi) continue;
-      const x=xForFreq(f), yy=z-Math.max(-12,Math.min(12,v))*sc;
-      const lbl=(f>=1000?(f/1000).toFixed(1)+'k':Math.round(f))+' '+(v>0?'+':'')+v.toFixed(0);
-      ctx.fillStyle='#0d1117'; const tw=ctx.measureText(lbl).width+6;
-      ctx.fillRect(x-tw/2, v>0?yy-16:yy+4, tw, 13);
-      ctx.fillStyle='#8ff0b8'; ctx.fillText(lbl, x, v>0?yy-6:yy+14); }
-    ctx.fillStyle='rgba(120,220,160,.9)'; ctx.textAlign='start'; ctx.font='10px monospace';
-    ctx.fillText('תיקון EQ', 8, z-12*sc-4);
+    const bwv=Math.max(3, W/freqs.length*0.62);
+    let worst=null;
+    for(let k=0;k<freqs.length;k++){
+      const v=corr[k]; if(v==null) continue;
+      const f=freqs[k]; if(f<lo||f>hi) continue;
+      if(Math.abs(v)<0.4) continue;
+      const x=xForFreq(f), h=Math.max(1.5, Math.min(stripH/2-2, Math.abs(v)*sc));
+      ctx.fillStyle = v>0 ? 'rgba(80,230,140,.85)' : 'rgba(255,90,120,.85)';
+      ctx.fillRect(x-bwv/2, v>0? z-h : z, bwv, h);
+      if(!worst || Math.abs(v)>Math.abs(worst.v)) worst={f,v,x};
+    }
+    ctx.font='9px monospace'; ctx.textAlign='start';
+    ctx.fillStyle='rgba(190,205,220,.75)';
+    ctx.fillText('תיקון EQ', 8, plotH-6-stripH+11);
+    if(worst){   // label only the single most significant band — the rest are readable from the list
+      const lbl=(worst.f>=1000?(worst.f/1000).toFixed(1)+'k':Math.round(worst.f))+'Hz '+(worst.v>0?'+':'')+worst.v.toFixed(1);
+      ctx.textAlign='end'; ctx.fillStyle=worst.v>0?'#8ff0b8':'#ff9db1';
+      ctx.fillText(lbl, W-8, plotH-6-stripH+11);
+    }
   }
   if(cursorX!=null && cursorX>=0 && cursorX<=W){
     const cf=freqForX(cursorX);
@@ -1993,7 +2029,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v141';
+document.getElementById('ver').textContent='v143';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
