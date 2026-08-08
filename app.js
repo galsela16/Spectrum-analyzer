@@ -75,7 +75,6 @@ let eqMarks=null;
 let eqCurveData=null;
 let eqMode='graphic', lastEqCorr=null;
 let tfMode='graphic';
-let eqCh = 1;
 const AREA_COLORS=['#2f9bff','#ffa53b','#ff5cc8','#50e68c'];
 const AREA_NAMES=['צפון','דרום','מזרח','מערב'];
 let areas=[];
@@ -466,8 +465,16 @@ function parseCalText(text, fname){
       if(isFinite(f)&&isFinite(g)&&f>0&&f<200000) { F.push(f); G.push(g); } }
   });
   if(F.length>1){
+    // interpolation assumes strictly ascending frequencies — sort and de-dupe so an
+    // unsorted or duplicated file can't silently produce a wrong calibration curve
+    const pts=F.map((f,i)=>[f,G[i]]).sort((a,b)=>a[0]-b[0]);
+    const F2=[],G2=[];
+    for(const [f,g] of pts){
+      if(F2.length && Math.abs(f-F2[F2.length-1])<1e-9){ G2[G2.length-1]=(G2[G2.length-1]+g)/2; continue; }
+      F2.push(f); G2.push(g);
+    }
     const id='c'+Date.now();
-    micCalList.push({id, name:(fname||'כיול').replace(/\.[^.]+$/,''), f:F, g:G});
+    micCalList.push({id, name:(fname||'כיול').replace(/\.[^.]+$/,''), f:F2, g:G2});
     activeCalId=id; deriveActiveCal(); saveCalStore(); renderCalList();
     if(eqPositions.length) computeAndShow();
     return true;
@@ -613,8 +620,9 @@ function updateAreaMeasBtn(){
 function measureArea(){
   if(!running){ alert('קודם הפעל את המיקרופון.'); return; }
   if(areas.length>=4){ alert('הגעת ל־4 אזורים — מחק אחד כדי להוסיף.'); return; }
-  if(areaState==='measuring') return;
-  const srcData = (eqCh === 2 && floatDataRef) ? floatDataRef : floatData;
+  if(measureBusy()){ alert('מדידה אחרת פעילה — המתן לסיומה.'); return; }
+  unfreezeForMeasure();
+  const srcData = floatData;
   areaAccum=new Float64Array(srcData.length); areaFrames=0; areaState='measuring';
   updateAreaMeasBtn();
   setTimeout(()=>{
@@ -724,7 +732,8 @@ function updateTfLevels(){
 }
 function tfMeasure(){
   if(!running||!analyserRef){ alert('הפעל מיקרופון עם כרטיס קול (input סטריאו).'); return; }
-  if(tfState==='measuring') return;
+  if(measureBusy()){ alert('מדידה אחרת פעילה — המתן לסיומה.'); return; }
+  unfreezeForMeasure();
   const bins=floatData.length;
   tfMic=new Float64Array(bins); tfRef=new Float64Array(bins); tfDiffSum=new Float64Array(bins); tfDiffSq=new Float64Array(bins); tfFrames=0; tfState='measuring';
   const btn=document.getElementById('tfMeasBtn'); btn.textContent='מודד…'; btn.style.opacity=.5;
@@ -894,7 +903,8 @@ function measureDelay(){ runDelayCapture(document.getElementById('dlyMeasBtn'), 
 }); }
 function runDelayCapture(btn, cb){
   if(!running||!analyserRef||!source){ alert('צריך כרטיס קול עם input סטריאו (מיק\'+רפרנס).'); return; }
-  if(dlyState==='measuring') return;
+  if(measureBusy()){ alert('מדידה אחרת פעילה — המתן לסיומה.'); return; }
+  unfreezeForMeasure();
   dlyState='measuring';
   const prevTxt=btn.textContent; btn.textContent='מקליט…'; btn.style.opacity=.5;
   const sr=audioCtx.sampleRate;
@@ -1051,10 +1061,22 @@ function computeDelay(ref, mic, sr){
   return { ms: (lag / sr) * 1000, samples: lag };
 }
 
+function measureBusy(){
+  // only one measurement may drive the generator/analyser at a time
+  return measState==='measuring' || areaState==='measuring' || tfState==='measuring'
+      || dlyState==='measuring' || rt60State==='capture';
+}
+function unfreezeForMeasure(){
+  // a frozen display holds stale FFT data — measuring from it would be wrong
+  if(!frozen) return;
+  frozen=false; snapCurve=null;
+  const fz=document.getElementById('freezeBtn'); if(fz){ fz.classList.remove('on'); fz.textContent='הקפא'; }
+}
 function measurePosition(){
   if(!running){ alert('קודם הפעל את המיקרופון.'); return; }
-  if(measState==='measuring') return;
-  const srcData = (eqCh === 2 && floatDataRef) ? floatDataRef : floatData;
+  if(measureBusy()){ alert('מדידה אחרת פעילה — המתן לסיומה.'); return; }
+  unfreezeForMeasure();
+  const srcData = floatData;
   measAccum=new Float64Array(srcData.length); measFrames=0; measState='measuring';
   updateEqUI();
   setTimeout(()=>{
@@ -1133,7 +1155,7 @@ function paramFromCorr(corr){
 function renderEqResult(){
   if(!lastEqCorr){ return; }
   const head='<div class="sub" style="margin-bottom:6px; color:var(--text); font-weight:600;">יעד '+(targetMode==='house'?'House':'שטוח')+
-    (micCal?' · כיול פעיל':' · ללא כיול')+' · '+eqPositions.length+' מיקומים (' + (eqCh===2?'כניסה 2':'כניסה 1') + '):</div>';
+    (micCal?' · כיול פעיל':' · ללא כיול')+' · '+eqPositions.length+' מיקומים:</div>';
   const box=document.getElementById('eqList');
   if(eqMode==='graphic'){
     let html = head + '<div class="tfGrid">';
@@ -1187,7 +1209,8 @@ document.getElementById('rtBtn').addEventListener('click',()=>{
 });
 function startRT60(){
   if(!running||!audioCtx){ alert('קודם הפעל את המיקרופון.'); return; }
-  if(rt60State==='capture') return;
+  if(measureBusy()){ alert('מדידה אחרת פעילה — המתן לסיומה.'); return; }
+  unfreezeForMeasure();
   rtStatus.innerHTML='מכין… משמיע רעש ורוד';
   const prevGenOn = genOn;
   const restoreType=genType; genType='pink';
@@ -1581,14 +1604,12 @@ function draw(){
   updateSignalTint();
   if(!frozen) analyser.getFloatFrequencyData(floatData);   // frozen → hold the last spectrum static
   if(measState==='measuring' && measAccum){
-    if(eqCh===2 && analyserRef) analyserRef.getFloatFrequencyData(floatDataRef);
-    const srcData = (eqCh === 2 && floatDataRef) ? floatDataRef : floatData;
+    const srcData = floatData;
     for(let i=0;i<srcData.length;i++) measAccum[i]+=db2lin(srcData[i]);
     measFrames++;
   }
   if(areaState==='measuring' && areaAccum){
-    if(eqCh===2 && analyserRef) analyserRef.getFloatFrequencyData(floatDataRef);
-    const srcData = (eqCh === 2 && floatDataRef) ? floatDataRef : floatData;
+    const srcData = floatData;
     for(let i=0;i<srcData.length;i++) areaAccum[i]+=db2lin(srcData[i]);
     areaFrames++;
   }
@@ -1616,9 +1637,8 @@ function draw(){
     setGain('dlyRef', levelDb(timeDataRef,2048));
   }
   if(eqPanel.classList.contains('open')){
-    const targetData = (eqCh === 2 && timeDataRef) ? timeDataRef : timeData;
-    if(eqCh === 2 && analyserRef) analyserRef.getFloatTimeDomainData(timeDataRef);
-    else analyser.getFloatTimeDomainData(timeData);
+    analyser.getFloatTimeDomainData(timeData);
+    const targetData = timeData;
     setGainEl(document.getElementById('eqMicFill'), document.getElementById('eqMicGain'), levelDb(targetData,2048));
   }
   if(typeof genPanel!=='undefined' && genPanel.classList.contains('open')){
@@ -1910,7 +1930,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v132';
+document.getElementById('ver').textContent='v133';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
