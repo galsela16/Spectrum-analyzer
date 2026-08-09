@@ -42,7 +42,7 @@ let floatData;
 let timeData, timeDataMeter;
 const GEQ=[20,25,31.5,40,50,63,80,100,125,160,200,250,315,400,500,630,800,1000,
            1250,1600,2000,2500,3150,4000,5000,6300,8000,10000,12500,16000,20000];
-let tfState='idle', tfSwap=false, tfMic=null, tfRef=null, tfDiffSum=null, tfDiffSq=null, tfFrames=0, tfResult=null, _tfCorr=0;
+let tfState='idle', tfSwap=false, tfMic=null, tfRef=null, tfFrames=0, tfResult=null, _tfCorr=0;
 let running=false, mode='rta';
 let peakHold=true, fbOn=true, avgOn=false;
 let floorDb=-85, ceilDb=-15;
@@ -287,9 +287,9 @@ function genApplyLevel(){
   if(genGain){ genGain.gain.setTargetAtTime(Math.pow(10,genDb/20),audioCtx.currentTime,0.1); }
 }
 
+const genPanel=document.getElementById('genPanel');
 document.getElementById('genBtn').addEventListener('click',function(){
-  const p=document.getElementById('genPanel'); 
-  const open=p.classList.toggle('open');
+  const open=genPanel.classList.toggle('open');
   this.classList.toggle('on',open);
 });
 
@@ -817,20 +817,22 @@ function updateTfLevels(){
   // Without this the meter reads ~0 at any real mic distance and can never show polarity.
   const N=1024, maxLag=Math.min(4800, timeDataRef.length-N-1);   // up to ~100ms @48k (~34m)
   const oa=timeData.length-N;
-  let bestAbs=0, r=0, bestLag=0;
+  let bestAbs=0, r=0, bestLag=0, bestVa=0, bestVb=0;
+  let _cVa=0, _cVb=0;   // variances of the last window pair corrAt looked at
   const corrAt=(ob)=>{
     let sa=0,sb=0,saa=0,sbb=0,sab=0;
     for(let i=0;i<N;i++){ const x=timeData[oa+i], y=timeDataRef[ob+i]; sa+=x;sb+=y;saa+=x*x;sbb+=y*y;sab+=x*y; }
     const cov=sab-sa*sb/N, va=saa-sa*sa/N, vb=sbb-sb*sb/N, den=Math.sqrt(va*vb);
+    _cVa=va; _cVb=vb;
     return den>1e-9 ? cov/den : 0;
   };
   for(let lag=0; lag<=maxLag; lag+=4){          // coarse scan
     const ob=timeDataRef.length-N-lag; if(ob<0) break;
-    const c=corrAt(ob); if(Math.abs(c)>bestAbs){ bestAbs=Math.abs(c); r=c; bestLag=lag; }
+    const c=corrAt(ob); if(Math.abs(c)>bestAbs){ bestAbs=Math.abs(c); r=c; bestLag=lag; bestVa=_cVa; bestVb=_cVb; }
   }
   for(let lag=Math.max(0,bestLag-6); lag<=Math.min(maxLag,bestLag+6); lag++){   // refine
     const ob=timeDataRef.length-N-lag; if(ob<0) continue;
-    const c=corrAt(ob); if(Math.abs(c)>bestAbs){ bestAbs=Math.abs(c); r=c; }
+    const c=corrAt(ob); if(Math.abs(c)>bestAbs){ bestAbs=Math.abs(c); r=c; bestVa=_cVa; bestVb=_cVb; }
   }
   _tfCorr += ((r||0)-_tfCorr)*0.15;   // smooth
   const fill=document.getElementById('tfCorrFill'), val=document.getElementById('tfCorrVal'), tip=document.getElementById('tfCorrTip');
@@ -841,7 +843,7 @@ function updateTfLevels(){
     const col=_tfCorr>0.4?'#39d98a':_tfCorr<-0.2?'#ff6b8b':'#ffd166';
     fill.style.background=col;
     if(val){ val.textContent=_tfCorr.toFixed(2); val.style.color=col; }
-    if(tip){ tip.textContent = va<1e-6||vb<1e-6 ? '(אין אות)' : _tfCorr<-0.2?'⚠ פולריות הפוכה?' : _tfCorr>0.6?'✓':' '; }
+    if(tip){ tip.textContent = bestVa<1e-6||bestVb<1e-6 ? '(אין אות)' : _tfCorr<-0.2?'⚠ פולריות הפוכה?' : _tfCorr>0.6?'✓':' '; }
   }
 }
 function tfMeasure(){
@@ -849,7 +851,7 @@ function tfMeasure(){
   if(measureBusy()){ alert('מדידה אחרת פעילה — המתן לסיומה.'); return; }
   unfreezeForMeasure();
   const bins=floatData.length;
-  tfMic=new Float64Array(bins); tfRef=new Float64Array(bins); tfDiffSum=new Float64Array(bins); tfDiffSq=new Float64Array(bins); tfFrames=0; tfState='measuring';
+  tfMic=new Float64Array(bins); tfRef=new Float64Array(bins); tfFrames=0; tfState='measuring';
   const btn=document.getElementById('tfMeasBtn'); btn.textContent='מודד…'; btn.style.opacity=.5;
   setTimeout(()=>{
     tfState='idle'; btn.textContent='מדוד שוב (6ש\')'; btn.style.opacity=1;
@@ -1759,9 +1761,6 @@ function draw(){
       for(let i=0;i<tfMic.length;i++){
         tfMic[i]+=db2lin(mic[i]);
         tfRef[i]+=db2lin(ref[i]);
-        const diff = mic[i] - ref[i];
-        tfDiffSum[i] += diff;
-        tfDiffSq[i] += diff * diff;
       }
       tfFrames++;
     }
@@ -1779,7 +1778,7 @@ function draw(){
     const targetData = timeData;
     setGainEl(document.getElementById('eqMicFill'), document.getElementById('eqMicGain'), levelDb(targetData,2048));
   }
-  if(typeof genPanel!=='undefined' && genPanel.classList.contains('open')){
+  if(genPanel.classList.contains('open')){
     analyser.getFloatTimeDomainData(timeData);
     const micDb=levelDb(timeData,2048);
     setGainEl(document.getElementById('gainMicFill'), document.getElementById('gainMicGain'), micDb);
@@ -2049,7 +2048,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v149';
+document.getElementById('ver').textContent='v150';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
