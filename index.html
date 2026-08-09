@@ -302,9 +302,9 @@
     <div class="dot" id="dot"></div>
     <h1><span>גל</span> אנלייזר <small id="ver" style="font-size:10px;color:var(--dim);letter-spacing:1px"></small></h1>
     <div class="modes">
-      <button id="mRta" class="on">ספקטרום</button>
-      <button id="mSpec">ווטרפול</button>
-      <button id="tfOverlayHdr" title="הצג מיק' + רפרנס יחד">מיק'/רפרנס</button>
+      <button id="mRta" class="on">ספקטרום · RTA</button>
+      <button id="mSpec">ווטרפול · Spectrograph</button>
+      <button id="tfOverlayHdr" title="הצג מיק' + רפרנס יחד">מיק'/רפרנס · TF</button>
     </div>
     <button id="helpBtn" title="מצב עזרה — רחף על כפתור להסבר">?</button>
     <div id="swatches" title="צבע האפליקציה">
@@ -339,7 +339,7 @@
     </div>
     
     <div id="rtPanel">
-      <h3 style="font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600">מדידת RT60</h3>
+      <h3 style="font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600">מדידת הדהוד · RT60</h3>
       <div id="rtStatus">לחץ RT60 כדי למדוד</div>
       <div class="chBar"><span style="min-width:64px">עוצמה</span><div class="track"><div class="fill" id="rtLvlFill"></div></div><span class="gainLbl" id="rtLvlGain">—</span></div>
       <div class="ctrl" style="width:100%">
@@ -367,10 +367,10 @@
       <button id="saveClose">סגור</button>
     </div>
     <div id="eqPanel">
-      <h3>מדידת תגובה</h3>
+      <h3>מדידת תגובה · Transfer Function</h3>
       <div class="seg respModeSeg" style="align-self:center">
-        <button data-rm="single" class="on">חד־ערוצי (מיק')</button>
-        <button data-rm="dual">דו־ערוצי (מיק'+רפרנס)</button>
+        <button data-rm="single" class="on">חד־ערוצי · SPL</button>
+        <button data-rm="dual">דו־ערוצי · TF</button>
       </div>
       <div style="display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;">
         <div class="seg" id="eqModeSwitchA">
@@ -411,7 +411,7 @@
     </div>
     
     <div id="areaPanel">
-      <h3>מדידת המרחב</h3>
+      <h3>מדידת המרחב · Spatial Average</h3>
       <div class="seg" id="eqModeSwitchB" style="align-self:center">
         <button data-go="avg">ממוצע</button>
         <button class="on">אזורים</button>
@@ -462,10 +462,10 @@
     </div>
     
     <div id="tfPanel">
-      <h3>מדידת תגובה</h3>
+      <h3>מדידת תגובה · Transfer Function</h3>
       <div class="seg respModeSeg" style="align-self:center">
-        <button data-rm="single">חד־ערוצי (מיק')</button>
-        <button data-rm="dual" class="on">דו־ערוצי (מיק'+רפרנס)</button>
+        <button data-rm="single">חד־ערוצי · SPL</button>
+        <button data-rm="dual" class="on">דו־ערוצי · TF</button>
       </div>
       <div class="sub">ערוץ 1 = מיקרופון מדידה · ערוץ 2 = רפרנס מהמיקסר. שלח תוכן/רעש ורוד דרך המערכת, ומדוד.</div>
       <div class="chBar"><span id="tfL1" style="min-width:96px">כניסה 1 → מיק'</span><div class="track"><div class="fill" id="tfMicFill"></div></div><span id="tfMicDb">—</span></div>
@@ -502,7 +502,7 @@
     </div>
     
     <div id="dlyPanel">
-      <h3>מדידת דיליי</h3>
+      <h3>מדידת דיליי · Delay Finder</h3>
       <div class="sub">כניסה 1 = מיקרופון · כניסה 2 = רפרנס מהמיקסר. נגן רעש ורוד/מוזיקה דרך המערכת (עם שליחת רפרנס לכניסה 2), ולחץ מדוד.</div>
       <div class="chBar"><span id="dlyL1" style="min-width:90px">כניסה 1 (מיק')</span><div class="track"><div class="fill" id="dlyMicFill"></div></div><span class="gainLbl" id="dlyMicGain">—</span></div>
       <div class="chBar"><span id="dlyL2" style="min-width:90px">כניסה 2 (רפרנס)</span><div class="track"><div class="fill" id="dlyRefFill"></div></div><span class="gainLbl" id="dlyRefGain">—</span></div>
@@ -637,12 +637,12 @@
 
     <div class="tabpage" data-page="tune">
       <div class="trow">
-        <button class="toggle" id="genBtn">גנרטור</button>
-        <button class="toggle" id="eqBtn">מדידת תגובה</button>
-        <button class="toggle" id="dlyBtn">דיליי</button>
-        <button class="toggle" id="rtBtn">RT60</button>
+        <button class="toggle" id="genBtn">גנרטור · Generator</button>
+        <button class="toggle" id="eqBtn">מדידת תגובה · Transfer Function</button>
+        <button class="toggle" id="dlyBtn">דיליי · Delay Finder</button>
+        <button class="toggle" id="rtBtn">הדהוד · RT60</button>
         <button class="toggle" id="geqShowBtn" title="הצג/הסתר את תצוגת תיקון ה-EQ">תצוגת EQ</button>
-        <button class="toggle" id="saveBtn">מדידות שמורות</button>
+        <button class="toggle" id="saveBtn">מדידות שמורות · Captures</button>
         <button class="toggle" id="refCurveBtn" title="שומר את התגובה הנוכחית כ'לפני' להשוואה">שמור כ״לפני״</button>
       </div>
       <div class="trow">

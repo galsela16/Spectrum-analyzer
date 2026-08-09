@@ -2103,7 +2103,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v154';
+document.getElementById('ver').textContent='v155';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
