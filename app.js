@@ -179,7 +179,7 @@ document.querySelectorAll('#unitSeg button').forEach(b=>b.addEventListener('clic
   document.querySelectorAll('#unitSeg button').forEach(x=>x.classList.remove('on'));
   this.classList.add('on'); meterUnit=this.dataset.u;
 }));
-document.getElementById('inSel').addEventListener('change',e=>{ try{localStorage.setItem('rta_inDev',e.target.value);}catch(_){} switchInput(e.target.value); });
+document.getElementById('inSel').addEventListener('change',e=>{ userPickedIn = e.target.value!==''; switchInput(e.target.value); });
 
 function freqForX(px){
   const W=cv.clientWidth;
@@ -1647,41 +1647,35 @@ async function start(deviceId){
   }
 }
 
-const PRO_RE=/mr18|xr18|x[\s-]?air|midas|behringer|scarlett|focusrite|presonus|motu|rme|audient|zoom|ssl|apollo|universal audio|interface|usb audio|audiobox|steinberg|ur[0-9]|clarett/i;
-function pickBestDevice(list, savedId){
-  if(savedId && list.some(d=>d.deviceId===savedId)) return savedId;   // remembered choice
-  const pro=list.find(d=>PRO_RE.test(d.label||''));                    // guess a pro interface
-  if(pro) return pro.deviceId;
-  return list[0] ? list[0].deviceId : '';
-}
+// By default the app follows the computer's current system default in/out.
+// These flip to true only if the user manually overrides a device for the session.
+let userPickedIn=false, userPickedOut=false;
 async function populateInputs(){
   try{
     const devs=await navigator.mediaDevices.enumerateDevices();
     const ins=devs.filter(d=>d.kind==='audioinput');
     const sel=document.getElementById('inSel');
-    const cur=sel.value;
     sel.innerHTML='';
+    { const o=document.createElement('option'); o.value=''; o.textContent='ברירת מחדל של המערכת'; sel.appendChild(o); }
     ins.forEach((d,i)=>{
+      if(d.deviceId==='default'||d.deviceId==='') return;   // the explicit default option already covers this
       const o=document.createElement('option');
       o.value=d.deviceId; o.textContent=d.label||('מיקרופון '+(i+1));
       sel.appendChild(o);
     });
-    const savedIn=lsGet('rta_inDev');
-    const bestIn=pickBestDevice(ins, cur||savedIn);
-    if(bestIn) sel.value=bestIn;
-    // if the best device isn't the one we're actually using, switch to it once
-    if(running && bestIn && bestIn!==activeInId){ switchInput(bestIn); return; }
+    sel.value = userPickedIn ? (activeInId||'') : '';   // '' = system default
+
     const outs=devs.filter(d=>d.kind==='audiooutput');
-    const osel=document.getElementById('outSel'); const ocur=osel.value;
+    const osel=document.getElementById('outSel');
     osel.innerHTML='';
-    if(!outs.length){ const o=document.createElement('option'); o.textContent='פלט ברירת מחדל'; osel.appendChild(o); }
+    { const o=document.createElement('option'); o.value=''; o.textContent='ברירת מחדל של המערכת'; osel.appendChild(o); }
     outs.forEach((d,i)=>{
+      if(d.deviceId==='default'||d.deviceId==='') return;
       const o=document.createElement('option');
       o.value=d.deviceId; o.textContent=d.label||('פלט '+(i+1));
       osel.appendChild(o);
     });
-    const savedOut=lsGet('rta_outDev');
-    if(ocur) osel.value=ocur; else if(savedOut && outs.some(d=>d.deviceId===savedOut)) osel.value=savedOut;
+    osel.value = userPickedOut ? (outSinkId||'') : '';
   }catch(e){}
 }
 let outSinkId=null;
@@ -1693,8 +1687,8 @@ async function applyOutput(deviceId){
   return false;
 }
 document.getElementById('outSel').addEventListener('change',async e=>{
-  try{localStorage.setItem('rta_outDev',e.target.value);}catch(_){}
-  const ok=await applyOutput(e.target.value);
+  userPickedOut = e.target.value!=='';
+  const ok=await applyOutput(e.target.value);   // '' resets the sink to the system default
   if(!ok) alert('הדפדפן לא תומך בבחירת יציאת פלט. הגדר את הפלט ב־macOS: הגדרות → סאונד → פלט.');
 });
 
@@ -2109,7 +2103,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v153';
+document.getElementById('ver').textContent='v154';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
