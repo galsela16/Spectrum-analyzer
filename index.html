@@ -432,6 +432,16 @@
           <button data-t="house">House</button>
         </div>
       </div>
+      <div style="display:flex;gap:14px;align-items:center;justify-content:center;flex-wrap:wrap;border-top:1px solid var(--line);padding-top:10px">
+        <div class="seg" id="areaModeSeg">
+          <button data-m="graphic" class="on">גרפיק</button>
+          <button data-m="param">פרמטרי</button>
+        </div>
+        <div class="seg" id="areaCutSeg">
+          <button data-co="0" class="on">מלא</button>
+          <button data-co="1">חיתוך בלבד</button>
+        </div>
+      </div>
       <div id="areaList" style="max-height:132px;overflow-y:auto"></div>
       <button id="areaEqBtn" class="toggle" style="align-self:center">הצע EQ ממוצע לכל האזורים</button>
       <canvas id="areaEqCanvas" style="width:100%;height:150px;background:#0b0f16;border:1px solid var(--line);border-radius:4px;display:none"></canvas>

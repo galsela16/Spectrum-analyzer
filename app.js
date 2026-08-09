@@ -345,18 +345,19 @@ document.getElementById('genOnBtn').addEventListener('click',()=>{ genOn?genStop
 function setTarget(mode){
   targetMode=mode;
   document.querySelectorAll('.tgtSeg button').forEach(b=>b.classList.toggle('on', b.dataset.t===mode));
-  if(eqPositions.length) computeAndShow();
+  if(eqPositions.length) computeAndShow(true);   // refresh without hijacking whichever panel is open
   if(areas.length) suggestAreaEQ();
   if(typeof tfFrames!=='undefined' && tfFrames) tfCompute();
 }
 document.querySelectorAll('.tgtSeg button').forEach(b=>b.addEventListener('click',function(){ setTarget(this.dataset.t); }));
-document.querySelectorAll('#cutOnlySeg button').forEach(b=>b.addEventListener('click',function(){
-  document.querySelectorAll('#cutOnlySeg button').forEach(x=>x.classList.remove('on'));
-  this.classList.add('on'); cutOnly=(this.dataset.co==='1');
-  if(eqPositions.length) computeAndShow();
+function setCutOnly(v){
+  cutOnly=v;
+  document.querySelectorAll('#cutOnlySeg button, #areaCutSeg button').forEach(b=>b.classList.toggle('on', (b.dataset.co==='1')===v));
+  if(eqPositions.length) computeAndShow(true);   // refresh eq data without forcing its modal open
   if(areas.length) suggestAreaEQ();
   if(typeof tfFrames!=='undefined' && tfFrames) tfCompute();
-}));
+}
+document.querySelectorAll('#cutOnlySeg button, #areaCutSeg button').forEach(b=>b.addEventListener('click',function(){ setCutOnly(this.dataset.co==='1'); }));
 
 document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',function(){
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
@@ -381,10 +382,13 @@ document.querySelectorAll('#eqModeSwitchA button').forEach(b=>b.addEventListener
 
 
 document.getElementById('eqMeasBtn').addEventListener('click',()=>pickSource(measurePosition,5000));
-document.querySelectorAll('#eqModeSeg button').forEach(b=>b.addEventListener('click',function(){
-  document.querySelectorAll('#eqModeSeg button').forEach(x=>x.classList.remove('on'));
-  this.classList.add('on'); eqMode=this.dataset.m; renderEqResult();
-}));
+function setEqMode(m){
+  eqMode=m;
+  document.querySelectorAll('#eqModeSeg button, #areaModeSeg button').forEach(b=>b.classList.toggle('on', b.dataset.m===m));
+  if(lastEqCorr) renderEqResult();
+  if(areas.length) suggestAreaEQ();
+}
+document.querySelectorAll('#eqModeSeg button, #areaModeSeg button').forEach(b=>b.addEventListener('click',function(){ setEqMode(this.dataset.m); }));
 document.querySelectorAll('#tfModeSeg button').forEach(b=>b.addEventListener('click',function(){
   document.querySelectorAll('#tfModeSeg button').forEach(x=>x.classList.remove('on'));
   this.classList.add('on'); tfMode=this.dataset.m; if(tfResult) renderTFList();
@@ -633,7 +637,12 @@ const areaPanel=document.getElementById('areaPanel');
 document.querySelectorAll('#eqModeSwitchB button').forEach(b=>b.addEventListener('click',function(){
   if(this.dataset.go==='avg'){ showModal(eqPanel); updateEqUI(); }
 }));
-function openAreas(){ renderAreaList(); showModal(areaPanel); }
+function openAreas(){
+  renderAreaList();
+  document.querySelectorAll('#areaModeSeg button').forEach(b=>b.classList.toggle('on', b.dataset.m===eqMode));
+  document.querySelectorAll('#areaCutSeg button').forEach(b=>b.classList.toggle('on', (b.dataset.co==='1')===cutOnly));
+  showModal(areaPanel);
+}
 document.getElementById('areaClose').addEventListener('click',closeModals);
 document.getElementById('areaMeasBtn').addEventListener('click',()=>pickSource(measureArea,5000));
 let pendingMeasureFn=null, pendingDur=5000;
@@ -697,22 +706,35 @@ function suggestAreaEQ(){
   eqCurveData={freqs:GEQ.slice(), corr:corr.slice()};
   
   const cv2=document.getElementById('areaEqCanvas'); cv2.style.display='block'; drawGEQ(cv2,GEQ,corr);
-  
-  let html = '<div class="sub" style="margin-bottom:6px; color:var(--text); font-weight:600;">ממוצע ' + areas.length + ' אזורים · יעד ' + (targetMode==='house'?'House':'שטוח') + ':</div>';
-  html += '<div class="tfGrid">';
-  for(let k=0; k<GEQ.length; k++){
-    const f = GEQ[k];
-    const fStr = f >= 1000 ? (f / 1000) + 'k' : f + 'Hz';
-    const v = corr[k];
-    if(v == null || Math.abs(v) < 0.5){
-      html += `<div class="tfItem off"><span class="f">${fStr}</span><span class="g">—</span></div>`;
-    } else {
-      const cls = v < 0 ? 'cut' : (v > 0 ? 'boost' : '');
-      const sign = v > 0 ? '+' : '';
-      html += `<div class="tfItem ${cls}"><span class="f">${fStr}</span><span class="g">${sign}${v.toFixed(1)}dB</span></div>`;
+
+  const head = '<div class="sub" style="margin-bottom:6px; color:var(--text); font-weight:600;">ממוצע ' + areas.length + ' אזורים · יעד ' + (targetMode==='house'?'House':'שטוח') + ':</div>';
+  let html;
+  if(eqMode==='param'){
+    const list=paramFromCorr(corr);
+    html = head;
+    if(list.length){
+      html += list.map(s=>{
+        const f=s.f>=1000?(s.f/1000).toFixed(2)+'kHz':Math.round(s.f)+'Hz';
+        const g=(s.gain>0?'+':'')+s.gain.toFixed(1)+'dB';
+        return '<div class="eqRow '+s.type+'"><span class="f">'+f+'</span><span class="g">'+g+'</span><span class="q">Q '+s.q.toFixed(1)+'</span></div>';
+      }).join('');
+    } else html += '<div class="sub">מאוזן 👌</div>';
+  } else {
+    html = head + '<div class="tfGrid">';
+    for(let k=0; k<GEQ.length; k++){
+      const f = GEQ[k];
+      const fStr = f >= 1000 ? (f / 1000) + 'k' : f + 'Hz';
+      const v = corr[k];
+      if(v == null || Math.abs(v) < 0.5){
+        html += `<div class="tfItem off"><span class="f">${fStr}</span><span class="g">—</span></div>`;
+      } else {
+        const cls = v < 0 ? 'cut' : (v > 0 ? 'boost' : '');
+        const sign = v > 0 ? '+' : '';
+        html += `<div class="tfItem ${cls}"><span class="f">${fStr}</span><span class="g">${sign}${v.toFixed(1)}dB</span></div>`;
+      }
     }
+    html += '</div>';
   }
-  html += '</div>';
   document.getElementById('areaEqList').innerHTML = html;
 }
 
@@ -1241,7 +1263,7 @@ function bandDbFromBins(bd,fLo,fHi,nyq,bins){
   let p=0; for(let i=lo;i<=hi;i++) p+=db2lin(bd[i]);
   return 10*Math.log10(p+1e-12);
 }
-function computeAndShow(){
+function computeAndShow(noModal){
   if(!eqPositions.length){ alert('מדוד לפחות מיקום אחד.'); return; }
   const binDb=avgPositions();
   if(!binDb) return;
@@ -1279,7 +1301,7 @@ function computeAndShow(){
   drawGEQ(document.getElementById('eqCurveCanvas'), GEQ, corr);
   lastEqCorr=corr;
   renderEqResult();
-  showModal(eqPanel);
+  if(!noModal) showModal(eqPanel);
 }
 function paramFromCorr(corr){
   const cand=[];
@@ -2087,7 +2109,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v152';
+document.getElementById('ver').textContent='v153';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
