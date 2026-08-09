@@ -101,11 +101,15 @@ function resize(){
   const dpr=Math.max(1, Math.min(window.devicePixelRatio||1, 2, MAXW/Math.max(1,r.width), MAXH/Math.max(1,r.height)));
   cv.width=Math.round(r.width*dpr); cv.height=Math.round(r.height*dpr);
   ctx.setTransform(dpr,0,0,dpr,0,0);
-  specCanvas=document.createElement('canvas');
-  specCanvas.width=Math.max(2,Math.floor(Math.min(r.width,MAXW)));
-  specCanvas.height=Math.max(2,Math.floor(Math.min(r.height,MAXH)));
-  specCtx=specCanvas.getContext('2d');
-  specCtx.fillStyle='#0d1117'; specCtx.fillRect(0,0,specCanvas.width,specCanvas.height);
+  // preserve the waterfall history across resizes instead of wiping it
+  const oldSpec=specCanvas;
+  const nc=document.createElement('canvas');
+  nc.width=Math.max(2,Math.floor(Math.min(r.width,MAXW)));
+  nc.height=Math.max(2,Math.floor(Math.min(r.height,MAXH)));
+  const nctx=nc.getContext('2d');
+  nctx.fillStyle='#0d1117'; nctx.fillRect(0,0,nc.width,nc.height);
+  if(oldSpec){ try{ nctx.drawImage(oldSpec,0,0,nc.width,nc.height); }catch(_){} }
+  specCanvas=nc; specCtx=nctx;
 }
 window.addEventListener('resize',resize);
 
@@ -314,7 +318,7 @@ function applyGenHz(hz, from){
   hz=Math.max(20,Math.min(20000, hz||0));
   genHz=hz;
   const slider=document.getElementById('genFreq'), num=document.getElementById('genFreqNum');
-  if(from!=='slider') slider.value=Math.min(16000,hz);
+  if(from!=='slider') slider.value=Math.min(20000,hz);
   if(from!=='num') num.value=Math.round(hz);
   document.getElementById('genFreqVal').textContent=(genHz>=1000?(genHz/1000).toFixed(genHz%1000?2:1)+'k':genHz)+'Hz';
   if(genOsc) genOsc.frequency.setTargetAtTime(genHz,audioCtx.currentTime,0.02);
@@ -1972,6 +1976,28 @@ function drawRta(W,H,nyquist,bins,xForFreq){
       ctx.fillStyle='#e6ecf3'; ctx.fillText(a.name,28,y-2);
     });
   }
+  // feedback markers — sustained peaks flagged by detectFeedback, drawn on the spectrum
+  if(fbOn && fbTrack.size){
+    const flagged=[];
+    for(const [,rec] of fbTrack){ if(rec.frames>=14) flagged.push(rec); }   // only confirmed (held) peaks
+    flagged.sort((a,b)=>b.db-a.db);
+    ctx.textAlign='center';
+    flagged.slice(0,6).forEach(rec=>{
+      const x=xForFreq(rec.hz); if(x<0||x>W) return;
+      const y=plotH-norm(rec.db)*plotH;
+      ctx.fillStyle='rgba(255,59,107,.95)';
+      ctx.beginPath(); ctx.arc(x,y-8,4,0,6.283); ctx.fill();
+      ctx.strokeStyle='rgba(255,59,107,.9)'; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(x,y-4); ctx.lineTo(x,y); ctx.stroke();
+      const lbl=(rec.hz>=1000?(rec.hz/1000).toFixed(2)+'k':rec.hz+'Hz')+' −'+rec.cut+'dB';
+      ctx.font='10px monospace';
+      const tw=ctx.measureText(lbl).width+8;
+      let tx=Math.max(2,Math.min(W-tw-2, x-tw/2));
+      ctx.fillStyle='rgba(40,10,18,.92)'; ctx.fillRect(tx,y-26,tw,13);
+      ctx.strokeStyle='rgba(255,59,107,.7)'; ctx.strokeRect(tx,y-26,tw,13);
+      ctx.fillStyle='#ff9db1'; ctx.fillText(lbl, tx+tw/2, y-16);
+    });
+  }
   let exactHz=0;
   if(peakBand>=0 && peakVal>0.05){
     const fc=ISO[peakBand];
@@ -2048,7 +2074,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v150';
+document.getElementById('ver').textContent='v151';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
