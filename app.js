@@ -24,6 +24,9 @@ function buildBands(bpo){
 }
 buildBands(6);
 
+// escape user-entered text (measurement names, calibration filenames) before it goes into innerHTML
+function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
 const cv = document.getElementById('cv');
 const ctx = cv.getContext('2d');
 const dot = document.getElementById('dot');
@@ -38,6 +41,7 @@ const meterVal = document.getElementById('meterVal');
 
 let audioCtx, analyser, analyserMeter, source, stream, raf;
 let analyserRef=null, floatDataRef=null, chReceived=1;
+let workletReady=false;   // recorder-worklet loaded? (needed for delay measurement)
 let floatData;
 let timeData, timeDataMeter;
 const GEQ=[20,25,31.5,40,50,63,80,100,125,160,200,250,315,400,500,630,800,1000,
@@ -58,7 +62,7 @@ let leqSumP=0, leqN=0, splMax=-120;
 let dragging=false, dragX0=0, dragX1=0, cursorX=null;
 let genType='pink', genOn=false, genGain=null, genSrc=null, genOsc=null;
 let genDb=-34, genHz=1000, targetMode='flat';
-let fftSize=32768;   // FFT resolution (accuracy vs speed)
+let fftSize=16384;   // FFT resolution (accuracy vs speed) — "balanced" default is smoother on laptops
 let _pfx=null;   // per-frame prefix-sum of linear power (perf)
 // dB→linear lookup: analyser output is clamped to [minDecibels, maxDecibels] (-100..-10),
 // so a small table covering -140..0 dB at 0.25dB steps is exact enough for power sums.
@@ -116,19 +120,23 @@ window.addEventListener('resize',resize);
 document.getElementById('floor').addEventListener('input',e=>{
   floorDb=parseFloat(e.target.value);
   document.getElementById('floorVal').textContent=floorDb+'dB';
+  prefSet('rta_floor', e.target.value);
 });
 document.getElementById('smooth').addEventListener('input',e=>{
   const v=parseFloat(e.target.value);
   document.getElementById('smoothVal').textContent=v.toFixed(2);
   if(analyser) analyser.smoothingTimeConstant=v;
+  prefSet('rta_smooth', e.target.value);
 });
 document.getElementById('cal').addEventListener('input',e=>{
   calib=parseFloat(e.target.value);
   document.getElementById('calVal').textContent=(calib>=0?'+':'')+calib+'dB';
+  prefSet('rta_cal', e.target.value);
 });
 document.getElementById('fbSens').addEventListener('input',e=>{
   fbProm = 26 - parseFloat(e.target.value);
   document.getElementById('fbSensVal').textContent = fbProm>=15?'נמוכה':fbProm>=10?'בינונית':'גבוהה';
+  prefSet('rta_fbSens', e.target.value);
 });
 document.getElementById('peakBtn').addEventListener('click',function(){
   peakHold=!peakHold; this.classList.toggle('on',peakHold); peaks.fill(0);
@@ -173,6 +181,7 @@ document.getElementById('wgtBtn').addEventListener('click',function(){
   this.classList.toggle('on', weightMode!=='Z');
   document.getElementById('wLbl').textContent=weightMode;
   leqSumP=0; leqN=0; splMax=-120;
+  prefSet('rta_wgt', weightMode);
 });
 document.getElementById('leqBtn').addEventListener('click',()=>{ leqSumP=0; leqN=0; splMax=-120; });
 document.querySelectorAll('#unitSeg button').forEach(b=>b.addEventListener('click',function(){
@@ -344,6 +353,7 @@ document.getElementById('genOnBtn').addEventListener('click',()=>{ genOn?genStop
 
 function setTarget(mode){
   targetMode=mode;
+  prefSet('rta_target', mode);
   document.querySelectorAll('.tgtSeg button').forEach(b=>b.classList.toggle('on', b.dataset.t===mode));
   if(eqPositions.length) computeAndShow(true);   // refresh without hijacking whichever panel is open
   if(areas.length) suggestAreaEQ();
@@ -407,6 +417,46 @@ function updateEqUI(){
 function targetDb(f){
   if(targetMode==='house') return Math.max(-5,Math.min(6, -1.0*Math.log2(f/250)));
   return 0;
+}
+// ---- shared EQ-correction math (one source of truth for all three measurement paths) ----
+function clampCorrBand(f, raw){
+  const maxBoost = cutOnly ? 0 : (f>500?1.5:4);   // limit boosts (protect drivers/headroom)
+  const maxCut   = f>500?-4:-9;
+  return Math.max(maxCut, Math.min(maxBoost, raw));
+}
+function eqOffset(resp, rel){                        // avg level over the reliable 200–4000Hz bands
+  let os=0,on=0;
+  for(let k=0;k<GEQ.length;k++){ if(rel[k] && GEQ[k]>=200 && GEQ[k]<=4000){ os+=resp[k]-targetDb(GEQ[k]); on++; } }
+  return on?os/on:0;
+}
+function buildCorr(resp, rel){                       // resp[k] measured dB per GEQ band, rel[k] reliability mask
+  const off=eqOffset(resp, rel);
+  return GEQ.map((f,k)=> rel[k] ? clampCorrBand(f, -(resp[k]-targetDb(f)-off)) : null);
+}
+// reliability mask by absolute level: a band is trusted if it's within 30dB of the loudest band and in 40–16kHz
+function relByLevel(resp){
+  const maxR=Math.max(...resp);
+  return GEQ.map((f,k)=> resp[k]>maxR-30 && f>=40 && f<=16000);
+}
+// ---- shared correction-list renderers (graphic fader grid / parametric list) ----
+function corrGridHtml(corr, rel){
+  let html='<div class="tfGrid">';
+  for(let k=0;k<GEQ.length;k++){
+    const f=GEQ[k], fStr=f>=1000?(f/1000)+'k':f+'Hz', v=corr[k];
+    const hide = v==null || (rel && !rel[k]) || Math.abs(v)<0.5;
+    if(hide) html+=`<div class="tfItem off"><span class="f">${fStr}</span><span class="g">—</span></div>`;
+    else { const cls=v<0?'cut':(v>0?'boost':''), sign=v>0?'+':''; html+=`<div class="tfItem ${cls}"><span class="f">${fStr}</span><span class="g">${sign}${v.toFixed(1)}dB</span></div>`; }
+  }
+  return html+'</div>';
+}
+function corrParamHtml(corr){
+  const list=paramFromCorr(corr);
+  if(!list.length) return '<div class="sub">מאוזן 👌</div>';
+  return list.map(s=>{
+    const f=s.f>=1000?(s.f/1000).toFixed(2)+'kHz':Math.round(s.f)+'Hz';
+    const g=(s.gain>0?'+':'')+s.gain.toFixed(1)+'dB';
+    return '<div class="eqRow '+s.type+'"><span class="f">'+f+'</span><span class="g">'+g+'</span><span class="q">Q '+s.q.toFixed(1)+'</span></div>';
+  }).join('');
 }
 function showGeqDock(title){
   const dock=document.getElementById('geqDock'); if(!dock) return;
@@ -533,7 +583,7 @@ function renderCalList(){
   const box=document.getElementById('calList');
   let html='<div class="calRow'+(activeCalId===null?' on':'')+'" data-id=""><span class="nm">ללא כיול</span></div>';
   html+=micCalList.map(c=>'<div class="calRow'+(c.id===activeCalId?' on':'')+'" data-id="'+c.id+'">'+
-    '<span class="nm" title="'+c.name+'">'+c.name+'</span><span class="sub">'+c.f.length+' נק\'</span><span class="del" data-del="'+c.id+'" title="מחק">🗑</span></div>').join('');
+    '<span class="nm" title="'+escapeHtml(c.name)+'">'+escapeHtml(c.name)+'</span><span class="sub">'+c.f.length+' נק\'</span><span class="del" data-del="'+c.id+'" title="מחק">🗑</span></div>').join('');
   box.innerHTML=html;
   box.querySelectorAll('.calRow').forEach(row=>row.addEventListener('click',e=>{
     if(e.target.dataset.del!==undefined) return;
@@ -691,51 +741,15 @@ function suggestAreaEQ(){
   const avg=new Array(n);
   for(let k=0;k<n;k++){ let p=0; areas.forEach(a=>p+=db2lin(a.db[k])); avg[k]=10*Math.log10(p/areas.length+1e-12); }
   const resp=avg.map((d,k)=> d - (micCal?micCalAt(GEQ[k]):0));
-  const maxR=Math.max(...resp);
-  const rel=GEQ.map((f,k)=> resp[k]>maxR-30 && f>=40 && f<=16000);
-  let os=0,on=0; for(let k=0;k<n;k++){ if(rel[k]&&GEQ[k]>=200&&GEQ[k]<=4000){ os+=resp[k]-targetDb(GEQ[k]); on++; } }
-  const off=on?os/on:0;
-  const corr=GEQ.map((f,k)=> {
-    if(!rel[k]) return null;
-    const raw = -(resp[k]-targetDb(f)-off);
-    const maxBoost = cutOnly ? 0 : (f > 500 ? 1.5 : 4);
-    const maxCut = f > 500 ? -4 : -9;
-    return Math.max(maxCut, Math.min(maxBoost, raw));
-  });
+  const rel=relByLevel(resp);
+  const corr=buildCorr(resp, rel);
   eqMarks=[]; for(let k=0;k<n;k++){ if(corr[k]!=null && Math.abs(corr[k])>=1.0) eqMarks.push({f:GEQ[k],gain:corr[k],type:corr[k]<0?'cut':'boost'}); }
   eqCurveData={freqs:GEQ.slice(), corr:corr.slice()};
-  
+
   const cv2=document.getElementById('areaEqCanvas'); cv2.style.display='block'; drawGEQ(cv2,GEQ,corr);
 
   const head = '<div class="sub" style="margin-bottom:6px; color:var(--text); font-weight:600;">ממוצע ' + areas.length + ' אזורים · יעד ' + (targetMode==='house'?'House':'שטוח') + ':</div>';
-  let html;
-  if(eqMode==='param'){
-    const list=paramFromCorr(corr);
-    html = head;
-    if(list.length){
-      html += list.map(s=>{
-        const f=s.f>=1000?(s.f/1000).toFixed(2)+'kHz':Math.round(s.f)+'Hz';
-        const g=(s.gain>0?'+':'')+s.gain.toFixed(1)+'dB';
-        return '<div class="eqRow '+s.type+'"><span class="f">'+f+'</span><span class="g">'+g+'</span><span class="q">Q '+s.q.toFixed(1)+'</span></div>';
-      }).join('');
-    } else html += '<div class="sub">מאוזן 👌</div>';
-  } else {
-    html = head + '<div class="tfGrid">';
-    for(let k=0; k<GEQ.length; k++){
-      const f = GEQ[k];
-      const fStr = f >= 1000 ? (f / 1000) + 'k' : f + 'Hz';
-      const v = corr[k];
-      if(v == null || Math.abs(v) < 0.5){
-        html += `<div class="tfItem off"><span class="f">${fStr}</span><span class="g">—</span></div>`;
-      } else {
-        const cls = v < 0 ? 'cut' : (v > 0 ? 'boost' : '');
-        const sign = v > 0 ? '+' : '';
-        html += `<div class="tfItem ${cls}"><span class="f">${fStr}</span><span class="g">${sign}${v.toFixed(1)}dB</span></div>`;
-      }
-    }
-    html += '</div>';
-  }
-  document.getElementById('areaEqList').innerHTML = html;
+  document.getElementById('areaEqList').innerHTML = head + (eqMode==='param' ? corrParamHtml(corr) : corrGridHtml(corr, null));
 }
 
 function updateAreaMeasBtn(){
@@ -907,17 +921,10 @@ function tfCompute(){
     refMax=Math.max(refMax,refB[k]);
   }
   if(micCal){ for(let k=0;k<GEQ.length;k++) H[k]-=micCalAt(GEQ[k]); }
+  // reliability here is reference-based (a band is trusted where channel-2 has real signal)
   const rel=GEQ.map((f,k)=> refB[k]>refMax-25 && f>=40 && f<=16000);
-  let os=0,on=0;
-  for(let k=0;k<GEQ.length;k++){ if(rel[k]&&GEQ[k]>=200&&GEQ[k]<=4000){ os+=H[k]-targetDb(GEQ[k]); on++; } }
-  const offset=on?os/on:0;
-  const corr=GEQ.map((f,k)=> {
-      if(!rel[k]) return null;
-      const raw = -(H[k]-targetDb(f)-offset);
-      const maxBoost = cutOnly ? 0 : (f > 500 ? 1.5 : 4);
-      const maxCut = f > 500 ? -4 : -9;
-      return Math.max(maxCut, Math.min(maxBoost, raw));
-  });
+  const on=rel.filter(Boolean).length;
+  const corr=buildCorr(H, rel);
   tfResult={corr,H,rel};
   document.getElementById('tfInfo').textContent = on? 'הזז בגרפיק־EQ לפי הערכים (±6dB מקס). מוצגים רק פסים אמינים עם תיקון משמעותי.' :
     'רפרנס חלש/חסר — ודא שערוץ 2 מקבל אות מהמיקסר, או לחץ "החלף ערוצים".';
@@ -934,44 +941,12 @@ function renderTFList(){
   eqCurveData = { freqs: GEQ.slice(), corr: tfResult.corr.slice() };
 
   if(tfMode==='param'){
-    const list=paramFromCorr(tfResult.corr);
-    let html='<div class="sub" style="margin-bottom:6px;color:var(--text);font-weight:600;">EQ פרמטרי (יעד '+(targetMode==='house'?'House':'שטוח')+'):</div>';
-    if(list.length){
-      html+=list.map(s=>{
-        const f=s.f>=1000?(s.f/1000).toFixed(2)+'kHz':Math.round(s.f)+'Hz';
-        const g=(s.gain>0?'+':'')+s.gain.toFixed(1)+'dB';
-        return '<div class="eqRow '+s.type+'"><span class="f">'+f+'</span><span class="g">'+g+'</span><span class="q">Q '+s.q.toFixed(1)+'</span></div>';
-      }).join('');
-    } else html+='<div class="sub">מאוזן 👌</div>';
-    box.innerHTML=html;
+    const head='<div class="sub" style="margin-bottom:6px;color:var(--text);font-weight:600;">EQ פרמטרי (יעד '+(targetMode==='house'?'House':'שטוח')+'):</div>';
+    box.innerHTML = head + corrParamHtml(tfResult.corr);
     return;
   }
-
-  let html = '<div class="sub" style="margin-bottom:6px; color:var(--text); font-weight:600;">ערכי תיקון לגרפיק-EQ (31 פסים):</div>';
-  html += '<div class="tfGrid">';
-
-  for(let k = 0; k < GEQ.length; k++){
-    const f = GEQ[k];
-    const fStr = f >= 1000 ? (f / 1000) + 'k' : f + 'Hz';
-    const v = tfResult.corr[k];
-
-    if(v == null || !tfResult.rel[k]){
-      html += `<div class="tfItem off">
-                <span class="f">${fStr}</span>
-                <span class="g">—</span>
-               </div>`;
-    } else {
-      const cls = v < 0 ? 'cut' : (v > 0 ? 'boost' : '');
-      const sign = v > 0 ? '+' : '';
-      html += `<div class="tfItem ${cls}">
-                <span class="f">${fStr}</span>
-                <span class="g">${sign}${v.toFixed(1)}dB</span>
-               </div>`;
-    }
-  }
-  
-  html += '</div>';
-  box.innerHTML = html;
+  const head='<div class="sub" style="margin-bottom:6px; color:var(--text); font-weight:600;">ערכי תיקון לגרפיק-EQ (31 פסים):</div>';
+  box.innerHTML = head + corrGridHtml(tfResult.corr, tfResult.rel);
 }
 
 function tfExportCsv(){
@@ -982,7 +957,13 @@ function tfExportCsv(){
 }
 
 const dlyPanel=document.getElementById('dlyPanel');
-document.getElementById('dlyBtn').addEventListener('click',()=>{ showModal(dlyPanel); });
+document.getElementById('dlyBtn').addEventListener('click',()=>{
+  showModal(dlyPanel);
+  if(running && !workletReady){   // proactively warn instead of failing only when they press "measure"
+    const st=document.getElementById('dlyStatus');
+    if(st){ st.innerHTML='<span style="color:var(--warn)">⚠ מנוע ההקלטה לא נטען — מדידת דיליי לא תעבוד. פתח את האתר דרך שרת/HTTPS (לא כקובץ מקומי).</span>'; }
+  }
+});
 document.getElementById('dlyClose').addEventListener('click',closeModals);
 function resetDelay(){
   dlyState='idle';
@@ -1117,7 +1098,7 @@ function renderDlySpk(){
     }
     return '<div class="calRow" style="gap:6px">'+
       '<span class="dlyAnchor" data-a="'+i+'" title="בחר כעוגן" style="cursor:pointer;font-size:15px;color:'+(i===dlyAnchor?'var(--accent)':'var(--dim)')+'">'+(i===dlyAnchor?'◉':'◎')+'</span>'+
-      '<input class="posName" data-i="'+i+'" value="'+(s.name||dlyName(i)).replace(/"/g,'&quot;')+'" style="flex:1">'+
+      '<input class="posName" data-i="'+i+'" value="'+escapeHtml(s.name||dlyName(i))+'" style="flex:1">'+
       '<span style="min-width:64px;font-size:11px;color:var(--dim)">'+(s.ms==null?'—':s.ms.toFixed(2)+'ms')+'</span>'+
       '<button class="toggle dlyMeasOne" data-i="'+i+'" style="padding:6px 10px;font-size:11px">מדוד</button>'+
       '<span style="min-width:74px;font-size:11px;text-align:end">'+add+'</span>'+
@@ -1231,9 +1212,15 @@ function measurePosition(){
   measAccum=new Float64Array(srcData.length); measFrames=0; measState='measuring';
   updateEqUI();
   setTimeout(()=>{
-    const bins=measAccum.length, bd=new Float32Array(bins);
-    for(let i=0;i<bins;i++) bd[i]=10*Math.log10(measAccum[i]/Math.max(1,measFrames)+1e-12);
-    eqPositions.push({name:'מיקום '+(eqPositions.length+1), data:bd}); measState='idle';
+    // reduce to the 31 GEQ bands right away — keeps storage tiny (31 vs ~16k numbers/position)
+    const bins=measAccum.length, nyq=audioCtx.sampleRate/2, R6=Math.pow(2,1/6);
+    const db=GEQ.map(fc=>{
+      let lo=Math.floor((fc/R6)/nyq*bins), hi=Math.ceil((fc*R6)/nyq*bins);
+      lo=Math.max(0,lo);hi=Math.min(bins-1,hi);if(hi<lo)hi=lo;
+      let p=0; for(let i=lo;i<=hi;i++) p+=measAccum[i]/Math.max(1,measFrames);
+      return 10*Math.log10(p+1e-12);
+    });
+    eqPositions.push({name:'מיקום '+(eqPositions.length+1), db}); measState='idle';
     computeAndShow(); updateEqUI(); renderEqList();
   },5000);
 }
@@ -1241,7 +1228,7 @@ function renderEqList(){
   const box=document.getElementById('eqPosList'); if(!box) return;
   if(!eqPositions.length){ box.innerHTML=''; return; }
   box.innerHTML=eqPositions.map((p,i)=>
-    '<div class="calRow"><input class="posName" data-i="'+i+'" value="'+(p.name||('מיקום '+(i+1))).replace(/"/g,'&quot;')+'">'+
+    '<div class="calRow"><input class="posName" data-i="'+i+'" value="'+escapeHtml(p.name||('מיקום '+(i+1)))+'">'+
     '<span class="del" data-del="'+i+'" title="מחק מיקום">🗑</span></div>').join('');
   box.querySelectorAll('.posName').forEach(inp=>inp.addEventListener('change',function(){
     const i=+this.dataset.i; if(eqPositions[i]) eqPositions[i].name=this.value; }));
@@ -1251,10 +1238,10 @@ function renderEqList(){
     updateEqUI(); renderEqList();
   }));
 }
-function avgPositions(){
+function avgPositions(){   // power-average the positions across the 31 GEQ bands → dB per band
   if(!eqPositions.length) return null;
-  const bins=eqPositions[0].data.length, out=new Float32Array(bins);
-  for(let i=0;i<bins;i++){ let p=0; for(const pos of eqPositions) p+=db2lin(pos.data[i]); out[i]=10*Math.log10(p/eqPositions.length+1e-12); }
+  const out=new Float32Array(GEQ.length);
+  for(let k=0;k<GEQ.length;k++){ let p=0; for(const pos of eqPositions) p+=db2lin(pos.db[k]); out[k]=10*Math.log10(p/eqPositions.length+1e-12); }
   return out;
 }
 function bandDbFromBins(bd,fLo,fHi,nyq,bins){
@@ -1265,11 +1252,9 @@ function bandDbFromBins(bd,fLo,fHi,nyq,bins){
 }
 function computeAndShow(noModal){
   if(!eqPositions.length){ alert('מדוד לפחות מיקום אחד.'); return; }
-  const binDb=avgPositions();
-  if(!binDb) return;
-  const nyq=audioCtx.sampleRate/2, bins=binDb.length, R6=Math.pow(2,1/6);
-  if(micCal){ for(let i=0;i<bins;i++) binDb[i]-=micCalAt(i*nyq/bins); }
-  const resp=GEQ.map(fc=> bandDbFromBins(binDb,fc/R6,fc*R6,nyq,bins));
+  const band=avgPositions();   // already 31-band dB (aligned to GEQ)
+  if(!band) return;
+  const resp=GEQ.map((fc,k)=> band[k] - (micCal?micCalAt(fc):0));
   // reliability guard: a measurement taken with no signal (PA off, mic muted, gain at zero)
   // still yields a smooth-looking curve from the noise floor. Refuse instead of advising on noise.
   // Criterion is absolute band level — pink through a good system is deliberately FLAT,
@@ -1285,17 +1270,8 @@ function computeAndShow(noModal){
       return;
     }
   }
-  const maxR=Math.max(...resp);
-  const rel=GEQ.map((f,k)=> resp[k]>maxR-30 && f>=40 && f<=16000);
-  let os=0,on=0; for(let k=0;k<GEQ.length;k++){ if(rel[k]&&GEQ[k]>=200&&GEQ[k]<=4000){ os+=resp[k]-targetDb(GEQ[k]); on++; } }
-  const off=on?os/on:0;
-  const corr=GEQ.map((f,k)=> {
-    if(!rel[k]) return null;
-    const raw = -(resp[k]-targetDb(f)-off);
-    const maxBoost = cutOnly ? 0 : (f > 500 ? 1.5 : 4);
-    const maxCut = f > 500 ? -4 : -9;
-    return Math.max(maxCut, Math.min(maxBoost, raw));
-  });
+  const rel=relByLevel(resp);
+  const corr=buildCorr(resp, rel);
   eqCurveData={freqs:GEQ.slice(), corr:corr.slice()};
   showGeqDock('תיקון EQ · חד־ערוצי');
   drawGEQ(document.getElementById('eqCurveCanvas'), GEQ, corr);
@@ -1324,36 +1300,7 @@ function renderEqResult(){
   const head='<div class="sub" style="margin-bottom:6px; color:var(--text); font-weight:600;">יעד '+(targetMode==='house'?'House':'שטוח')+
     (micCal?' · כיול פעיל':' · ללא כיול')+' · '+eqPositions.length+' מיקומים:</div>';
   const box=document.getElementById('eqList');
-  if(eqMode==='graphic'){
-    let html = head + '<div class="tfGrid">';
-    for(let k=0; k<GEQ.length; k++){
-      const f = GEQ[k];
-      const fStr = f >= 1000 ? (f / 1000) + 'k' : f + 'Hz';
-      const v = lastEqCorr[k];
-      if(v == null || Math.abs(v) < 0.5){
-        html += `<div class="tfItem off"><span class="f">${fStr}</span><span class="g">—</span></div>`;
-      } else {
-        const cls = v < 0 ? 'cut' : (v > 0 ? 'boost' : '');
-        const sign = v > 0 ? '+' : '';
-        html += `<div class="tfItem ${cls}"><span class="f">${fStr}</span><span class="g">${sign}${v.toFixed(1)}dB</span></div>`;
-      }
-    }
-    html += '</div>';
-    box.innerHTML = html;
-  } else {
-    const list=paramFromCorr(lastEqCorr);
-    let html = head;
-    if(list.length){
-      html += list.map(s=>{
-        const f=s.f>=1000?(s.f/1000).toFixed(2)+'kHz':Math.round(s.f)+'Hz';
-        const g=(s.gain>0?'+':'')+s.gain.toFixed(1)+'dB';
-        return '<div class="eqRow '+s.type+'"><span class="f">'+f+'</span><span class="g">'+g+'</span><span class="q">Q '+s.q.toFixed(1)+'</span></div>';
-      }).join('');
-    } else {
-      html += '<div class="sub">מאוזן 👌</div>';
-    }
-    box.innerHTML = html;
-  }
+  box.innerHTML = head + (eqMode==='graphic' ? corrGridHtml(lastEqCorr, null) : corrParamHtml(lastEqCorr));
 }
 
 const rtPanel=document.getElementById('rtPanel'), rtStatus=document.getElementById('rtStatus');
@@ -1494,6 +1441,7 @@ document.getElementById('res').addEventListener('input',e=>{
   const bpo=Math.max(3,Math.min(24,parseInt(e.target.value,10)));
   document.getElementById('resVal').textContent='1/'+bpo+' אוקטבה';
   buildBands(bpo);
+  prefSet('rta_res', bpo);
 });
 function setFft(n){
   fftSize=n;
@@ -1508,7 +1456,7 @@ function setFft(n){
 }
 document.querySelectorAll('#fftSeg button').forEach(b=>b.addEventListener('click',function(){
   document.querySelectorAll('#fftSeg button').forEach(x=>x.classList.remove('on'));
-  this.classList.add('on'); setFft(parseInt(this.dataset.n,10));
+  this.classList.add('on'); setFft(parseInt(this.dataset.n,10)); prefSet('rta_fft', this.dataset.n);
 }));
 document.getElementById('mRta').addEventListener('click',()=>setMode('rta'));
 document.getElementById('mSpec').addEventListener('click',()=>setMode('spec'));
@@ -1578,7 +1526,9 @@ async function start(deviceId){
     if(audioCtx.state === 'suspended') await audioCtx.resume();
     try {
       await audioCtx.audioWorklet.addModule('recorder-worklet.js');
+      workletReady=true;
     } catch(err) {
+      workletReady=false;
       console.warn('AudioWorklet failed to load. Delay measurement might not work without a server.', err);
     }
 
@@ -1958,13 +1908,11 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     ctx.strokeRect(xa,0,xb-xa,plotH);
   }
   if(targetMode!=='off' && (eqPanel.classList.contains('open')||areaPanel.classList.contains('open'))){
+    // guide shape derived from the SAME targetDb() used for the actual correction, so what you
+    // see matches what the app aims for (flat = level line, house = the real bass-up/treble-down tilt)
     ctx.strokeStyle='rgba(80,230,140,.8)'; ctx.setLineDash([6,5]); ctx.lineWidth=2; ctx.beginPath();
     for(let b=0;b<BANDS;b++){
-      const t=b/(BANDS-1);
-      let ty=0.55;
-      if(targetMode==='house'){
-        ty=0.68-0.22*t;
-      }
+      const ty=Math.max(0.05, Math.min(0.95, 0.55 + targetDb(ISO[b])*0.03));   // 0.03 display-units per dB
       const x=b*bw+bw/2, yy=plotH-ty*plotH;
       b===0?ctx.moveTo(x,yy):ctx.lineTo(x,yy);
     }
@@ -2115,7 +2063,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v156';
+document.getElementById('ver').textContent='v157';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
@@ -2126,6 +2074,7 @@ function applyAccent(hex){
   try{ localStorage.setItem('rta_accent',hex); }catch(_){}
 }
 function lsGet(k){ try{ return localStorage.getItem(k); }catch(_){ return null; } }
+function prefSet(k,v){ try{ localStorage.setItem(k, v); }catch(_){} }
 // ---- before/after: keep a reference curve of the response prior to EQ changes ----
 document.getElementById('refCurveBtn').addEventListener('click',function(){
   if(refCurve){ refCurve=null; this.classList.remove('on'); this.textContent='שמור כ״לפני״'; return; }
@@ -2143,7 +2092,7 @@ function snapshotState(name){
   return {
     id:'s'+Date.now(), name:name, date:new Date().toISOString().slice(0,10),
     target:targetMode,
-    positions:eqPositions.map(p=>({name:p.name, data:Array.from(p.data)})),
+    positions:eqPositions.map(p=>({name:p.name, db:Array.from(p.db)})),   // 31-band, tiny
     areas:areas.map(a=>({name:a.name, color:a.color, db:Array.from(a.db), show:a.show})),
     speakers:dlySpeakers.map(s=>({name:s.name, ms:s.ms})),
     anchor:dlyAnchor,
@@ -2158,7 +2107,7 @@ function renderSaveList(){
     if(s.positions&&s.positions.length) bits.push(s.positions.length+' מיקומים');
     if(s.areas&&s.areas.length) bits.push(s.areas.length+' אזורים');
     if(s.speakers&&s.speakers.some(x=>x.ms!=null)) bits.push('דיליי');
-    return '<div class="saveRow"><span class="nm" title="'+s.name.replace(/"/g,'&quot;')+'">'+s.name+
+    return '<div class="saveRow"><span class="nm" title="'+escapeHtml(s.name)+'">'+escapeHtml(s.name)+
       '</span><span class="meta">'+s.date+(bits.length?' · '+bits.join(' · '):'')+'</span>'+
       '<button data-load="'+s.id+'">טען</button><button data-rm="'+s.id+'">מחק</button></div>';
   }).join('');
@@ -2173,7 +2122,16 @@ function loadSave(id){
   const s=saves.find(x=>x.id===id); if(!s) return;
   if(measureBusy()){ alert('מדידה פעילה — המתן לסיומה.'); return; }
   if((eqPositions.length||areas.length) && !confirm('לטעון "'+s.name+'"? המדידות הנוכחיות יוחלפו.')) return;
-  eqPositions=(s.positions||[]).map(p=>({name:p.name, data:Float32Array.from(p.data)}));
+  eqPositions=(s.positions||[]).map(p=>{
+    if(p.db) return {name:p.name, db:Float32Array.from(p.db)};                       // new 31-band format
+    // legacy full-FFT-bin save → reduce to 31 bands (needs a live context for the sample rate)
+    if(p.data && audioCtx){
+      const bd=p.data, bins=bd.length, nyq=audioCtx.sampleRate/2, R6=Math.pow(2,1/6);
+      const db=GEQ.map(fc=>bandDbFromBins(bd, fc/R6, fc*R6, nyq, bins));
+      return {name:p.name, db:Float32Array.from(db)};
+    }
+    return {name:p.name, db:new Float32Array(GEQ.length).fill(-120)};                 // unconvertible → placeholder
+  });
   areas=(s.areas||[]).map(a=>({name:a.name, color:a.color, db:Float32Array.from(a.db), show:a.show!==false}));
   if(s.speakers&&s.speakers.length){ dlySpeakers=s.speakers.map(x=>({name:x.name, ms:x.ms})); dlyAnchor=s.anchor||0; }
   if(s.target) setTarget(s.target);
@@ -2197,6 +2155,22 @@ document.getElementById('saveNowBtn').addEventListener('click',()=>{
   persistSaves(); renderSaveList(); inp.value='';
 });
 loadSaves();
+// ---- restore saved view/measurement preferences from previous sessions ----
+(function initPrefs(){
+  const applyInput=(id,key)=>{ const v=lsGet(key); if(v==null) return; const el=document.getElementById(id); if(!el) return; el.value=v; el.dispatchEvent(new Event('input')); };
+  applyInput('res','rta_res');           // resolution (bands/octave)
+  applyInput('smooth','rta_smooth');     // display smoothing
+  applyInput('floor','rta_floor');       // noise floor
+  applyInput('cal','rta_cal');           // SPL calibration offset
+  applyInput('fbSens','rta_fbSens');     // feedback sensitivity
+  const fft=lsGet('rta_fft');            // FFT size
+  if(fft){ const btn=document.querySelector('#fftSeg button[data-n="'+fft+'"]'); if(btn) btn.click(); }
+  const tgt=lsGet('rta_target');         // target curve
+  if(tgt) setTarget(tgt);
+  const wgt=lsGet('rta_wgt');            // weighting Z/A/C
+  if(wgt && wgt!=='Z'){ weightMode=wgt; const wb=document.getElementById('wgtBtn');
+    wb.textContent='dB'+wgt; wb.classList.add('on'); document.getElementById('wLbl').textContent=wgt; }
+})();
 (function initAccent(){
   const saved=lsGet('rta_accent');
   if(saved){ applyAccent(saved);
@@ -2302,6 +2276,13 @@ function showHelpTip(txt,cx,cy){
 document.addEventListener('mousemove',e=>{
   if(!helpMode) return;
   showHelpTip(helpTextFor(e.target), e.clientX, e.clientY);
+});
+// keyboard users: Tab-focusing a control in help mode shows its explanation next to it
+document.addEventListener('focusin',e=>{
+  if(!helpMode) return;
+  const txt=helpTextFor(e.target); if(!txt){ helpTip.style.display='none'; return; }
+  const r=e.target.getBoundingClientRect();
+  showHelpTip(txt, r.left, r.bottom);
 });
 // touch: in help mode a tap explains the control instead of activating it
 document.addEventListener('pointerdown',e=>{
