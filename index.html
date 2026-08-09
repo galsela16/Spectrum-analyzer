@@ -417,10 +417,14 @@
         <button class="on">אזורים</button>
       </div>
       <div class="sub">מדוד בכל צד של המעגל (צפון/דרום/מזרח/מערב) והשווה. עד 4 אזורים על הגרף.</div>
-      <div style="display:flex;gap:8px;align-items:center;justify-content:center;">
+      <div class="chBar"><span style="min-width:64px">גיין מיק'</span><div class="track"><div class="fill" id="areaMicFill"></div></div><span class="gainLbl" id="areaMicGain">—</span></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:center;">
         <button id="areaMeasBtn" class="toggle">מדוד אזור חדש (5ש')</button>
         <button id="areaGenToggleBtn" class="toggle">▶ רעש ורוד</button>
+        <button id="areaResetBtn" class="toggle">אפס</button>
+        <button id="areaCombBtn" class="toggle">בדוק פאזה</button>
       </div>
+      <div id="areaCombResult" style="display:none;text-align:center;font-size:12px"></div>
       <div class="ctrl" style="flex:0 0 auto;align-items:center;min-width:auto">
         <label style="justify-content:center">עקומת יעד</label>
         <div class="seg tgtSeg" style="align-self:center">

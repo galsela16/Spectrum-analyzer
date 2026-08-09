@@ -391,7 +391,7 @@ document.querySelectorAll('#tfModeSeg button').forEach(b=>b.addEventListener('cl
 }));
 document.getElementById('eqResetBtn').addEventListener('click',()=>{ eqPositions=[]; eqMarks=null;
   { const cr=document.getElementById('combResult'); if(cr){ cr.style.display='none'; cr.innerHTML=''; } } document.getElementById('eqList').innerHTML=''; document.getElementById('eqPosList').innerHTML=''; updateEqUI(); });
-document.getElementById('combBtn').addEventListener('click',runCombCheck);
+document.getElementById('combBtn').addEventListener('click',()=>runCombCheck('combResult'));
 
 function updateEqUI(){
   const meas = measState==='measuring';
@@ -666,6 +666,15 @@ function runWithSource(kind, measureFn, durMs){
   }, 450+durMs+300);
 }
 
+document.getElementById('areaCombBtn').addEventListener('click',()=>runCombCheck('areaCombResult'));
+document.getElementById('areaResetBtn').addEventListener('click',()=>{
+  areas=[];
+  { const cr=document.getElementById('areaCombResult'); if(cr){ cr.style.display='none'; cr.innerHTML=''; } }
+  const ac=document.getElementById('areaEqCanvas'); if(ac) ac.style.display='none';
+  const al=document.getElementById('areaEqList'); if(al) al.innerHTML='';
+  eqMarks=null; eqCurveData=null; hideGeqDock();
+  renderAreaList();
+});
 document.getElementById('areaEqBtn').addEventListener('click',suggestAreaEQ);
 function suggestAreaEQ(){
   if(!areas.length){ alert('מדוד לפחות אזור אחד.'); return; }
@@ -787,8 +796,8 @@ function detectComb(){
   const inRange = delayMs>=1.4 && delayMs<=6.5;
   return {spacingHz, delayMs, strength:best.val, depth, inRange};
 }
-function runCombCheck(){
-  const el=document.getElementById('combResult'); if(!el) return;
+function runCombCheck(resultId){
+  const el=document.getElementById(resultId||'combResult'); if(!el) return;
   el.style.display='block';   // only occupies space once there's a result
   const r=detectComb();
   if(!r){ el.innerHTML='<span style="color:var(--dim)">אין מספיק אות. נגן רעש ורוד ונסה שוב.</span>'; return; }
@@ -1782,6 +1791,10 @@ function draw(){
     const targetData = timeData;
     setGainEl(document.getElementById('eqMicFill'), document.getElementById('eqMicGain'), levelDb(targetData,2048));
   }
+  if(areaPanel.classList.contains('open')){
+    analyser.getFloatTimeDomainData(timeData);
+    setGainEl(document.getElementById('areaMicFill'), document.getElementById('areaMicGain'), levelDb(timeData,2048));
+  }
   if(genPanel.classList.contains('open')){
     analyser.getFloatTimeDomainData(timeData);
     const micDb=levelDb(timeData,2048);
@@ -2074,7 +2087,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v151';
+document.getElementById('ver').textContent='v152';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
