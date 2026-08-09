@@ -2008,10 +2008,10 @@ function drawRta(W,H,nyquist,bins,xForFreq){
   // feedback markers — sustained peaks flagged by detectFeedback, drawn on the spectrum
   if(fbOn && fbTrack.size){
     const flagged=[];
-    for(const [,rec] of fbTrack){ if(rec.frames>=14) flagged.push(rec); }   // only confirmed (held) peaks
+    for(const [,rec] of fbTrack){ if(rec.hold>=FB_CONFIRM && rec.swing<FB_MAXSWING) flagged.push(rec); }   // confirmed: parked, steady, narrow
     flagged.sort((a,b)=>b.db-a.db);
     ctx.textAlign='center';
-    flagged.slice(0,6).forEach(rec=>{
+    flagged.slice(0,4).forEach(rec=>{
       const x=xForFreq(rec.hz); if(x<0||x>W) return;
       const y=plotH-norm(rec.db)*plotH;
       ctx.fillStyle='rgba(255,59,107,.95)';
@@ -2068,42 +2068,54 @@ function drawSpec(W,H,nyquist,bins,xForFreq){
   peakHzEl.textContent= pk>floorDb ? (pkf>=1000?(pkf/1000).toFixed(1)+' kHz':Math.round(pkf)+' Hz') : '—';
 }
 
+// Real feedback ≠ music. A ringing tone is (a) loud, (b) very narrow, (c) parked at the
+// exact same frequency for a sustained time, and (d) steady/rising in level. Musical notes
+// are transient and move around. We require all four so held chords/melodies don't false-trip.
+const FB_MINDB=-50;      // ignore quiet tonal peaks
+const FB_MINQ=6;         // feedback is narrow; broad musical humps are rejected
+const FB_CONFIRM=18;     // ~2.3s of a stable, steady tone before it's flagged
+const FB_MAXSWING=2.5;   // dB — large level swings mean musical dynamics, not a ring
 function detectFeedback(nyquist,bins){
   const PROM=fbProm;
-  const MINDB=-58;
-  const HOLD=14;
   const win=24;
   const seen=new Set();
-
-  const iLo=Math.max(2,Math.floor(60/nyquist*bins));
-  const iHi=Math.min(bins-2,Math.floor(12000/nyquist*bins));
+  const iLo=Math.max(2,Math.floor(120/nyquist*bins));    // feedback rarely rings below ~120Hz
+  const iHi=Math.min(bins-2,Math.floor(10000/nyquist*bins));
   for(let i=iLo;i<=iHi;i++){
     const d=floatData[i];
-    if(d<MINDB) continue;
+    if(d<FB_MINDB) continue;
     if(!(d>floatData[i-1]&&d>=floatData[i+1])) continue;
     let sum=0,n=0;
     for(let j=i-win;j<=i+win;j++){ if(Math.abs(j-i)>2&&j>=0&&j<bins){sum+=floatData[j];n++;} }
     const avg=sum/Math.max(1,n);
-    if(d-avg<PROM) continue;
     const prom=d-avg;
+    if(prom<PROM) continue;
     let li=i, ri=i;
     while(li>1 && floatData[li]>d-3) li--;
     while(ri<bins-1 && floatData[ri]>d-3) ri++;
     const bw3=Math.max(1,(ri-li))*nyquist/bins;
     const hz=Math.round(i*nyquist/bins);
-    const q=Math.max(2,Math.min(12, hz/bw3));
+    const q=Math.max(2,Math.min(30, hz/bw3));
+    if(q<FB_MINQ) continue;                               // too broad → not feedback
     const cut=Math.max(3,Math.min(12, Math.round(prom*0.7)));
-    const key=Math.round(hz/ (hz<300?5:hz<2000?15:60));
+    const key=Math.round(hz/ (hz<300?4:hz<2000?10:40));   // finer buckets so different notes don't merge
     seen.add(key);
-    const rec=fbTrack.get(key)||{frames:0,db:d,hz:hz,cut:cut,q:q};
-    rec.frames=Math.min(HOLD+30,rec.frames+2);
-    rec.db=d; rec.hz=hz; rec.cut=cut; rec.q=q; fbTrack.set(key,rec);
+    const tol = hz<300?5:hz<2000?14:50;
+    const rec=fbTrack.get(key);
+    if(rec){
+      if(Math.abs(hz-rec.hz)<=tol) rec.hold=Math.min(FB_CONFIRM+30, rec.hold+1);   // parked → build confidence
+      else rec.hold=Math.max(0, rec.hold-3);                                       // jumped → likely a new note
+      rec.swing = rec.swing*0.8 + Math.abs(d-rec.db)*0.2;                          // running level volatility
+      rec.db=d; rec.hz=hz; rec.cut=cut; rec.q=q;
+    } else {
+      fbTrack.set(key,{hold:1, swing:0, db:d, hz:hz, cut:cut, q:q});
+    }
   }
-  for(const [k,rec] of fbTrack){ if(!seen.has(k)){ rec.frames-=1; if(rec.frames<=0) fbTrack.delete(k);} }
+  for(const [k,rec] of fbTrack){ if(!seen.has(k)){ rec.hold-=3; if(rec.hold<=0) fbTrack.delete(k);} }
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v155';
+document.getElementById('ver').textContent='v156';
 // ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
 let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
 function applyAccent(hex){
