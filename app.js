@@ -2243,7 +2243,7 @@ function drawRta(){
   if(typeof abMode !== 'undefined' && abMode !== 'off'){
     const drawTrace = (s, col, label) => {
       if(!s || !s.positions || !s.positions.length) return;
-      const dbArr = s.positions[0].db; // לוקח את המיקום הראשון במדידה
+      const dbArr = s.positions[0].db;
       ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath();
       for(let k=0; k<GEQ.length; k++){
         const f = GEQ[k]; if(f<ISO[0]||f>ISO[BANDS-1]) continue;
@@ -2270,8 +2270,8 @@ function drawRta(){
       ctx.strokeStyle = '#39d98a'; ctx.lineWidth = 2.5; ctx.beginPath();
       for(let k=0; k<GEQ.length; k++){
         const f = GEQ[k]; if(f<ISO[0]||f>ISO[BANDS-1]) continue;
-        const diff = dbB[k] - dbA[k]; // הפרש ב-dB
-        const x = xForFreq(f), yy = midY - (diff * (plotH / 30)); // 30dB scaling
+        const diff = dbB[k] - dbA[k];
+        const x = xForFreq(f), yy = midY - (diff * (plotH / 30));
         k===0 ? ctx.moveTo(x,yy) : ctx.lineTo(x,yy);
       }
       ctx.stroke();
@@ -2304,8 +2304,7 @@ function drawRta(){
   if(dock && !dock.classList.contains('collapsed') && eqCanvas && typeof lastEqCorr !== 'undefined' && lastEqCorr){
     if(typeof drawGEQ === 'function') drawGEQ(eqCanvas, GEQ, lastEqCorr);
   }
-}
-  
+}  
   if(tfOpen){
     if(!frozen) analyserRef.getFloatFrequencyData(floatDataRef);
     if(!_pfxRef || _pfxRef.length!==bins+1) _pfxRef=new Float64Array(bins+1);
