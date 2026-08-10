@@ -83,6 +83,22 @@
     border-color:var(--accent); color:var(--accent); background:rgba(62,166,255,.16);
   }
 
+  .abWidget{
+    position:absolute; top:10px; inset-inline-start:10px; z-index:8;
+    display:none; gap:5px; background:rgba(13,17,23,.88); backdrop-filter:blur(6px);
+    padding:5px 8px; border:1px solid var(--line); border-radius:6px; box-shadow:0 4px 16px rgba(0,0,0,.4);
+  }
+  body.sun-mode .abWidget{ background:rgba(255,255,255,.92); }
+  .abWidget.show{ display:flex; align-items:center; }
+  .abWidget button{
+    border:1px solid var(--line); background:var(--panel-2); color:var(--text);
+    font-family:inherit; font-size:11px; font-weight:600; padding:4px 9px; border-radius:4px; cursor:pointer;
+  }
+  .abWidget button.on{ border-color:var(--accent); color:var(--accent); background:rgba(62,166,255,.16); }
+  .saveRow .abBtn{ border:1px solid var(--line); background:var(--panel); color:var(--dim); font-size:11px; padding:3px 7px; border-radius:3px; cursor:pointer; }
+  .saveRow .abBtn.on-a{ border-color:#2f9bff; color:#2f9bff; background:rgba(47,155,255,.15); font-weight:bold; }
+  .saveRow .abBtn.on-b{ border-color:#ffa53b; color:#ffa53b; background:rgba(255,165,59,.15); font-weight:bold; }
+
   .idle{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
     gap:16px;text-align:center;padding:24px;z-index:4}
   .idle p{color:var(--dim);font-size:13px;line-height:1.7;max-width:300px}
@@ -244,7 +260,6 @@
   .saveRow button{border:1px solid var(--line);background:var(--panel);color:var(--text);font-family:inherit;font-size:11px;padding:4px 8px;border-radius:3px;cursor:pointer}
   .saveRow button:hover{border-color:var(--accent);color:var(--accent)}
 
-  /* עיצוב מעודכן ומתוקן לתצוגת פיידר ה-EQ הצפה */
   #geqDock{
     position:absolute; bottom:42px; inset-inline:10px; z-index:9;
     border:1px solid var(--line); border-radius:6px; background:var(--panel-2);
@@ -321,7 +336,7 @@
   .chBar .fill.clip{background:var(--hot)}
   .gainLbl{min-width:70px;font-size:10px;letter-spacing:.3px;text-align:start}
   .gainLbl.lo{color:var(--hot)}.gainLbl.ok{color:#39d98a}.gainLbl.hi{color:var(--warn)}.gainLbl.clip{color:var(--hot);font-weight:700}
-  #tfCanvas{width:100%;height:150px;position:relative;flex-shrink:0;background:var(--panel-2);border:1px solid var(--line);border-radius:4px}
+  #tfCanvas{width:100%;height:150px;position:relative;flex-shrink:0;background:var(--panel-2);border:1px solid var(--line);border-radius:4px;display:none}
   #tfGeqList{display:flex;flex-direction:column;gap:6px;z-index:2;width:100%}
   #tfBtns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
   #tfClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
@@ -369,6 +384,14 @@
       <button id="qbAutoDelay" title="סנכרון דיליי אוטומטי">⏱️ Auto-Delay</button>
       <button id="qbCoh" class="on" title="הצג/הסתר קוהרנטיות">📊 Coh</button>
       <button id="qbPhase" title="הצג/הסתר פאזה">📐 Phase</button>
+    </div>
+
+    <!-- A/B Comparison Floating Widget -->
+    <div id="abWidget" class="abWidget">
+      <button id="abBtnA">A</button>
+      <button id="abBtnB">B</button>
+      <button id="abBtnDelta">Δ (הפרש)</button>
+      <button id="abBtnOff" title="סגור תצוגת A/B">✕</button>
     </div>
 
     <div id="fbPanel"></div>
@@ -704,7 +727,6 @@
         <button class="toggle" id="rtBtn">הדהוד · RT60</button>
         <button class="toggle" id="geqShowBtn" title="הצג/הסתר את תצוגת תיקון ה-EQ">תצוגת EQ</button>
         <button class="toggle" id="saveBtn">מדידות שמורות · Captures</button>
-        <button class="toggle" id="refCurveBtn" title="שומר את התגובה הנוכחית כ'לפני' להשוואה">שמור כ״לפני״</button>
       </div>
       <div class="trow">
         <div class="ctrl" style="flex:0 0 auto">
