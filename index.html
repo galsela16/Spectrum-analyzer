@@ -12,7 +12,6 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <title>גל אנלייזר</title>
 <style>
-  /* Heebo — bundled locally for offline PWA. Hebrew + Latin (numbers) subsets per weight. */
   @font-face{font-family:'Heebo';font-style:normal;font-weight:400;font-display:swap;
     src:url('fonts/heebo-latin-400-normal.woff2') format('woff2');
     unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+2000-206F,U+2074,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215;}
@@ -205,15 +204,6 @@
   #rtClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
     font-size:12px;padding:8px 20px;border-radius:4px;cursor:pointer;align-self:center}
   
-  #gainPanel{position:relative;display:none;
-    flex-direction:column;gap:12px;width:min(94%,420px);max-height:calc(100dvh - 32px);overflow:auto;padding:16px 18px;border:1px solid var(--accent);
-    border-radius:6px;background:var(--panel);box-shadow:0 12px 48px rgba(0,0,0,.8)}
-  #gainPanel.open{display:flex}
-  #gainPanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
-  #gainPanel .sub{font-size:10px;color:var(--dim);letter-spacing:.5px;line-height:1.5}
-  #gainClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
-    font-size:12px;padding:8px 20px;border-radius:4px;cursor:pointer;align-self:center}
-
   #savePanel{position:relative;display:none;
     flex-direction:column;gap:12px;width:min(94%,420px);max-height:calc(100dvh - 32px);overflow:auto;padding:16px 18px;border:1px solid var(--accent);
     border-radius:6px;background:var(--panel);box-shadow:0 12px 48px rgba(0,0,0,.8)}
@@ -502,9 +492,13 @@
       <div id="tfBtns">
         <button class="toggle" id="tfSwapBtn">החלף ערוצים</button>
         <button class="toggle" id="tfOverlayBtn">הצג על הגרף</button>
+        <button class="toggle" id="tfAutoDelayBtn" title="סנכרון זמנים אוטומטי בין המיקרופון לרפרנס">⚡ Auto-Delay</button>
+        <button class="toggle" id="tfPhaseToggleBtn">גרף פאזה</button>
+        <button class="toggle on" id="tfCohToggleBtn">קוהרנטיות</button>
         <button class="toggle" id="tfMeasBtn">מדוד (6ש')</button>
         <button class="toggle" id="tfCsvBtn">CSV</button>
       </div>
+      <div id="tfDelayInfo" style="text-align:center;font-size:11px;color:var(--accent)">סנכרון דיליי TF: 0.00 ms (0m)</div>
       <canvas id="tfCanvas" style="width:100%;height:234px;background:var(--panel-2);border:1px solid var(--line);border-radius:4px;display:none"></canvas>
       <div class="seg" id="tfModeSeg" style="align-self:center">
         <button data-m="graphic" class="on">גרפיק</button>
