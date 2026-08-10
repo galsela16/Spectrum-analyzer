@@ -2280,18 +2280,28 @@ function drawRta(W,H,nyquist,bins,xForFreq){
       ctx.setLineDash([]);
     }
 
-    if(showTfPhase){
+  if(showTfPhase){
       ctx.beginPath();
       for(let px = 0; px <= W; px += 2){
         const f = freqForX(px);
         const k = Math.min(TF_FFT_N/2 - 1, Math.round(f / nyquist * (TF_FFT_N/2)));
-        const phaseRad = Math.atan2(tfPxyIm[k], tfPxyRe[k]);
+
+        // ממוצע וקטורי מורכב של bins סמוכים להחלקת פאזה
+        let pxyRe = 0, pxyIm = 0;
+        for(let offset = -1; offset <= 1; offset++){
+          const idx = Math.max(0, Math.min(TF_FFT_N/2 - 1, k + offset));
+          pxyRe += tfPxyRe[idx];
+          pxyIm += tfPxyIm[idx];
+        }
+
+        const phaseRad = Math.atan2(pxyIm, pxyRe);
         const phaseNorm = 0.5 - (phaseRad / (2 * Math.PI));
         const y = plotH * Math.max(0, Math.min(1, phaseNorm));
+        
         px === 0 ? ctx.moveTo(px, y) : ctx.lineTo(px, y);
       }
-      ctx.strokeStyle = 'rgba(34, 197, 94, 0.85)';
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = 'rgba(34, 197, 94, 0.9)';
+      ctx.lineWidth = 2;
       ctx.stroke();
     }
     
