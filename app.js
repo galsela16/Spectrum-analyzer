@@ -2161,62 +2161,150 @@ function computeComplexTf(){
   }
 }
 
-function drawRta(W,H,nyquist,bins,xForFreq){
-  ctx.clearRect(0,0,W,H);
-  if(sunMode){
-    ctx.fillStyle = '#f8fafc';
-    ctx.fillRect(0,0,W,H);
-  }
-  if(!_pfx || _pfx.length!==bins+1) _pfx=new Float64Array(bins+1);
-  { let acc=0; _pfx[0]=0; for(let i=0;i<bins;i++){ acc+=db2lin(floatData[i]); _pfx[i+1]=acc; } }
-  const bandPowDb=(fLo,fHi)=>{
-    let lo=Math.floor(fLo/nyquist*bins), hi=Math.ceil(fHi/nyquist*bins);
-    lo=Math.max(0,lo); hi=Math.min(bins-1,hi); if(hi<lo)hi=lo;
-    return 10*Math.log10((_pfx[hi+1]-_pfx[lo])+1e-12);
+function drawRta(){
+  if(!ctx || !cv) return;
+  const W = cv.clientWidth, H = cv.clientHeight;
+  const plotH = H - 36;
+  const nyquist = audioCtx ? audioCtx.sampleRate / 2 : 22050;
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = sunMode ? '#f8fafc' : '#0d1117';
+  ctx.fillRect(0, 0, W, H);
+
+  const xForFreq = f => {
+    const lMin = Math.log10(viewMin), lMax = Math.log10(viewMax);
+    return Math.max(0, Math.min(W, ((Math.log10(f) - lMin) / (lMax - lMin)) * W));
   };
-  const meterH = (meterEl && meterEl.style.display!=='none') ? 40 : 6;
-  const plotH = H - meterH - 16;
-  const labelY = H - meterH - 4;
-  ctx.strokeStyle=sunMode ? '#cbd5e1' : '#2b3646'; 
-  ctx.fillStyle=sunMode ? '#475569' : '#aeb9c7'; 
-  ctx.font='11px monospace'; ctx.textAlign='center';
-  const lo=ISO[0], hi=ISO[BANDS-1];
-  [20,31.5,50,100,200,500,1000,2000,5000,10000,20000].filter(f=>f>=lo&&f<=hi).forEach(f=>{
-    const x=xForFreq(f);
-    ctx.globalAlpha=.6; ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,plotH);ctx.stroke(); ctx.globalAlpha=1;
-    ctx.fillText(fLabel(f)+'Hz',x,labelY);
+  const freqForX = x => {
+    const lMin = Math.log10(viewMin), lMax = Math.log10(viewMax);
+    return Math.pow(10, lMin + (x / W) * (lMax - lMin));
+  };
+  const norm = db => Math.max(0, Math.min(1, (db - floorDb) / (ceilDb - floorDb)));
+
+  // קווי אורך - תדרים
+  ctx.strokeStyle = sunMode ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 1;
+  [31.5, 63, 125, 250, 500, 1000, 2000, 4000, 8000, 16000].forEach(f => {
+    const x = xForFreq(f);
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, plotH); ctx.stroke();
+    ctx.fillStyle = sunMode ? '#64748b' : '#94a3b8'; ctx.font = '10px Heebo, sans-serif';
+    ctx.textAlign = 'center'; ctx.fillText(f >= 1000 ? (f/1000)+'kHz' : f+'Hz', x, H - 12);
   });
-  [0.25,0.5,0.75].forEach(p=>{ctx.globalAlpha=.3;ctx.strokeStyle=sunMode?'#cbd5e1':'#2b3646';ctx.beginPath();ctx.moveTo(0,plotH*p);ctx.lineTo(W,plotH*p);ctx.stroke();ctx.globalAlpha=1;});
 
-  const bw=W/BANDS, gap=Math.max(0.5,bw*0.12);
-  const tfOpen = ((tfOverlay || (typeof tfPanel!=='undefined' && tfPanel && tfPanel.classList.contains('open'))) && floatDataRef && analyserRef);
-  
-  const qBar = document.getElementById('tfQuickBar');
-  if(qBar) qBar.classList.toggle('show', tfOpen);
+  // קווי רוחב - dB
+  for(let db = floorDb; db <= ceilDb; db += 10){
+    const y = plotH - norm(db) * plotH;
+    ctx.strokeStyle = sunMode ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.06)';
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    ctx.fillStyle = sunMode ? '#475569' : '#64748b'; ctx.font = '9px Heebo, sans-serif';
+    ctx.textAlign = 'left'; ctx.fillText(db + 'dB', 6, y - 2);
+  }
 
-  let peakBand=-1,peakVal=0;
-  
-  for(let b=0;b<BANDS;b++){
-    const fc=ISO[b];
-    const rawDb=bandPowDb(fc/R,fc*R);
-    lastBandDb[b]=rawDb;
-    let v=norm(rawDb);
-    if(avgOn){ avgBuf[b]=avgBuf[b]*0.9+v*0.1; v=avgBuf[b]; } else { avgBuf[b]=v; }
-    lastV[b]=v;
-    if(v>peakVal){peakVal=v;peakBand=b;}
-    
-    if(!tfOpen){
-      const x=b*bw+gap/2, barW=bw-gap;
-      const barH=v*plotH, y=plotH-barH;
-      let col= v<0.85?'rgba('+accentRgb[0]+','+accentRgb[1]+','+accentRgb[2]+','+(0.4+v).toFixed(2)+')' : 'var(--hot)';
-      ctx.fillStyle=col; ctx.fillRect(x,y,barW,barH);
-      if(peakHold){
-        if(v>=peaks[b]) peaks[b]=v; else peaks[b]=Math.max(0,peaks[b]-0.005);
-        const py=plotH-peaks[b]*plotH;
-        ctx.fillStyle=sunMode?'#0f172a':'rgba(255,255,255,.85)'; ctx.fillRect(x,py-2,barW,2);
+  // ציור פאזה (אם מופעל)
+  if(showTfPhase){
+    ctx.beginPath();
+    for(let px = 0; px <= W; px += 2){
+      const f = freqForX(px);
+      const k = Math.min(TF_FFT_N/2 - 1, Math.round(f / nyquist * (TF_FFT_N/2)));
+      let pxyRe = 0, pxyIm = 0;
+      for(let offset = -1; offset <= 1; offset++){
+        const idx = Math.max(0, Math.min(TF_FFT_N/2 - 1, k + offset));
+        pxyRe += tfPxyRe[idx]; pxyIm += tfPxyIm[idx];
       }
+      const phaseRad = Math.atan2(pxyIm, pxyRe);
+      const phaseNorm = 0.5 - (phaseRad / (2 * Math.PI));
+      const y = plotH * Math.max(0, Math.min(1, phaseNorm));
+      px === 0 ? ctx.moveTo(px, y) : ctx.lineTo(px, y);
+    }
+    ctx.strokeStyle = 'rgba(34, 197, 94, 0.9)'; ctx.lineWidth = 2; ctx.stroke();
+  }
+
+  // ציור קוהרנטיות (אם מופעל)
+  if(showTfCoh){
+    ctx.beginPath(); let prevCoh = 0;
+    for(let px = 0; px <= W; px += 2){
+      const f = freqForX(px);
+      const k = Math.min(TF_FFT_N/2 - 1, Math.round(f / nyquist * (TF_FFT_N/2)));
+      let pxx=0, pyy=0, pxyRe=0, pxyIm=0;
+      for(let offset = -1; offset <= 1; offset++){
+        const idx = Math.max(0, Math.min(TF_FFT_N/2 - 1, k + offset));
+        pxx += tfPxx[idx]; pyy += tfPyy[idx]; pxyRe += tfPxyRe[idx]; pxyIm += tfPxyIm[idx];
+      }
+      const pxySq = pxyRe*pxyRe + pxyIm*pxyIm;
+      const rawCoh = Math.max(0, Math.min(1, pxySq / (pxx * pyy + 1e-12)));
+      const coh = prevCoh ? (prevCoh * 0.4 + rawCoh * 0.6) : rawCoh; prevCoh = coh;
+      const y = plotH - coh * plotH;
+      px === 0 ? ctx.moveTo(px, y) : ctx.lineTo(px, y);
+    }
+    ctx.strokeStyle = 'rgba(239, 68, 68, 0.85)'; ctx.lineWidth = 2; ctx.setLineDash([4, 2]); ctx.stroke(); ctx.setLineDash([]);
+  }
+
+  // ---- A/B & Delta Trace Drawing ----
+  if(typeof abMode !== 'undefined' && abMode !== 'off'){
+    const drawTrace = (s, col, label) => {
+      if(!s || !s.positions || !s.positions.length) return;
+      const dbArr = s.positions[0].db; // לוקח את המיקום הראשון במדידה
+      ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.beginPath();
+      for(let k=0; k<GEQ.length; k++){
+        const f = GEQ[k]; if(f<ISO[0]||f>ISO[BANDS-1]) continue;
+        const x = xForFreq(f), yy = plotH - norm(dbArr[k]) * plotH;
+        k===0 ? ctx.moveTo(x,yy) : ctx.lineTo(x,yy);
+      }
+      ctx.stroke();
+      ctx.fillStyle = col; ctx.font = 'bold 11px Heebo, sans-serif'; ctx.textAlign='start';
+      ctx.fillText('— ' + label + ': ' + s.name, 10, 20);
+    };
+
+    if(abMode === 'A') drawTrace(saveA, '#2f9bff', 'מדידה A');
+    if(abMode === 'B') drawTrace(saveB, '#ffa53b', 'מדידה B');
+
+    if(abMode === 'delta' && saveA && saveB && saveA.positions && saveA.positions[0] && saveB.positions && saveB.positions[0]){
+      const dbA = saveA.positions[0].db, dbB = saveB.positions[0].db;
+      const midY = plotH / 2;
+
+      // קו בסיס 0dB
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.setLineDash([3,3]);
+      ctx.beginPath(); ctx.moveTo(0, midY); ctx.lineTo(W, midY); ctx.stroke(); ctx.setLineDash([]);
+
+      // עקומת הפרש (Delta)
+      ctx.strokeStyle = '#39d98a'; ctx.lineWidth = 2.5; ctx.beginPath();
+      for(let k=0; k<GEQ.length; k++){
+        const f = GEQ[k]; if(f<ISO[0]||f>ISO[BANDS-1]) continue;
+        const diff = dbB[k] - dbA[k]; // הפרש ב-dB
+        const x = xForFreq(f), yy = midY - (diff * (plotH / 30)); // 30dB scaling
+        k===0 ? ctx.moveTo(x,yy) : ctx.lineTo(x,yy);
+      }
+      ctx.stroke();
+      ctx.fillStyle = '#39d98a'; ctx.font = 'bold 11px Heebo, sans-serif'; ctx.textAlign='start';
+      ctx.fillText('— Δ הפרש (B - A)', 10, 20);
     }
   }
+
+  // ציור הספקטרום החי המרכזי
+  if(analyser && floatData){
+    if(!frozen) analyser.getFloatFrequencyData(floatData);
+    if(typeof computeComplexTf === 'function') computeComplexTf(floatData, floatDataRef);
+
+    ctx.beginPath();
+    ctx.strokeStyle = sunMode ? '#0284c7' : '#3ea6ff'; ctx.lineWidth = 2;
+    for(let i = 0; i < floatData.length; i++){
+      const f = (i / floatData.length) * nyquist;
+      if(f < viewMin || f > viewMax) continue;
+      const x = xForFreq(f);
+      const corr = typeof getCalCorrection === 'function' ? getCalCorrection(f) : 0;
+      const y = plotH - norm(floatData[i] + calib + corr) * plotH;
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  }
+
+  // ציור פיידרים במידה ומעגן ה-EQ פתוח
+  const dock = document.getElementById('geqDock');
+  const eqCanvas = document.getElementById('eqCurveCanvas');
+  if(dock && !dock.classList.contains('collapsed') && eqCanvas && typeof lastEqCorr !== 'undefined' && lastEqCorr){
+    if(typeof drawGEQ === 'function') drawGEQ(eqCanvas, GEQ, lastEqCorr);
+  }
+}
   
   if(tfOpen){
     if(!frozen) analyserRef.getFloatFrequencyData(floatDataRef);
@@ -2545,25 +2633,65 @@ function snapshotState(name){
   };
 }
 
+// ---- A/B Engine Variables ----
+let saveA = null, saveB = null, abMode = 'off'; // 'off', 'A', 'B', 'delta'
+
 function renderSaveList(){
   const box=document.getElementById('saveList'); if(!box) return;
   if(!saves.length){ box.innerHTML='<div class="sub">אין מדידות שמורות עדיין.</div>'; return; }
   box.innerHTML=saves.map(s=>{
+    const isA = saveA && saveA.id === s.id;
+    const isB = saveB && saveB.id === s.id;
     const bits=[];
     if(s.positions&&s.positions.length) bits.push(s.positions.length+' מיקומים');
     if(s.areas&&s.areas.length) bits.push(s.areas.length+' אזורים');
-    if(s.speakers&&s.speakers.some(x=>x.ms!=null)) bits.push('דיליי');
     return '<div class="saveRow"><span class="nm" title="'+escapeHtml(s.name)+'">'+escapeHtml(s.name)+
-      '</span><span class="meta">'+s.date+(bits.length?' · '+bits.join(' · '):'')+'</span>'+
+      '</span><button class="abBtn '+(isA?'on-a':'')+'" data-set-a="'+s.id+'">A</button>'+
+      '<button class="abBtn '+(isB?'on-b':'')+'" data-set-b="'+s.id+'">B</button>'+
       '<button data-load="'+s.id+'">טען</button><button data-rm="'+s.id+'">מחק</button></div>';
   }).join('');
+
+  box.querySelectorAll('[data-set-a]').forEach(b=>b.addEventListener('click',()=>setAbSlot('A', b.dataset.setA)));
+  box.querySelectorAll('[data-set-b]').forEach(b=>b.addEventListener('click',()=>setAbSlot('B', b.dataset.setB)));
   box.querySelectorAll('[data-load]').forEach(b=>b.addEventListener('click',()=>loadSave(b.dataset.load)));
   box.querySelectorAll('[data-rm]').forEach(b=>b.addEventListener('click',()=>{
     const s=saves.find(x=>x.id===b.dataset.rm);
     if(!confirm('למחוק את "'+(s?s.name:'')+'"?')) return;
-    saves=saves.filter(x=>x.id!==b.dataset.rm); persistSaves(); renderSaveList();
+    if(saveA && saveA.id===s.id) saveA=null;
+    if(saveB && saveB.id===s.id) saveB=null;
+    saves=saves.filter(x=>x.id!==b.dataset.rm); persistSaves(); updateAbWidget(); renderSaveList();
   }));
 }
+
+function setAbSlot(slot, id){
+  const s = saves.find(x=>x.id===id); if(!s) return;
+  if(slot==='A') saveA = (saveA && saveA.id===id) ? null : s;
+  if(slot==='B') saveB = (saveB && saveB.id===id) ? null : s;
+  if(saveA || saveB) abMode = slot === 'A' ? 'A' : 'B';
+  else abMode = 'off';
+  updateAbWidget();
+  renderSaveList();
+}
+
+function updateAbWidget(){
+  const w = document.getElementById('abWidget'); if(!w) return;
+  const show = (saveA || saveB);
+  w.classList.toggle('show', show);
+  if(!show) { abMode='off'; return; }
+
+  const btnA = document.getElementById('abBtnA');
+  const btnB = document.getElementById('abBtnB');
+  const btnDelta = document.getElementById('abBtnDelta');
+
+  if(btnA){ btnA.style.display = saveA ? 'inline-block' : 'none'; btnA.classList.toggle('on', abMode==='A'); btnA.textContent = saveA ? 'A: '+saveA.name : 'A'; }
+  if(btnB){ btnB.style.display = saveB ? 'inline-block' : 'none'; btnB.classList.toggle('on', abMode==='B'); btnB.textContent = saveB ? 'B: '+saveB.name : 'B'; }
+  if(btnDelta){ btnDelta.style.display = (saveA && saveB) ? 'inline-block' : 'none'; btnDelta.classList.toggle('on', abMode==='delta'); }
+}
+
+safeAddListener('abBtnA', 'click', ()=>{ abMode='A'; updateAbWidget(); });
+safeAddListener('abBtnB', 'click', ()=>{ abMode='B'; updateAbWidget(); });
+safeAddListener('abBtnDelta', 'click', ()=>{ abMode='delta'; updateAbWidget(); });
+safeAddListener('abBtnOff', 'click', ()=>{ abMode='off'; updateAbWidget(); });
 
 function loadSave(id){
   const s=saves.find(x=>x.id===id); if(!s) return;
