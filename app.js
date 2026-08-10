@@ -197,10 +197,29 @@ document.getElementById('tfAutoDelayBtn').addEventListener('click', tfAutoDelay)
 document.getElementById('tfPhaseToggleBtn').addEventListener('click', function(){
   showTfPhase = !showTfPhase;
   this.classList.toggle('on', showTfPhase);
+  const qbBtn = document.getElementById('qbPhase');
+  if(qbBtn) qbBtn.classList.toggle('on', showTfPhase);
 });
 document.getElementById('tfCohToggleBtn').addEventListener('click', function(){
   showTfCoh = !showTfCoh;
   this.classList.toggle('on', showTfCoh);
+  const qbBtn = document.getElementById('qbCoh');
+  if(qbBtn) qbBtn.classList.toggle('on', showTfCoh);
+});
+
+// Event Listeners for TF Quick Floating Bar
+document.getElementById('qbAutoDelay').addEventListener('click', tfAutoDelay);
+document.getElementById('qbCoh').addEventListener('click', function(){
+  showTfCoh = !showTfCoh;
+  this.classList.toggle('on', showTfCoh);
+  const mainBtn = document.getElementById('tfCohToggleBtn');
+  if(mainBtn) mainBtn.classList.toggle('on', showTfCoh);
+});
+document.getElementById('qbPhase').addEventListener('click', function(){
+  showTfPhase = !showTfPhase;
+  this.classList.toggle('on', showTfPhase);
+  const mainBtn = document.getElementById('tfPhaseToggleBtn');
+  if(mainBtn) mainBtn.classList.toggle('on', showTfPhase);
 });
 
 function tfAutoDelay(){
@@ -1986,6 +2005,10 @@ function drawRta(W,H,nyquist,bins,xForFreq){
 
   const bw=W/BANDS, gap=Math.max(0.5,bw*0.12);
   const tfOpen = ((tfOverlay || (typeof tfPanel!=='undefined' && tfPanel.classList.contains('open'))) && floatDataRef && analyserRef);
+  
+  const qBar = document.getElementById('tfQuickBar');
+  if(qBar) qBar.classList.toggle('show', tfOpen);
+
   let peakBand=-1,peakVal=0;
   
   for(let b=0;b<BANDS;b++){
@@ -2189,7 +2212,7 @@ function drawRta(W,H,nyquist,bins,xForFreq){
   let exactHz=0;
   if(peakBand>=0 && peakVal>0.05){
     const fc=ISO[peakBand];
-    let lo=Math.floor((fc/R)/nyquist*bins), hi=Math.ceil((fc/R)/nyquist*bins);
+    let lo=Math.floor((fc/R)/nyquist*bins), hi=Math.ceil((fc*R)/nyquist*bins);
     lo=Math.max(1,lo); hi=Math.min(bins-1,hi);
     let bMax=-999, bi=lo;
     for(let i=lo;i<=hi;i++){ if(floatData[i]>bMax){ bMax=floatData[i]; bi=i; } }
@@ -2375,7 +2398,7 @@ loadSaves();
   if(tgt) setTarget(tgt);
   const wgt=lsGet('rta_wgt');
   if(wgt && wgt!=='Z'){ weightMode=wgt; const wb=document.getElementById('wgtBtn');
-    wb.textContent='dBZ'; wb.classList.add('on'); document.getElementById('wLbl').textContent=wgt; }
+    wb.textContent='dB'+wgt; wb.classList.add('on'); document.getElementById('wLbl').textContent=wgt; }
   const sm = lsGet('rta_sunmode');
   if(sm === '1'){ sunMode = true; document.body.classList.add('sun-mode'); const sb = document.getElementById('sunBtn'); if(sb) sb.classList.add('on'); }
 })();
