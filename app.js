@@ -1735,6 +1735,13 @@ function resetSession(){
   const al=document.getElementById('areaEqList'); if(al) al.innerHTML='';
   tfResult=null; const tg=document.getElementById('tfGeqList'); if(tg) tg.innerHTML='';
   const tc=document.getElementById('tfCanvas'); if(tc) tc.style.display='none';
+
+  // איפוס מובנה של הדיליי ב-TF בזמן איפוס סשן
+  tfDelayMs = 0;
+  tfDelaySamples = 0;
+  const tfDlyEl = document.getElementById('tfDelayInfo');
+  if (tfDlyEl) tfDlyEl.textContent = 'סנכרון דיליי TF: 0.00 ms';
+
   resetDelay();
   fbTrack.clear(); if(fbPanel) fbPanel.innerHTML='';
   leqSumP=0; leqN=0; splMax=-120; lvlPeak=-120;
