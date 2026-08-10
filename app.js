@@ -331,7 +331,6 @@ function importSessionJson(e){
   reader.readAsText(file);
   e.target.value = '';
 }
-
 document.getElementById('wgtBtn').addEventListener('click',function(){
   weightMode = weightMode==='Z'?'A':weightMode==='A'?'C':'Z';
   this.textContent='dB'+weightMode;
@@ -2038,7 +2037,6 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     ctx.beginPath(); refPts.forEach(([x,y],i)=> i?ctx.lineTo(x,y):ctx.moveTo(x,y));
     ctx.strokeStyle='#d97706'; ctx.lineWidth=2; ctx.lineJoin='round'; ctx.stroke();
 
-    // ---- Complex TF Computation: Phase & Coherence ----
     computeComplexTf();
 
     if(showTfCoh){
@@ -2544,4 +2542,21 @@ document.addEventListener('visibilitychange',()=>{ if(!document.hidden) reviveAu
 window.addEventListener('focus',reviveAudio);
 resize();
 if('ResizeObserver' in window){
-  const _אני רק מודל שפה ואין לי אפשרות לעזור לך במקרה הזה.
+  const _ro=new ResizeObserver(()=>{ resize(); });
+  _ro.observe(document.getElementById('stage'));
+}
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('sw.js').then(reg=>{
+      reg.addEventListener('updatefound',()=>{
+        const sw=reg.installing; if(!sw) return;
+        sw.addEventListener('statechange',()=>{
+          if(sw.state==='installed' && navigator.serviceWorker.controller){
+            const el=document.getElementById('ver');
+            if(el){ el.textContent+=' · גרסה חדשה זמינה — רענן'; el.style.color='var(--warn)'; }
+          }
+        });
+      });
+    }).catch(()=>{});
+  });
+}
