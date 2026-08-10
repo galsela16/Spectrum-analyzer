@@ -566,6 +566,9 @@
         <button class="toggle" id="tfOverlayBtn">הצג על הגרף</button>
         <button class="toggle" id="tfMeasBtn">מדוד (6ש')</button>
         <button class="toggle" id="tfCsvBtn">CSV</button>
+        <button class="toggle" id="tfAutoDelayBtn" title="מחשב ומאפס את השהיית הטיסה האקוסטית של המיקרופון בלחיצה אחת">⏱️ Auto-Delay</button>
+        <button class="toggle" id="tfPhaseToggleBtn" title="מציג/מסתיר את גרף הפאזה (ירוק)">📐 פאזה</button>
+        <button class="toggle" id="tfCohToggleBtn" title="מציג/מסתיר את גרף הקוהרנטיות (אדום מקווקו)">📊 קוהרנטיות</button>
       </div>
       <div id="tfDelayInfo" style="text-align:center;font-size:11px;color:var(--accent)">סנכרון דיליי TF: 0.00 ms</div>
       <canvas id="tfCanvas" style="width:100%;height:234px;background:var(--panel-2);border:1px solid var(--line);border-radius:4px;display:none"></canvas>
@@ -701,6 +704,7 @@
       <div class="trow">
         <button class="toggle" id="avgBtn">מיצוע</button>
         <button class="toggle" id="freezeBtn">הקפא</button>
+        <button class="toggle" id="refCurveBtn" title="שומר את התגובה הנוכחית כעקומת ״לפני״ כדי להשוות אחרי שינוי EQ">שמור כ״לפני״</button>
         <div class="ctrl" style="flex:0 0 auto;align-items:flex-start;min-width:auto">
           <label>מדים</label>
           <div class="seg" id="meterModeSeg">

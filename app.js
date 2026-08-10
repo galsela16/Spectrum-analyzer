@@ -1,3 +1,4 @@
+function safeOn(id,ev,fn,opt){var el=document.getElementById(id); if(el){el.addEventListener(ev,fn,opt);} return el;}
 const FMIN=20, FMAX=20000;
 let viewMin=20, viewMax=20000;
 let curBpo=6;
@@ -133,7 +134,7 @@ function resize(){
 }
 window.addEventListener('resize',resize);
 
-document.getElementById('sunBtn').addEventListener('click', function(){
+safeOn('sunBtn', 'click', function(){
   sunMode = !sunMode;
   document.body.classList.toggle('sun-mode', sunMode);
   this.classList.toggle('on', sunMode);
@@ -144,24 +145,24 @@ document.getElementById('sunBtn').addEventListener('click', function(){
   }
 });
 
-document.getElementById('floor').addEventListener('input',e=>{
+safeOn('floor', 'input',e=>{
   floorDb=parseFloat(e.target.value);
   document.getElementById('floorVal').textContent=floorDb+'dB';
   prefSet('rta_floor', e.target.value);
 });
-document.getElementById('smooth').addEventListener('input',e=>{
+safeOn('smooth', 'input',e=>{
   const v=parseFloat(e.target.value);
   document.getElementById('smoothVal').textContent=v.toFixed(2);
   if(analyser) analyser.smoothingTimeConstant=v;
   prefSet('rta_smooth', e.target.value);
 });
-document.getElementById('cal').addEventListener('input',e=>{
+safeOn('cal', 'input',e=>{
   calib=parseFloat(e.target.value);
   document.getElementById('calVal').textContent=(calib>=0?'+':'')+calib+'dB';
   prefSet('rta_cal', e.target.value);
 });
 
-document.getElementById('autoCalBtn').addEventListener('click', autoCal1kHz);
+safeOn('autoCalBtn', 'click', autoCal1kHz);
 
 function autoCal1kHz(){
   if(!running || !analyser){ alert('קודם הפעל את המיקרופון.'); return; }
@@ -193,14 +194,14 @@ function autoCal1kHz(){
 }
 
 // ---- TF Controls: Auto-Delay, Phase, Coherence ----
-document.getElementById('tfAutoDelayBtn').addEventListener('click', tfAutoDelay);
-document.getElementById('tfPhaseToggleBtn').addEventListener('click', function(){
+safeOn('tfAutoDelayBtn', 'click', tfAutoDelay);
+safeOn('tfPhaseToggleBtn', 'click', function(){
   showTfPhase = !showTfPhase;
   this.classList.toggle('on', showTfPhase);
   const qbBtn = document.getElementById('qbPhase');
   if(qbBtn) qbBtn.classList.toggle('on', showTfPhase);
 });
-document.getElementById('tfCohToggleBtn').addEventListener('click', function(){
+safeOn('tfCohToggleBtn', 'click', function(){
   showTfCoh = !showTfCoh;
   this.classList.toggle('on', showTfCoh);
   const qbBtn = document.getElementById('qbCoh');
@@ -208,14 +209,14 @@ document.getElementById('tfCohToggleBtn').addEventListener('click', function(){
 });
 
 // Event Listeners for TF Quick Floating Bar
-document.getElementById('qbAutoDelay').addEventListener('click', tfAutoDelay);
-document.getElementById('qbCoh').addEventListener('click', function(){
+safeOn('qbAutoDelay', 'click', tfAutoDelay);
+safeOn('qbCoh', 'click', function(){
   showTfCoh = !showTfCoh;
   this.classList.toggle('on', showTfCoh);
   const mainBtn = document.getElementById('tfCohToggleBtn');
   if(mainBtn) mainBtn.classList.toggle('on', showTfCoh);
 });
-document.getElementById('qbPhase').addEventListener('click', function(){
+safeOn('qbPhase', 'click', function(){
   showTfPhase = !showTfPhase;
   this.classList.toggle('on', showTfPhase);
   const mainBtn = document.getElementById('tfPhaseToggleBtn');
@@ -241,27 +242,27 @@ function tfAutoDelay(){
   document.getElementById('tfDelayInfo').textContent = `סנכרון דיליי TF: ${tfDelayMs.toFixed(2)} ms (~${dist.toFixed(2)}m)`;
 }
 
-document.getElementById('fbSens').addEventListener('input',e=>{
+safeOn('fbSens', 'input',e=>{
   fbProm = 26 - parseFloat(e.target.value);
   document.getElementById('fbSensVal').textContent = fbProm>=15?'נמוכה':fbProm>=10?'בינונית':'גבוהה';
   prefSet('rta_fbSens', e.target.value);
 });
-document.getElementById('peakBtn').addEventListener('click',function(){
+safeOn('peakBtn', 'click',function(){
   peakHold=!peakHold; this.classList.toggle('on',peakHold); peaks.fill(0);
 });
-document.getElementById('fbBtn').addEventListener('click',function(){
+safeOn('fbBtn', 'click',function(){
   fbOn=!fbOn; this.classList.toggle('on',fbOn); fbTrack.clear(); fbPanel.innerHTML='';
 });
-document.getElementById('avgBtn').addEventListener('click',function(){
+safeOn('avgBtn', 'click',function(){
   avgOn=!avgOn; this.classList.toggle('on',avgOn); if(avgOn) avgBuf.fill(0);
 });
-document.getElementById('freezeBtn').addEventListener('click',function(){
+safeOn('freezeBtn', 'click',function(){
   frozen=!frozen;
   if(frozen){ snapCurve=lastV.slice(); this.classList.add('on'); this.textContent='הפשר תצוגה'; }
   else { snapCurve=null; this.classList.remove('on'); this.textContent='הקפא'; }
 });
-document.getElementById('pngBtn').addEventListener('click',exportPNG);
-document.getElementById('csvBtn').addEventListener('click',exportCSV);
+safeOn('pngBtn', 'click',exportPNG);
+safeOn('csvBtn', 'click',exportCSV);
 
 function stamp(){ const d=new Date(); const p=n=>(''+n).padStart(2,'0');
   return d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'_'+p(d.getHours())+p(d.getMinutes())+p(d.getSeconds()); }
@@ -284,9 +285,9 @@ function exportCSV(){
   download('rta_'+stamp()+'.csv', URL.createObjectURL(new Blob([rows],{type:'text/csv'})));
 }
 
-document.getElementById('exportJsonBtn').addEventListener('click', exportSessionJson);
-document.getElementById('importJsonBtn').addEventListener('click', ()=> document.getElementById('jsonFileInput').click());
-document.getElementById('jsonFileInput').addEventListener('change', importSessionJson);
+safeOn('exportJsonBtn', 'click', exportSessionJson);
+safeOn('importJsonBtn', 'click', ()=> document.getElementById('jsonFileInput').click());
+safeOn('jsonFileInput', 'change', importSessionJson);
 
 function exportSessionJson(){
   const data = {
@@ -350,7 +351,7 @@ function importSessionJson(e){
   reader.readAsText(file);
   e.target.value = '';
 }
-document.getElementById('wgtBtn').addEventListener('click',function(){
+safeOn('wgtBtn', 'click',function(){
   weightMode = weightMode==='Z'?'A':weightMode==='A'?'C':'Z';
   this.textContent='dB'+weightMode;
   this.classList.toggle('on', weightMode!=='Z');
@@ -358,12 +359,12 @@ document.getElementById('wgtBtn').addEventListener('click',function(){
   leqSumP=0; leqN=0; splMax=-120;
   prefSet('rta_wgt', weightMode);
 });
-document.getElementById('leqBtn').addEventListener('click',()=>{ leqSumP=0; leqN=0; splMax=-120; });
+safeOn('leqBtn', 'click',()=>{ leqSumP=0; leqN=0; splMax=-120; });
 document.querySelectorAll('#unitSeg button').forEach(b=>b.addEventListener('click',function(){
   document.querySelectorAll('#unitSeg button').forEach(x=>x.classList.remove('on'));
   this.classList.add('on'); meterUnit=this.dataset.u;
 }));
-document.getElementById('inSel').addEventListener('change',e=>{ userPickedIn = e.target.value!==''; switchInput(e.target.value); });
+safeOn('inSel', 'change',e=>{ userPickedIn = e.target.value!==''; switchInput(e.target.value); });
 
 function freqForX(px){
   const W=cv.clientWidth;
@@ -394,7 +395,7 @@ cv.addEventListener('pointerup',e=>{
 });
 cv.addEventListener('pointercancel',()=>{dragging=false;});
 cv.addEventListener('dblclick',()=>{ if(running) resetZoom(); });
-document.getElementById('zoomBtn').addEventListener('click',resetZoom);
+safeOn('zoomBtn', 'click',resetZoom);
 
 function makeNoiseBuffer(type){
   const len=Math.floor(audioCtx.sampleRate*2);
@@ -476,7 +477,7 @@ function genApplyLevel(){
 }
 
 const genPanel=document.getElementById('genPanel');
-document.getElementById('genBtn').addEventListener('click',function(){
+safeOn('genBtn', 'click',function(){
   const open=genPanel.classList.toggle('open');
   this.classList.toggle('on',open);
 });
@@ -488,11 +489,11 @@ document.querySelectorAll('#genType button').forEach(b=>b.addEventListener('clic
   document.getElementById('genSweepWrap').style.display = genType==='sweep'?'flex':'none';
   if(genOn) genStart();
 }));
-document.getElementById('genSweep').addEventListener('input',e=>{
+safeOn('genSweep', 'input',e=>{
   genSweepDur=parseFloat(e.target.value);
   document.getElementById('genSweepVal').textContent=genSweepDur.toFixed(1)+'ש\'';
 });
-document.getElementById('genLvl').addEventListener('input',e=>{
+safeOn('genLvl', 'input',e=>{
   genDb=parseFloat(e.target.value);
   const el=document.getElementById('genLvlVal'); el.textContent=genDb+'dB';
   el.style.color = genDb>=-16 ? 'var(--hot)' : (genDb>=-24?'var(--warn)':'var(--accent)');
@@ -507,9 +508,9 @@ function applyGenHz(hz, from){
   document.getElementById('genFreqVal').textContent=(genHz>=1000?(genHz/1000).toFixed(genHz%1000?2:1)+'k':genHz)+'Hz';
   if(genOsc) genOsc.frequency.setTargetAtTime(genHz,audioCtx.currentTime,0.02);
 }
-document.getElementById('genFreq').addEventListener('input',e=>applyGenHz(parseFloat(e.target.value),'slider'));
-document.getElementById('genFreqNum').addEventListener('input',e=>applyGenHz(parseFloat(e.target.value),'num'));
-document.getElementById('genOnBtn').addEventListener('click',()=>{ genOn?genStop():genStart(); });
+safeOn('genFreq', 'input',e=>applyGenHz(parseFloat(e.target.value),'slider'));
+safeOn('genFreqNum', 'input',e=>applyGenHz(parseFloat(e.target.value),'num'));
+safeOn('genOnBtn', 'click',()=>{ genOn?genStop():genStart(); });
 
 ['eqGenToggleBtn', 'areaGenToggleBtn'].forEach(id=>{
   const el = document.getElementById(id);
@@ -553,8 +554,8 @@ document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',function
 
 const eqPanel=document.getElementById('eqPanel');
 const savePanel=document.getElementById('savePanel');
-document.getElementById('eqClose').addEventListener('click',closeModals);
-document.getElementById('eqBtn').addEventListener('click',()=>{ showModal(eqPanel); updateEqUI(); });
+safeOn('eqClose', 'click',closeModals);
+safeOn('eqBtn', 'click',()=>{ showModal(eqPanel); updateEqUI(); });
 
 document.querySelectorAll('.respModeSeg button').forEach(b=>b.addEventListener('click',function(){
   if(this.dataset.rm==='dual'){ showModal(tfPanel); if(typeof tfResult!=='undefined' && tfResult) renderTFList(); }
@@ -564,7 +565,7 @@ document.querySelectorAll('#eqModeSwitchA button').forEach(b=>b.addEventListener
   if(this.dataset.go==='area'){ openAreas(); }
 }));
 
-document.getElementById('eqMeasBtn').addEventListener('click',()=>pickSource(measurePosition,5000));
+safeOn('eqMeasBtn', 'click',()=>pickSource(measurePosition,5000));
 function setEqMode(m){
   eqMode=m;
   document.querySelectorAll('#eqModeSeg button, #areaModeSeg button').forEach(b=>b.classList.toggle('on', b.dataset.m===m));
@@ -576,9 +577,9 @@ document.querySelectorAll('#tfModeSeg button').forEach(b=>b.addEventListener('cl
   document.querySelectorAll('#tfModeSeg button').forEach(x=>x.classList.remove('on'));
   this.classList.add('on'); tfMode=this.dataset.m; if(tfResult) renderTFList();
 }));
-document.getElementById('eqResetBtn').addEventListener('click',()=>{ eqPositions=[]; eqMarks=null;
+safeOn('eqResetBtn', 'click',()=>{ eqPositions=[]; eqMarks=null;
   { const cr=document.getElementById('combResult'); if(cr){ cr.style.display='none'; cr.innerHTML=''; } } document.getElementById('eqList').innerHTML=''; document.getElementById('eqPosList').innerHTML=''; updateEqUI(); });
-document.getElementById('combBtn').addEventListener('click',()=>runCombCheck('combResult'));
+safeOn('combBtn', 'click',()=>runCombCheck('combResult'));
 
 function updateEqUI(){
   const meas = measState==='measuring';
@@ -641,7 +642,7 @@ function syncGeqBtn(){
   const b=document.getElementById('geqShowBtn'), d=document.getElementById('geqDock');
   if(b&&d) b.classList.toggle('on', d.style.display!=='none');
 }
-document.getElementById('geqShowBtn').addEventListener('click',function(){
+safeOn('geqShowBtn', 'click',function(){
   const d=document.getElementById('geqDock');
   if(d.style.display==='none' || !d.style.display){
     if(!eqCurveData){ alert('אין עדיין תיקון להצגה — בצע מדידת תגובה קודם.'); return; }
@@ -651,7 +652,7 @@ document.getElementById('geqShowBtn').addEventListener('click',function(){
   } else d.style.display='none';
   syncGeqBtn();
 });
-document.getElementById('geqDockToggle').addEventListener('click',function(){
+safeOn('geqDockToggle', 'click',function(){
   const d=document.getElementById('geqDock');
   d.classList.toggle('collapsed');
   this.textContent = d.classList.contains('collapsed') ? '▲' : '▼';
@@ -808,10 +809,10 @@ async function addCalFromFile(file){
   }
 }
 const calPanel=document.getElementById('calPanel');
-document.getElementById('calBtn').addEventListener('click',()=>{ renderCalList(); showModal(calPanel); });
-document.getElementById('calClose').addEventListener('click',closeModals);
-document.getElementById('calAdd').addEventListener('change',e=>{ if(e.target.files[0]) addCalFromFile(e.target.files[0]); e.target.value=''; });
-document.getElementById('calPasteBtn').addEventListener('click',()=>{
+safeOn('calBtn', 'click',()=>{ renderCalList(); showModal(calPanel); });
+safeOn('calClose', 'click',closeModals);
+safeOn('calAdd', 'change',e=>{ if(e.target.files[0]) addCalFromFile(e.target.files[0]); e.target.value=''; });
+safeOn('calPasteBtn', 'click',()=>{
   const t=document.getElementById('calPaste').value;
   if(!t.trim()){ alert('הדבק קודם את תוכן הקובץ.'); return; }
   if(parseCalText(t,'כיול מודבק')) document.getElementById('calPaste').value='';
@@ -821,7 +822,7 @@ calPanel.addEventListener('dragover',e=>{ e.preventDefault(); calPanel.style.bor
 calPanel.addEventListener('dragleave',()=>{ calPanel.style.borderColor=''; });
 calPanel.addEventListener('drop',e=>{ e.preventDefault(); calPanel.style.borderColor='';
   const f=e.dataTransfer.files[0]; if(f) addCalFromFile(f); });
-document.getElementById('calResetBtn').addEventListener('click',()=>{
+safeOn('calResetBtn', 'click',()=>{
   if(!micCalList.length){ return; }
   if(!confirm('לאפס ולמחוק את כל קבצי הכיולים?')) return;
   micCalList=[]; activeCalId=null; deriveActiveCal(); saveCalStore(); renderCalList();
@@ -858,8 +859,8 @@ function openAreas(){
   document.querySelectorAll('#areaCutSeg button').forEach(b=>b.classList.toggle('on', (b.dataset.co==='1')===cutOnly));
   showModal(areaPanel);
 }
-document.getElementById('areaClose').addEventListener('click',closeModals);
-document.getElementById('areaMeasBtn').addEventListener('click',()=>pickSource(measureArea,5000));
+safeOn('areaClose', 'click',closeModals);
+safeOn('areaMeasBtn', 'click',()=>pickSource(measureArea,5000));
 let pendingMeasureFn=null, pendingDur=5000;
 const srcOverlay=document.getElementById('srcOverlay');
 function pickSource(fn, dur){
@@ -890,8 +891,8 @@ function runWithSource(kind, measureFn, durMs){
   }, 450+durMs+300);
 }
 
-document.getElementById('areaCombBtn').addEventListener('click',()=>runCombCheck('areaCombResult'));
-document.getElementById('areaResetBtn').addEventListener('click',()=>{
+safeOn('areaCombBtn', 'click',()=>runCombCheck('areaCombResult'));
+safeOn('areaResetBtn', 'click',()=>{
   areas=[];
   { const cr=document.getElementById('areaCombResult'); if(cr){ cr.style.display='none'; cr.innerHTML=''; } }
   const ac=document.getElementById('areaEqCanvas'); if(ac) ac.style.display='none';
@@ -899,7 +900,7 @@ document.getElementById('areaResetBtn').addEventListener('click',()=>{
   eqMarks=null; eqCurveData=null; hideGeqDock();
   renderAreaList();
 });
-document.getElementById('areaEqBtn').addEventListener('click',suggestAreaEQ);
+safeOn('areaEqBtn', 'click',suggestAreaEQ);
 function suggestAreaEQ(){
   if(!areas.length){ alert('מדוד לפחות אזור אחד.'); return; }
   const n=GEQ.length;
@@ -961,18 +962,18 @@ function renderAreaList(){
 }
 
 const tfPanel=document.getElementById('tfPanel');
-document.getElementById('tfClose').addEventListener('click',closeModals);
-document.getElementById('tfSwapBtn').addEventListener('click',function(){ tfSwap=!tfSwap; this.classList.toggle('on',tfSwap); });
+safeOn('tfClose', 'click',closeModals);
+safeOn('tfSwapBtn', 'click',function(){ tfSwap=!tfSwap; this.classList.toggle('on',tfSwap); });
 function setTfOverlay(on){
   tfOverlay=on;
   const a=document.getElementById('tfOverlayBtn'), b=document.getElementById('tfOverlayHdr');
   if(a) a.classList.toggle('on',on);
   if(b) b.classList.toggle('on',on);
 }
-document.getElementById('tfOverlayBtn').addEventListener('click',()=>setTfOverlay(!tfOverlay));
-document.getElementById('tfOverlayHdr').addEventListener('click',()=>setTfOverlay(!tfOverlay));
-document.getElementById('tfMeasBtn').addEventListener('click',()=>pickSource(tfMeasure,6000));
-document.getElementById('tfCsvBtn').addEventListener('click',tfExportCsv);
+safeOn('tfOverlayBtn', 'click',()=>setTfOverlay(!tfOverlay));
+safeOn('tfOverlayHdr', 'click',()=>setTfOverlay(!tfOverlay));
+safeOn('tfMeasBtn', 'click',()=>pickSource(tfMeasure,6000));
+safeOn('tfCsvBtn', 'click',tfExportCsv);
 
 function detectComb(){
   if(!floatData || !audioCtx) return null;
@@ -1115,14 +1116,14 @@ function tfExportCsv(){
 }
 
 const dlyPanel=document.getElementById('dlyPanel');
-document.getElementById('dlyBtn').addEventListener('click',()=>{
+safeOn('dlyBtn', 'click',()=>{
   showModal(dlyPanel);
   if(running && !workletReady){
     const st=document.getElementById('dlyStatus');
     if(st){ st.innerHTML='<span style="color:var(--warn)">⚠ מנוע ההקלטה לא נטען — מדידת דיליי לא תעבוד. פתח את האתר דרך שרת/HTTPS (לא כקובץ מקומי).</span>'; }
   }
 });
-document.getElementById('dlyClose').addEventListener('click',closeModals);
+safeOn('dlyClose', 'click',closeModals);
 function resetDelay(){
   dlyState='idle';
   dlySpeakers.forEach((s,i)=>{ s.ms=null; s.name=dlyName(i); });
@@ -1130,8 +1131,8 @@ function resetDelay(){
   const st=document.getElementById('dlyStatus'); if(st) st.textContent='—';
   renderDlySpk();
 }
-document.getElementById('dlyReset').addEventListener('click',resetDelay);
-document.getElementById('dlyMeasBtn').addEventListener('click',()=>pickSource(measureDelay,2100));
+safeOn('dlyReset', 'click',resetDelay);
+safeOn('dlyMeasBtn', 'click',()=>pickSource(measureDelay,2100));
 
 function fft(re,im,inv){
   const n=re.length;
@@ -1454,18 +1455,18 @@ function renderEqResult(){
 }
 
 const rtPanel=document.getElementById('rtPanel'), rtStatus=document.getElementById('rtStatus');
-document.getElementById('rtClose').addEventListener('click',closeModals);
-document.getElementById('rtRange').addEventListener('input',e=>{
+safeOn('rtClose', 'click',closeModals);
+safeOn('rtRange', 'input',e=>{
   rtRange=parseFloat(e.target.value);
   document.getElementById('rtRangeVal').textContent=rtRange+'dB';
   if(rt60Samples.length) analyzeRT60();
 });
-document.getElementById('rtLevel').addEventListener('input',e=>{
+safeOn('rtLevel', 'input',e=>{
   rtLevel=parseInt(e.target.value,10);
   document.getElementById('rtLevelVal').textContent=rtLevel+'dB';
 });
-document.getElementById('rtRunBtn').addEventListener('click',startRT60);
-document.getElementById('rtBtn').addEventListener('click',()=>{
+safeOn('rtRunBtn', 'click',startRT60);
+safeOn('rtBtn', 'click',()=>{
   if(!running||!audioCtx){ alert('קודם הפעל את המיקרופון.'); return; }
   showModal(rtPanel);
   { const c=document.getElementById('rtCanvas'); if(c) c.style.display='none'; }
@@ -1584,7 +1585,7 @@ function drawRTPlot(post, steady, slope, intercept){
     x.moveTo(X(0),Y(intercept)); x.lineTo(X(tMax),Y(intercept+slope*tMax)); x.stroke(); x.setLineDash([]);
   }
 }
-document.getElementById('res').addEventListener('input',e=>{
+safeOn('res', 'input',e=>{
   const bpo=Math.max(3,Math.min(24,parseInt(e.target.value,10)));
   document.getElementById('resVal').textContent='1/'+bpo+' אוקטבה';
   buildBands(bpo);
@@ -1605,10 +1606,10 @@ document.querySelectorAll('#fftSeg button').forEach(b=>b.addEventListener('click
   document.querySelectorAll('#fftSeg button').forEach(x=>x.classList.remove('on'));
   this.classList.add('on'); setFft(parseInt(this.dataset.n,10)); prefSet('rta_fft', this.dataset.n);
 }));
-document.getElementById('mRta').addEventListener('click',()=>setMode('rta'));
-document.getElementById('mSpec').addEventListener('click',()=>setMode('spec'));
-document.getElementById('startBtn').addEventListener('click',()=>start());
-document.getElementById('stopBtn').addEventListener('click',resetSession);
+safeOn('mRta', 'click',()=>setMode('rta'));
+safeOn('mSpec', 'click',()=>setMode('spec'));
+safeOn('startBtn', 'click',()=>start());
+safeOn('stopBtn', 'click',resetSession);
 function resetSession(){
   if(audioCtx && audioCtx.state==='suspended') audioCtx.resume();
   const tr = stream && stream.getAudioTracks && stream.getAudioTracks()[0];
@@ -1782,7 +1783,7 @@ async function applyOutput(deviceId){
   }catch(e){}
   return false;
 }
-document.getElementById('outSel').addEventListener('change',async e=>{
+safeOn('outSel', 'change',async e=>{
   userPickedOut = e.target.value!=='';
   const ok=await applyOutput(e.target.value);
   if(!ok) alert('הדפדפן לא תומך בבחירת יציאת פלט. הגדר את הפלט ב־macOS: הגדרות → סאונד → פלט.');
@@ -2307,7 +2308,7 @@ function applyAccent(hex){
 function lsGet(k){ try{ return localStorage.getItem(k); }catch(_){ return null; } }
 function prefSet(k,v){ try{ localStorage.setItem(k, v); }catch(_){} }
 
-document.getElementById('refCurveBtn').addEventListener('click',function(){
+safeOn('refCurveBtn', 'click',function(){
   if(refCurve){ refCurve=null; this.classList.remove('on'); this.textContent='שמור כ״לפני״'; return; }
   if(!running || !lastV.length){ alert('הפעל מיקרופון ונגן אות לפני שמירת עקומת ייחוס.'); return; }
   refCurve={ v:lastV.slice(), bands:BANDS };
@@ -2371,9 +2372,9 @@ function loadSave(id){
   if(s.calName && (!micCal || (micCalList.find(c=>c.id===activeCalId)||{}).name!==s.calName))
     alert('שים לב: המדידה נשמרה עם כיול "'+s.calName+'". ודא שאותו כיול פעיל.');
 }
-document.getElementById('saveBtn').addEventListener('click',()=>{ renderSaveList(); showModal(savePanel); });
-document.getElementById('saveClose').addEventListener('click',closeModals);
-document.getElementById('saveNowBtn').addEventListener('click',()=>{
+safeOn('saveBtn', 'click',()=>{ renderSaveList(); showModal(savePanel); });
+safeOn('saveClose', 'click',closeModals);
+safeOn('saveNowBtn', 'click',()=>{
   const inp=document.getElementById('saveName');
   const name=(inp.value||'').trim();
   if(!name){ alert('תן שם למדידה.'); inp.focus(); return; }
@@ -2490,7 +2491,7 @@ const HELP={
 };
 let helpMode=false;
 const helpTip=document.createElement('div'); helpTip.id='helpTip'; document.body.appendChild(helpTip);
-document.getElementById('helpBtn').addEventListener('click',function(){
+safeOn('helpBtn', 'click',function(){
   helpMode=!helpMode; this.classList.toggle('on',helpMode); document.body.classList.toggle('help-on',helpMode);
   if(!helpMode) helpTip.style.display='none';
 });
