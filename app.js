@@ -2116,7 +2116,7 @@ function draw(){
   const xForFreq=f=>((Math.log(f)-logMin)/(logMax-logMin))*W;
 
   if(mode==='rta') drawRta(W,H,nyquist,bins,xForFreq);
-  else (W,H,nyquist,bins,xForFreq);
+  else drawSpec(W,H,nyquist,bins,xForFreq);
 
   fbFrameCounter++;
   if(fbOn && !frozen && fbFrameCounter % 4 === 0) detectFeedback(nyquist,bins);
@@ -2298,13 +2298,6 @@ function drawRta(){
     ctx.stroke();
   }
 
-  // ציור פיידרים במידה ומעגן ה-EQ פתוח
-  const dock = document.getElementById('geqDock');
-  const eqCanvas = document.getElementById('eqCurveCanvas');
-  if(dock && !dock.classList.contains('collapsed') && eqCanvas && typeof lastEqCorr !== 'undefined' && lastEqCorr){
-    if(typeof drawGEQ === 'function') drawGEQ(eqCanvas, GEQ, lastEqCorr);
-  }
-}  
 // ציור פיידרים במידה ומעגן ה-EQ פתוח
   const dock = document.getElementById('geqDock');
   const eqCanvas = document.getElementById('eqCurveCanvas');
