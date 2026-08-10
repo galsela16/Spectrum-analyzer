@@ -2143,7 +2143,7 @@ function computeComplexTf(){
   fft(tfYr, tfYi, false);
 
   const halfN = N / 2;
-  const alpha = 0.85;
+  const alpha = 0.95;
 
   for(let k=0; k<halfN; k++){
     const rx = tfXr[k], ix = tfXi[k];
@@ -2247,20 +2247,35 @@ function drawRta(W,H,nyquist,bins,xForFreq){
 
     computeComplexTf();
 
-    if(showTfCoh){
+  if(showTfCoh){
       ctx.beginPath();
+      let prevCoh = 0;
       for(let px = 0; px <= W; px += 2){
         const f = freqForX(px);
         const k = Math.min(TF_FFT_N/2 - 1, Math.round(f / nyquist * (TF_FFT_N/2)));
-        const pxx = tfPxx[k], pyy = tfPyy[k];
-        const pxySq = tfPxyRe[k]*tfPxyRe[k] + tfPxyIm[k]*tfPxyIm[k];
-        const coh = Math.max(0, Math.min(1, pxySq / (pxx * pyy + 1e-12)));
+        
+        // ממוצע מקומי של 3 Bins סמוכים להחלקת תדרים
+        let pxx=0, pyy=0, pxyRe=0, pxyIm=0, count=0;
+        for(let offset = -1; offset <= 1; offset++){
+          const idx = Math.max(0, Math.min(TF_FFT_N/2 - 1, k + offset));
+          pxx += tfPxx[idx]; pyy += tfPyy[idx];
+          pxyRe += tfPxyRe[idx]; pxyIm += tfPxyIm[idx];
+          count++;
+        }
+        
+        const pxySq = pxyRe*pxyRe + pxyIm*pxyIm;
+        const rawCoh = Math.max(0, Math.min(1, pxySq / (pxx * pyy + 1e-12)));
+        
+        // החלקת סינוס רכה בין פיקסלים
+        const coh = prevCoh ? (prevCoh * 0.4 + rawCoh * 0.6) : rawCoh;
+        prevCoh = coh;
+
         const y = plotH - coh * plotH;
         px === 0 ? ctx.moveTo(px, y) : ctx.lineTo(px, y);
       }
-      ctx.strokeStyle = 'rgba(239, 68, 68, 0.75)';
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([3, 2]);
+      ctx.strokeStyle = 'rgba(239, 68, 68, 0.85)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 2]);
       ctx.stroke();
       ctx.setLineDash([]);
     }
