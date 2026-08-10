@@ -1856,8 +1856,9 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     const stepPx = 1;
     for(let px = 0; px <= W; px += stepPx){
       const f = freqForX(px);
-      const fLo = f / 1.0072;
-      const fHi = f * 1.0072;
+      // שימוש ב-R שמחושב לפי סליידר הרזולוציה (curBpo)
+      const fLo = f / R;
+      const fHi = f * R;
       const mDb = bandPowDb(fLo, fHi);
       const rDb = refBandDb(fLo, fHi);
       micPts.push([px, plotH - norm(mDb) * plotH]);
@@ -1990,7 +1991,7 @@ function drawRta(W,H,nyquist,bins,xForFreq){
   let exactHz=0;
   if(peakBand>=0 && peakVal>0.05){
     const fc=ISO[peakBand];
-    let lo=Math.floor((fc/R)/nyquist*bins), hi=Math.ceil((fc*R)/nyquist*bins);
+    let lo=Math.floor((fc/R)/nyquist*bins), hi=Math.ceil((fc/R)/nyquist*bins);
     lo=Math.max(1,lo); hi=Math.min(bins-1,hi);
     let bMax=-999, bi=lo;
     for(let i=lo;i<=hi;i++){ if(floatData[i]>bMax){ bMax=floatData[i]; bi=i; } }
