@@ -708,7 +708,7 @@ safeAddListener('geqDockToggle', 'click', function(){
 });
 
 function drawGEQ(c, freqs, corr){
-  if(!c || (c.parentElement && c.parentElement.classList.contains('collapsed'))) return;
+ if(!c || (c.parentElement && c.parentElement.classList.contains('collapsed'))) return;
   const x=c.getContext('2d');
   const dpr=Math.min(window.devicePixelRatio||1,2);
   const CW=c.clientWidth||360, H=234;
@@ -716,63 +716,91 @@ function drawGEQ(c, freqs, corr){
   x.setTransform(dpr,0,0,dpr,0,0);
   const W=CW;
   x.clearRect(0,0,W,H);
-  const top=34, bot=H-46, mid=(top+bot)/2, scale=(bot-top)/2/9;
-  const n=freqs.length, slot=W/n, kw=Math.max(9,Math.min(18,slot*0.80)), kh=11;
+  const top=38, bot=H-48, mid=(top+bot)/2, scale=(bot-top)/2/9;
+  const n=freqs.length, slot=W/n, kw=Math.max(9,Math.min(18,slot*0.80)), kh=12;
 
-  x.fillStyle=sunMode ? '#f0f4f8' : '#12171f'; 
+  // רקע
+  x.fillStyle=sunMode ? '#f8fafc' : '#12171f'; 
   x.fillRect(0,0,W,H);
 
-  x.font='9px monospace'; x.textAlign='left';
-  [6,0,-6].forEach(d=>{ const yy=mid-d*scale;
-    x.strokeStyle = d===0 ? (sunMode?'rgba(0,0,0,.3)':'rgba(255,255,255,.30)') : (sunMode?'rgba(0,0,0,.1)':'rgba(255,255,255,.10)');
+  // קווי רשת וסרגל dB
+  x.font='10px Heebo, sans-serif'; x.textAlign='left';
+  [6,3,0,-3,-6].forEach(d=>{
+    const yy=mid-d*scale;
+    x.strokeStyle = d===0 ? (sunMode?'rgba(0,0,0,.4)':'rgba(255,255,255,.4)') : (sunMode?'rgba(0,0,0,.12)':'rgba(255,255,255,.12)');
     x.setLineDash(d===0?[]:[2,3]); x.beginPath(); x.moveTo(0,yy); x.lineTo(W,yy); x.stroke();
-    x.fillStyle=sunMode?'#475569':'rgba(160,175,190,.75)'; x.fillText((d>0?'+':'')+d, 2, yy-2); });
+    x.fillStyle=sunMode?'#334155':'#cbd5e1'; x.fillText((d>0?'+':'')+d+'dB', 4, yy-2);
+  });
   x.setLineDash([]);
 
+  // ציור הפיידרים והערכים
   for(let k=0;k<n;k++){
     const cx=slot*k+slot/2, v=corr[k];
-    x.strokeStyle=sunMode?'rgba(0,0,0,.2)':'rgba(255,255,255,.20)'; x.lineWidth=Math.max(3,kw*0.34);
+    x.strokeStyle=sunMode?'rgba(0,0,0,.18)':'rgba(255,255,255,.18)'; x.lineWidth=Math.max(2,kw*0.3);
     x.lineCap='round'; x.beginPath(); x.moveTo(cx,top); x.lineTo(cx,bot); x.stroke();
     if(v==null) continue;
+
     const yy=mid-Math.max(-9,Math.min(9,v))*scale;
-    x.strokeStyle = v>0.4?'rgba(80,230,140,.75)' : v<-0.4?'rgba(255,90,120,.75)' : (sunMode?'rgba(0,0,0,.22)':'rgba(255,255,255,.22)');
+    const isBoost = v > 0.4, isCut = v < -0.4;
+    const lineCol = isBoost ? '#39d98a' : isCut ? '#ff4d6d' : (sunMode?'#64748b':'#94a3b8');
+
+    // קו שינוי עוצמה
+    x.strokeStyle=lineCol; x.lineWidth=Math.max(3, kw*0.4);
     x.beginPath(); x.moveTo(cx,mid); x.lineTo(cx,yy); x.stroke();
-    const col = v>0.4?'#5ce89a' : v<-0.4?'#ff6b8b' : (sunMode?'#64748b':'#9fb0c2');
-    x.save(); x.shadowColor='rgba(0,0,0,.4)'; x.shadowBlur=3; x.shadowOffsetY=1;
-    x.fillStyle=col; x.strokeStyle='rgba(0,0,0,.7)'; x.lineWidth=1;
+
+    // ידית הפיידר (Knob)
+    x.save(); x.shadowColor='rgba(0,0,0,.5)'; x.shadowBlur=4; x.shadowOffsetY=1;
+    x.fillStyle=lineCol; x.strokeStyle='rgba(0,0,0,.8)'; x.lineWidth=1;
     x.beginPath();
-    if(x.roundRect) x.roundRect(cx-kw/2, yy-kh/2, kw, kh, 2);
+    if(x.roundRect) x.roundRect(cx-kw/2, yy-kh/2, kw, kh, 3);
     else x.rect(cx-kw/2, yy-kh/2, kw, kh);
     x.fill(); x.stroke(); x.restore();
-    x.fillStyle='rgba(0,0,0,.55)'; x.fillRect(cx-kw/2+2, yy-0.5, kw-4, 1);
+
+    x.fillStyle='#000'; x.fillRect(cx-kw/2+2, yy-0.5, kw-4, 1);
+
+    // תגית אופקית בולטת לערך ה-dB
     if(Math.abs(v)>=0.4){
-      const txt=(v>0?'+':'')+ (Math.abs(v)>=10 ? v.toFixed(0) : v.toFixed(1));
-      x.save(); x.translate(cx, v>0 ? yy-kh/2-3 : yy+kh/2+3); x.rotate(-Math.PI/2);
-      x.textAlign = v>0 ? 'left' : 'right';
-      x.font='9px monospace'; x.fillStyle = v>0?'#15803d':'#b91c1c';
-      x.fillText(txt, 0, 3); x.restore();
+      const txt=(v>0?'+':'')+v.toFixed(1);
+      x.font='bold 10px Heebo, sans-serif';
+      const tw=Math.max(22, x.measureText(txt).width + 6);
+      const bgY = v > 0 ? yy - kh/2 - 15 : yy + kh/2 + 3;
+
+      x.fillStyle = sunMode ? 'rgba(255,255,255,0.95)' : 'rgba(15,23,42,0.95)';
+      x.strokeStyle = lineCol;
+      x.lineWidth = 1;
+      x.fillRect(cx - tw/2, bgY, tw, 13);
+      x.strokeRect(cx - tw/2, bgY, tw, 13);
+
+      x.textAlign='center';
+      x.fillStyle = lineCol;
+      x.fillText(txt, cx, bgY + 10);
     }
   }
 
-  x.font='9px monospace';
+  // תדרי הפסים למטה
+  x.font='10px Heebo, sans-serif';
   for(let k=0;k<n;k++){
     const f=freqs[k], cx=slot*k+slot/2;
     const lbl = f>=1000 ? (f/1000)+'k' : String(f);
-    x.save(); x.translate(cx, bot+6); x.rotate(-Math.PI/2);
-    x.textAlign='right'; x.fillStyle= corr[k]==null ? (sunMode?'rgba(0,0,0,.4)':'rgba(120,132,146,.6)') : (sunMode?'#0f172a':'rgba(170,185,200,.95)');
+    x.save(); x.translate(cx, bot+8); x.rotate(-Math.PI/2);
+    x.textAlign='right'; 
+    x.fillStyle= corr[k]==null ? (sunMode?'rgba(0,0,0,.35)':'rgba(148,163,184,.5)') : (sunMode?'#0f172a':'#f1f5f9');
+    x.font = (corr[k]!=null && Math.abs(corr[k])>=0.5) ? 'bold 10px Heebo, sans-serif' : '10px Heebo, sans-serif';
     x.fillText(lbl, 0, 3); x.restore();
   }
+
+  // כותרת סיכום חריגות
   let worst=null;
   for(let k=0;k<n;k++){ const v=corr[k]; if(v==null) continue; if(!worst||Math.abs(v)>Math.abs(worst.v)) worst={v,k}; }
   if(worst && Math.abs(worst.v)>=0.5){
     const f=freqs[worst.k];
-    x.textAlign='right'; x.fillStyle=worst.v>0?'#16a34a':'#dc2626';
-    x.fillText('הכי חריג: '+(f>=1000?(f/1000).toFixed(1)+'k':Math.round(f))+'Hz '+(worst.v>0?'+':'')+worst.v.toFixed(1)+'dB', W-4, 12);
+    x.textAlign='right'; x.font='bold 11px Heebo, sans-serif';
+    x.fillStyle=worst.v>0?'#22c55e':'#ef4444';
+    x.fillText('חריגה מקסימלית: '+(f>=1000?(f/1000).toFixed(1)+'k':Math.round(f))+'Hz ('+(worst.v>0?'+':'')+worst.v.toFixed(1)+'dB)', W-8, 14);
   }
-  x.textAlign='left'; x.fillStyle=sunMode?'#475569':'rgba(150,165,180,.75)';
-  x.fillText('הזז כל פס לפי הידית', 4, 12);
+  x.textAlign='left'; x.font='11px Heebo, sans-serif'; x.fillStyle=sunMode?'#334155':'#94a3b8';
+  x.fillText('הזז פיידרים ב-EQ לפי הערכים', 8, 14);
 }
-
 function micCalAt(f){
   if(!micCal||!micCal.f.length) return 0;
   const F=micCal.f, G=micCal.g;
