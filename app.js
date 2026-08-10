@@ -292,7 +292,7 @@ safeOn('jsonFileInput', 'change', importSessionJson);
 
 function exportSessionJson(){
   const data = {
-    version: 'v162',
+    version: 'v163',
     timestamp: new Date().toISOString(),
     saves: saves,
     eqPositions: eqPositions.map(p=>({name:p.name, db:Array.from(p.db)})),
@@ -2113,10 +2113,10 @@ function drawRta(W,H,nyquist,bins,xForFreq){
   }
 
   // ---- השוואת A/B (לפני/אחרי כיוון) ----
-  if(abView!=='off' && (abA || abB)){
+  if(abA || abB){
     const trace=(snap,color)=>{
       if(!snap || !snap.f || !snap.f.length) return;
-      ctx.strokeStyle=color; ctx.lineWidth=2; ctx.beginPath();
+      ctx.strokeStyle=color; ctx.lineWidth=2.5; ctx.beginPath();
       for(let i=0;i<snap.f.length;i++){
         const x=xForFreq(snap.f[i]), yy=plotH-norm(snap.db[i])*plotH;
         i===0?ctx.moveTo(x,yy):ctx.lineTo(x,yy);
@@ -2125,21 +2125,28 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     };
     ctx.font='11px monospace'; ctx.textAlign='start';
     let ly = tfOpen ? 92 : 28;
-    if((abView==='A'||abView==='both') && abA){ trace(abA,'#f59e0b'); ctx.fillStyle='#f59e0b'; ctx.fillText('— לפני (A)',10,ly); ly+=14; }
-    if((abView==='B'||abView==='both') && abB){ trace(abB,'#22c55e'); ctx.fillStyle='#22c55e'; ctx.fillText('— אחרי (B)',10,ly); ly+=14; }
-    if(abView==='delta' && abA && abB){
-      const midY=plotH/2;
-      ctx.setLineDash([4,4]); ctx.strokeStyle=sunMode?'rgba(0,0,0,.25)':'rgba(255,255,255,.28)';
-      ctx.beginPath(); ctx.moveTo(0,midY); ctx.lineTo(W,midY); ctx.stroke(); ctx.setLineDash([]);
-      ctx.strokeStyle='#39d98a'; ctx.lineWidth=2.5; ctx.beginPath();
-      const n=Math.min(abA.f.length, abB.f.length);
-      for(let i=0;i<n;i++){
-        const diff=abB.db[i]-abA.db[i];
-        const x=xForFreq(abA.f[i]), yy=midY-(diff*(plotH/40));
-        i===0?ctx.moveTo(x,yy):ctx.lineTo(x,yy);
+    if(abView!=='off'){
+      if((abView==='A'||abView==='both') && abA){ trace(abA,'#f59e0b'); ctx.fillStyle='#f59e0b'; ctx.fillText('— לפני (A)',10,ly); ly+=14; }
+      if((abView==='B'||abView==='both') && abB){ trace(abB,'#22c55e'); ctx.fillStyle='#22c55e'; ctx.fillText('— אחרי (B)',10,ly); ly+=14; }
+      if(abView==='delta' && abA && abB){
+        const midY=plotH/2;
+        ctx.setLineDash([4,4]); ctx.strokeStyle=sunMode?'rgba(0,0,0,.25)':'rgba(255,255,255,.28)';
+        ctx.beginPath(); ctx.moveTo(0,midY); ctx.lineTo(W,midY); ctx.stroke(); ctx.setLineDash([]);
+        ctx.strokeStyle='#39d98a'; ctx.lineWidth=2.5; ctx.beginPath();
+        const n=Math.min(abA.f.length, abB.f.length);
+        for(let i=0;i<n;i++){
+          const diff=abB.db[i]-abA.db[i];
+          const x=xForFreq(abA.f[i]), yy=midY-(diff*(plotH/40));
+          i===0?ctx.moveTo(x,yy):ctx.lineTo(x,yy);
+        }
+        ctx.stroke();
+        ctx.fillStyle='#39d98a'; ctx.fillText('Δ אחרי−לפני · קו אמצע=0 · טווח ±20dB',10,ly); ly+=14;
       }
-      ctx.stroke();
-      ctx.fillStyle='#39d98a'; ctx.fillText('Δ אחרי−לפני · קו אמצע=0 · טווח ±20dB',10,ly);
+    }
+    // הנחיה לצעד הבא
+    if(abA && !abB){
+      ctx.fillStyle=sunMode?'#b45309':'#fbbf24';
+      ctx.fillText('לפני (A) נלכד ✓ — כוונן את המערכת ואז לחץ ״לכוד אחרי (B)״', 10, ly);
     }
   }
   if(snapCurve && snapCurve.length===BANDS){
@@ -2327,7 +2334,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v162';
+document.getElementById('ver').textContent='v163';
 
 let accentRgb=[62,166,255];
 function applyAccent(hex){
@@ -2350,15 +2357,16 @@ safeOn('refCurveBtn', 'click',function(){
 // ---- A/B: לפני/אחרי כיוון ----
 function abSnapshot(){ return { f: ISO.slice(), db: lastBandDb.slice() }; }
 function syncAbSeg(){ document.querySelectorAll('#abViewSeg button').forEach(x=>x.classList.toggle('on', x.dataset.v===abView)); }
+function abHasData(){ return lastBandDb.length && lastBandDb.some(v=>v>-119); }
 safeOn('abCapA','click',function(){
-  if(!running || !lastBandDb.length){ alert('הפעל מיקרופון ונגן אות (למשל פינק נויז) לפני לכידת ״לפני״.'); return; }
+  if(!abHasData()){ alert('אין עדיין מדידה ללכוד.\nהפעל את המיקרופון, נגן אות (למשל פינק נויז), ואז לחץ שוב.'); return; }
   abA=abSnapshot(); this.classList.add('on'); this.textContent='✓ לפני (A)';
-  if(abView==='off'){ abView='both'; syncAbSeg(); }
+  abView = abB ? 'both' : 'A'; syncAbSeg();
 });
 safeOn('abCapB','click',function(){
-  if(!running || !lastBandDb.length){ alert('הפעל מיקרופון ונגן אות לפני לכידת ״אחרי״.'); return; }
+  if(!abHasData()){ alert('אין עדיין מדידה ללכוד.\nהפעל את המיקרופון, נגן אות, ואז לחץ שוב.'); return; }
   abB=abSnapshot(); this.classList.add('on'); this.textContent='✓ אחרי (B)';
-  if(abView==='off'){ abView='both'; syncAbSeg(); }
+  abView = abA ? 'both' : 'B'; syncAbSeg();
 });
 safeOn('abClear','click',function(){
   abA=null; abB=null; abView='off';
