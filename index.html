@@ -244,14 +244,29 @@
   .saveRow button{border:1px solid var(--line);background:var(--panel);color:var(--text);font-family:inherit;font-size:11px;padding:4px 8px;border-radius:3px;cursor:pointer}
   .saveRow button:hover{border-color:var(--accent);color:var(--accent)}
 
-  #geqDock{flex:none;margin:0 10px 6px;border:1px solid var(--line);border-radius:5px;background:var(--panel-2);overflow:hidden}
-  #geqDockHead{display:flex;align-items:center;justify-content:space-between;padding:6px 12px;
-    background:var(--panel-2);border-bottom:1px solid var(--accent)}
-  #geqDockTitle{font-size:12px;font-weight:600;letter-spacing:.5px;color:var(--accent)}
-  #geqDockToggle{border:1px solid var(--line);background:var(--panel);color:var(--text);font-size:12px;
-    cursor:pointer;padding:2px 12px;border-radius:4px;line-height:1.5}
-  #geqDockToggle:hover{color:var(--accent);background:rgba(62,166,255,.1)}
-  #eqCurveCanvas{display:block;width:100%;height:234px;background:var(--panel-2)}
+  /* עיצוב מעודכן ומתוקן לתצוגת פיידר ה-EQ הצפה */
+  #geqDock{
+    position:absolute; bottom:42px; inset-inline:10px; z-index:9;
+    border:1px solid var(--line); border-radius:6px; background:var(--panel-2);
+    box-shadow:0 8px 24px rgba(0,0,0,.4); overflow:hidden;
+  }
+  body.sun-mode #geqDock{
+    background:#ffffff; border-color:var(--line); box-shadow:0 8px 24px rgba(0,0,0,.15);
+  }
+  #geqDockHead{
+    display:flex; align-items:center; justify-content:space-between; padding:6px 12px;
+    background:var(--panel-2); border-bottom:1px solid var(--accent);
+  }
+  body.sun-mode #geqDockHead{ background:#f1f5f9; }
+  #geqDockTitle{font-size:12px; font-weight:600; letter-spacing:.5px; color:var(--accent)}
+  #geqDockToggle{
+    border:1px solid var(--line); background:var(--panel); color:var(--text); font-size:12px;
+    cursor:pointer; padding:2px 12px; border-radius:4px; line-height:1.5;
+  }
+  body.sun-mode #geqDockToggle{ background:#ffffff; color:#0f172a; }
+  #geqDockToggle:hover{color:var(--accent); background:rgba(62,166,255,.1)}
+  #eqCurveCanvas{display:block; width:100%; height:234px; background:var(--panel-2)}
+  body.sun-mode #eqCurveCanvas{ background:#ffffff; }
   #geqDock.collapsed #eqCurveCanvas{display:none}
 
   #eqPanel{position:relative;display:none;
