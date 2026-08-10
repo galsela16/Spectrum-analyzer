@@ -1724,31 +1724,56 @@ function resetSession(){
   if(audioCtx && audioCtx.state==='suspended') audioCtx.resume();
   const tr = stream && stream.getAudioTracks && stream.getAudioTracks()[0];
   if(running && (!tr || tr.readyState==='ended')){ stop(); start(); return; }
+  
+  // 1. איפוס תצוגה, הקפאות ופיקים
   peaks.fill(0); avgBuf.fill(0); snapCurve=null; frozen=false;
   const fz=document.getElementById('freezeBtn'); if (fz) { fz.classList.remove('on'); fz.textContent='הקפא'; }
-  eqPositions=[]; eqMarks=null; eqCurveData=null; lastEqCorr=null;
-  { const pl=document.getElementById('eqPosList'); if(pl) pl.innerHTML=''; const el=document.getElementById('eqList'); if(el) el.innerHTML=''; }
-  hideGeqDock();
-  updateEqUI();
-  areas=[]; renderAreaList();
-  const ac=document.getElementById('areaEqCanvas'); if(ac) ac.style.display='none';
-  const al=document.getElementById('areaEqList'); if(al) al.innerHTML='';
-  tfResult=null; const tg=document.getElementById('tfGeqList'); if(tg) tg.innerHTML='';
-  const tc=document.getElementById('tfCanvas'); if(tc) tc.style.display='none';
-
-  // איפוס מובנה של הדיליי ב-TF בזמן איפוס סשן
+  
+  // 2. כיובוי ואיפוס מוחלט של מצב TF, פאזה ודיליי
   tfDelayMs = 0;
   tfDelaySamples = 0;
+  tfOverlay = false;
+  showTfPhase = false;
+  showTfCoh = false;
+
   const tfDlyEl = document.getElementById('tfDelayInfo');
   if (tfDlyEl) tfDlyEl.textContent = 'סנכרון דיליי TF: 0.00 ms';
 
+  // כיבוי כפתורי TF ופאזה בממשק
+  ['tfOverlayHdr', 'tfOverlayBtn', 'qbPhase', 'tfPhaseToggleBtn', 'qbCoh', 'tfCohToggleBtn'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('on');
+  });
+  
+  const qBar = document.getElementById('tfQuickBar');
+  if (qBar) qBar.classList.remove('show');
+
+  // 3. איפוס מדידות EQ, אזורים ודיליי
+  eqPositions=[]; eqMarks=null; eqCurveData=null; lastEqCorr=null;
+  const pl=document.getElementById('eqPosList'); if(pl) pl.innerHTML='';
+  const el=document.getElementById('eqList'); if(el) el.innerHTML='';
+  hideGeqDock();
+  updateEqUI();
+
+  areas=[]; renderAreaList();
+  const ac=document.getElementById('areaEqCanvas'); if(ac) ac.style.display='none';
+  const al=document.getElementById('areaEqList'); if(al) al.innerHTML='';
+
+  tfResult=null;
+  const tg=document.getElementById('tfGeqList'); if(tg) tg.innerHTML='';
+  const tc=document.getElementById('tfCanvas'); if(tc) tc.style.display='none';
+
   resetDelay();
   fbTrack.clear(); if(fbPanel) fbPanel.innerHTML='';
+  
+  // 4. איפוס מדים, יעד ושקלים
   leqSumP=0; leqN=0; splMax=-120; lvlPeak=-120;
   targetMode='flat'; document.querySelectorAll('.tgtSeg button').forEach(b=>b.classList.toggle('on', b.dataset.t==='flat'));
   weightMode='Z'; const wb=document.getElementById('wgtBtn'); if (wb) { wb.textContent='dBZ'; wb.classList.remove('on'); } const wLbl=document.getElementById('wLbl'); if (wLbl) wLbl.textContent='Z';
+  
   if(viewMin!==FMIN||viewMax!==FMAX){ viewMin=FMIN; viewMax=FMAX; buildBands(curBpo); const zb=document.getElementById('zoomBtn'); if(zb) zb.style.display='none'; }
   if(genOn) genStop();
+  
   closeModals();
 }
 
