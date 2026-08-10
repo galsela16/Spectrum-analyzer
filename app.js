@@ -2301,27 +2301,47 @@ function drawRta(){
       ctx.stroke(); ctx.setLineDash([]);
     }
 
-    // Peak Hold — שכבת שיאים שקופה
-    if(peakHold){
-      ctx.beginPath();
-      ctx.strokeStyle = sunMode ? 'rgba(2,132,199,0.35)' : 'rgba(62,166,255,0.35)';
-      ctx.lineWidth = 1;
-      for(let b = 0; b < BANDS; b++){
-        const x = xForFreq(ISO[b]), y = plotH - peaks[b] * plotH;
-        b === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-      }
-      ctx.stroke();
-    }
-
-    // העקומה החיה (או הקפואה) — נקודה אחת לכל רצועה
+    // מקור הערכים המצוירים: חי או קפוא
     const curve = (frozen && snapCurve) ? snapCurve : lastV;
-    ctx.beginPath();
-    ctx.strokeStyle = sunMode ? '#0284c7' : '#3ea6ff'; ctx.lineWidth = 2;
+
+    // קצוות הבָּרים — נקודות אמצע בין מרכזי רצועות סמוכות (על ציר לוג)
+    const xs = new Array(BANDS);
+    for(let b = 0; b < BANDS; b++) xs[b] = xForFreq(ISO[b]);
+    const edge = new Array(BANDS + 1);
+    edge[0] = xs[0] - (xs[1] - xs[0]) / 2;
+    edge[BANDS] = xs[BANDS-1] + (xs[BANDS-1] - xs[BANDS-2]) / 2;
+    for(let b = 1; b < BANDS; b++) edge[b] = (xs[b-1] + xs[b]) / 2;
+
+    // ---- בָּרים בדידים, בר לכל רצועה ----
+    const accent = sunMode ? '#0284c7' : '#3ea6ff';
     for(let b = 0; b < BANDS; b++){
-      const x = xForFreq(ISO[b]), y = plotH - curve[b] * plotH;
-      b === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      let xL = edge[b], xR = edge[b+1];
+      const full = xR - xL;
+      if(full <= 0) continue;
+      const gap = Math.min(2, full * 0.18);
+      xL += gap * 0.5; const bw = Math.max(1, full - gap);
+      const v = curve[b];
+      const yTop = plotH - v * plotH;
+      const barH = plotH - yTop;
+      if(barH > 0){
+        const grad = ctx.createLinearGradient(0, plotH, 0, yTop);
+        if(sunMode){
+          grad.addColorStop(0, 'rgba(2,132,199,0.35)');
+          grad.addColorStop(1, 'rgba(2,132,199,0.95)');
+        } else {
+          grad.addColorStop(0, 'rgba(62,166,255,0.30)');
+          grad.addColorStop(1, 'rgba(62,166,255,0.95)');
+        }
+        ctx.fillStyle = grad;
+        ctx.fillRect(xL, yTop, bw, barH);
+      }
+      // כובע Peak Hold — פס דק בראש כל בר, נופל לאט
+      if(peakHold && peaks[b] > 0){
+        const yP = plotH - peaks[b] * plotH;
+        ctx.fillStyle = sunMode ? 'rgba(2,132,199,0.9)' : 'rgba(150,200,255,0.95)';
+        ctx.fillRect(xL, yP - 1, bw, 2);
+      }
     }
-    ctx.stroke();
   }
 
 // ציור פיידרים במידה ומעגן ה-EQ פתוח
