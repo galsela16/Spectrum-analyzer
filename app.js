@@ -209,30 +209,14 @@ function autoCal1kHz(){
 safeAddListener('tfAutoDelayBtn', 'click', tfAutoDelay);
 safeAddListener('qbAutoDelay', 'click', tfAutoDelay);
 
-safeAddListener('tfPhaseToggleBtn', 'click', function(){
-  showTfPhase = !showTfPhase;
-  this.classList.toggle('on', showTfPhase);
-  const qbBtn = document.getElementById('qbPhase');
-  if(qbBtn) qbBtn.classList.toggle('on', showTfPhase);
-});
 safeAddListener('qbPhase', 'click', function(){
   showTfPhase = !showTfPhase;
   this.classList.toggle('on', showTfPhase);
-  const mainBtn = document.getElementById('tfPhaseToggleBtn');
-  if(mainBtn) mainBtn.classList.toggle('on', showTfPhase);
 });
 
-safeAddListener('tfCohToggleBtn', 'click', function(){
-  showTfCoh = !showTfCoh;
-  this.classList.toggle('on', showTfCoh);
-  const qbBtn = document.getElementById('qbCoh');
-  if(qbBtn) qbBtn.classList.toggle('on', showTfCoh);
-});
 safeAddListener('qbCoh', 'click', function(){
   showTfCoh = !showTfCoh;
   this.classList.toggle('on', showTfCoh);
-  const mainBtn = document.getElementById('tfCohToggleBtn');
-  if(mainBtn) mainBtn.classList.toggle('on', showTfCoh);
 });
 
 function tfAutoDelay(){
@@ -1768,7 +1752,7 @@ function resetSession(){
   if (tfDlyEl) tfDlyEl.textContent = 'סנכרון דיליי TF: 0.00 ms';
 
   // כיבוי כפתורי TF ופאזה בממשק
-  ['tfOverlayHdr', 'tfOverlayBtn', 'qbPhase', 'tfPhaseToggleBtn', 'qbCoh', 'tfCohToggleBtn'].forEach(id => {
+  ['tfOverlayHdr', 'tfOverlayBtn', 'qbPhase', 'qbCoh'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.classList.remove('on');
   });
@@ -2377,7 +2361,7 @@ function detectFeedback(nyquist,bins){
 
 loadCalStore();
 const verEl = document.getElementById('ver');
-if(verEl) verEl.textContent='v159';
+if(verEl) verEl.textContent='v160';
 
 let accentRgb=[62,166,255];
 function applyAccent(hex){
@@ -2610,8 +2594,8 @@ const HELP={
   tfOverlayHdr:'הצג/הסתר את עקומות המיק\' והרפרנס\nיחד על הגרף הראשי.',
   tfOverlayBtn:'משאיר את עקומות המיק\' והרפרנס על הגרף\nהראשי גם כשהפאנל סגור.',
   tfAutoDelayBtn:'מחשב ומאפס את השהיית הטיסה האקוסטית של המיקרופון בלחיצה אחת.',
-  tfPhaseToggleBtn:'מציג/מסתיר את גרף הפאזה (ירוק).',
-  tfCohToggleBtn:'מציג/מסתיר את גרף הקוהרנטיות (אדום מקווקו).',
+  qbPhase:'מציג/מסתיר את גרף הפאזה.',
+  qbCoh:'מציג/מסתיר את גרף הקוהרנטיות.',
   saveBtn:'מדידות שמורות: שמור וטען מדידות\nלפי מקום ותאריך.',
   exportJsonBtn:'ייצוא כל הסשן לקובץ JSON להעברה בין מכשירים.',
   importJsonBtn:'ייבוא קובץ JSON של סשן שמור.',
