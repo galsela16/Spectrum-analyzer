@@ -36,6 +36,11 @@
     --text:#e6ecf3; --dim:#9aa7b6; --accent:#3ea6ff; --warn:#ffd166; --hot:#ff3b6b;
     --amber:#3ea6ff; --amber-dim:#2f7fc9;
   }
+  body.sun-mode {
+    --panel:#ffffff; --panel-2:#f0f4f8; --line:#cbd5e1; --grid:#e2e8f0;
+    --text:#0f172a; --dim:#475569; --accent:#0284c7; --warn:#d97706; --hot:#dc2626;
+    background:#f8fafc;
+  }
   *{box-sizing:border-box;margin:0;padding:0}
   html,body{height:100%}
   body{
@@ -47,8 +52,10 @@
     -webkit-user-select:none;user-select:none;
     padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   }
+  body.sun-mode{ background: #f8fafc; }
   header{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line);
     background:linear-gradient(180deg,#141a21,#0f141b)}
+  body.sun-mode header{ background:linear-gradient(180deg,#ffffff,#f1f5f9); }
   .dot{width:9px;height:9px;border-radius:50%;background:var(--dim);transition:.3s;flex:none}
   .dot.live{background:var(--accent);animation:pulse 1.6s infinite}
   @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(62,166,255,.5)}70%{box-shadow:0 0 0 7px rgba(62,166,255,0)}100%{box-shadow:0 0 0 0 rgba(62,166,255,0)}}
@@ -82,10 +89,11 @@
   #modalBg{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.22);backdrop-filter:blur(1px);-webkit-backdrop-filter:blur(1px);display:none;align-items:center;justify-content:center;padding:16px}
   #modalBg.show{display:flex}
   
-  #helpBtn{margin-inline-start:auto;width:30px;height:30px;border-radius:50%;border:1px solid var(--line);
-    background:#161b22;color:var(--dim);font-weight:700;font-size:14px;cursor:pointer;transition:.14s;flex:none}
-  #helpBtn.on{border-color:var(--accent);color:var(--accent);background:rgba(62,166,255,.14);box-shadow:0 0 12px rgba(62,166,255,.3)}
-  #helpBtn:hover{color:var(--text);border-color:#3a4656}
+  #helpBtn, #sunBtn{width:30px;height:30px;border-radius:50%;border:1px solid var(--line);
+    background:var(--panel-2);color:var(--dim);font-weight:700;font-size:14px;cursor:pointer;transition:.14s;flex:none;display:flex;align-items:center;justify-content:center}
+  #sunBtn{margin-inline-start:auto}
+  #helpBtn.on, #sunBtn.on{border-color:var(--accent);color:var(--accent);background:rgba(62,166,255,.14);box-shadow:0 0 12px rgba(62,166,255,.3)}
+  #helpBtn:hover, #sunBtn:hover{color:var(--text);border-color:#3a4656}
   #swatches{display:flex;gap:6px;align-items:center;flex:none}
   .sw{width:18px;height:18px;border-radius:50%;border:2px solid transparent;cursor:pointer;padding:0;transition:.12s}
   .sw:hover{transform:scale(1.15)}
@@ -97,7 +105,7 @@
     box-shadow:0 8px 24px rgba(0,0,0,.6)}
   #srcOverlay{position:fixed;inset:0;z-index:110;display:none;background:rgba(0,0,0,.25);backdrop-filter:blur(1px);-webkit-backdrop-filter:blur(1px);align-items:center;justify-content:center}
   #dlyPanel{position:relative;display:none;flex-direction:column;gap:10px;width:min(94%,380px);max-height:calc(100dvh - 32px);overflow:auto;
-    padding:16px 18px;border:1px solid var(--accent);border-radius:6px;background:rgba(13,17,23,.96);box-shadow:0 12px 48px rgba(0,0,0,.8)}
+    padding:16px 18px;border:1px solid var(--accent);border-radius:6px;background:var(--panel);box-shadow:0 12px 48px rgba(0,0,0,.8)}
   #dlyPanel.open{display:flex}
   #dlyPanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
   #dlyPanel .sub{font-size:10px;color:var(--dim);letter-spacing:.5px;line-height:1.5}
@@ -105,14 +113,14 @@
   #dlyClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;font-size:12px;padding:8px 20px;border-radius:4px;cursor:pointer;align-self:center}
   #srcOverlay.show{display:flex}
   #srcBox{display:flex;flex-direction:column;gap:9px;width:min(90%,280px);padding:18px;border:1px solid var(--accent);
-    border-radius:6px;background:rgba(13,17,23,.98);box-shadow:0 10px 40px rgba(0,0,0,.6)}
+    border-radius:6px;background:var(--panel);box-shadow:0 10px 40px rgba(0,0,0,.6)}
   #srcBox .srcTitle{font-size:13px;color:var(--text);text-align:center;margin-bottom:4px;letter-spacing:.5px}
   #srcBox .toggle{width:100%;text-align:center}
   body.help-on .toggle,body.help-on .tab,body.help-on .seg button,body.help-on input[type=range]{cursor:help}
   
   #areaPanel{position:relative;display:none;
     flex-direction:column;gap:10px;width:min(94%,520px);max-height:calc(100dvh - 32px);overflow:auto;padding:16px 18px;
-    border:1px solid var(--accent);border-radius:6px;background:rgba(13,17,23,.96);box-shadow:0 12px 48px rgba(0,0,0,.8)}
+    border:1px solid var(--accent);border-radius:6px;background:var(--panel);box-shadow:0 12px 48px rgba(0,0,0,.8)}
   #areaPanel.open{display:flex}
   #areaPanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
   #areaPanel .sub{font-size:10px;color:var(--dim);letter-spacing:.5px;line-height:1.5}
@@ -127,73 +135,79 @@
   
   .meter{position:absolute;bottom:8px;inset-inline:10px;z-index:3;height:26px;border:1px solid var(--line);
     border-radius:4px;background:rgba(13,17,23,.55);backdrop-filter:blur(4px);overflow:hidden;display:flex;align-items:center;pointer-events:none}
+  body.sun-mode .meter{ background:rgba(255,255,255,.85); }
   .meterFill{position:absolute;inset-inline-start:0;top:0;bottom:0;width:0%;
     background:linear-gradient(90deg,var(--accent) 0%,#5ab6ff 60%,#9fd4ff 80%,var(--hot) 100%);
     opacity:.8;transition:width 0.08s ease-out}
   .meterPeak{position:absolute;top:0;bottom:0;width:2px;background:#fff;opacity:.9}
+  body.sun-mode .meterPeak{ background:#0f172a; }
   .meterVal{position:relative;margin-inline-start:auto;padding-inline-end:10px;font-size:13px;font-weight:600;
     color:var(--text);font-variant-numeric:tabular-nums;letter-spacing:.5px;z-index:1}
   .meterLbl{position:relative;padding-inline-start:10px;font-size:10px;color:var(--dim);letter-spacing:1.5px;z-index:1}
   
   footer{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:18px 18px 20px;border-top:1px solid var(--line);position:relative;overflow:hidden;
     background:radial-gradient(120% 140% at 50% 0%, #14202c 0%, #0e161e 55%, #0a0e13 100%)}
+  body.sun-mode footer{ background:radial-gradient(120% 140% at 50% 0%, #ffffff 0%, #f1f5f9 55%, #e2e8f0 100%); }
   #pcb{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;opacity:.2;z-index:0}
   footer::before{content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
     background:radial-gradient(70% 130% at 50% -10%, rgba(62,166,255,.12), transparent 70%)}
   footer>*{position:relative;z-index:1}
   .ctrl{display:flex;flex-direction:column;gap:6px;flex:1;min-width:110px}
   .trow{display:flex;gap:10px;align-items:center;flex-wrap:wrap;width:100%}
-  .ctrl label{font-size:10px;letter-spacing:1.5px;color:#a8b0bc;text-transform:uppercase;display:flex;justify-content:space-between}
+  .ctrl label{font-size:10px;letter-spacing:1.5px;color:var(--dim);text-transform:uppercase;display:flex;justify-content:space-between}
   .ctrl label b{color:var(--accent);font-variant-numeric:tabular-nums;text-shadow:0 0 8px rgba(62,166,255,.5)}
   input[type=range]{-webkit-appearance:none;appearance:none;height:6px;border-radius:5px;outline:none;
     background:#48545f;border:1px solid #5a6874;box-shadow:inset 0 1px 2px rgba(0,0,0,.35)}
+  body.sun-mode input[type=range]{ background:#cbd5e1; border-color:#94a3b8; }
   input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;cursor:pointer;
     background:radial-gradient(circle at 35% 30%,#8fd0ff,var(--accent) 60%);border:1px solid #0b0f16;box-shadow:0 0 8px rgba(62,166,255,.6),0 1px 2px rgba(0,0,0,.5)}
   input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;cursor:pointer;
     background:var(--accent);border:1px solid #0b0f16;box-shadow:0 0 8px rgba(62,166,255,.6)}
-  .toggle{border:1px solid #2a323d;background:#161b22;color:#c4d0de;font-family:inherit;font-size:12px;letter-spacing:.3px;
+  .toggle{border:1px solid var(--line);background:var(--panel-2);color:var(--text);font-family:inherit;font-size:12px;letter-spacing:.3px;
     padding:11px 17px;border-radius:4px;cursor:pointer;transition:.14s ease;white-space:nowrap;font-weight:600}
-  .toggle:hover{border-color:#3a4656;background:#1b222b;color:#eaf1f8}
+  .toggle:hover{border-color:var(--accent);background:var(--panel);color:var(--text)}
   .toggle:active{transform:translateY(1px)}
   .toggle.on{color:#eaf4ff;border-color:var(--accent);background:rgba(62,166,255,.14);box-shadow:0 0 14px rgba(62,166,255,.28)}
+  body.sun-mode .toggle.on{ color:var(--accent); }
   .tabbar{flex-basis:100%;display:flex;gap:7px;align-items:center;margin-bottom:12px}
-  .tab{border:1px solid #2a323d;background:#161b22;color:#c4d0de;font-family:inherit;font-size:12px;
+  .tab{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;font-size:12px;
     font-weight:600;letter-spacing:.3px;padding:10px 20px;border-radius:4px;cursor:pointer;transition:.14s ease}
-  .tab:hover{border-color:#3a4656;color:#eaf1f8}
-  .tab.on{color:#fff;border-color:var(--accent);background:rgba(62,166,255,.16);box-shadow:0 0 16px rgba(62,166,255,.3)}
+  .tab:hover{border-color:var(--accent);color:var(--text)}
+  .tab.on{color:var(--text);border-color:var(--accent);background:rgba(62,166,255,.16);box-shadow:0 0 16px rgba(62,166,255,.3)}
+  body.sun-mode .tab.on{ color:var(--accent); }
   .tabpage{flex-basis:100%;display:none;gap:10px;align-items:center;flex-wrap:wrap}
   .tabpage.active{display:flex;flex-direction:column;align-items:stretch}
-  .seg{display:flex;border:1px solid #2a323d;border-radius:4px;overflow:hidden}
-  .seg button{border:none;background:#161b22;color:#c4d0de;font-family:inherit;font-size:12px;
-    letter-spacing:.3px;padding:10px 15px;cursor:pointer;transition:.14s;border-inline-start:1px solid #2a323d;font-weight:600}
+  .seg{display:flex;border:1px solid var(--line);border-radius:4px;overflow:hidden}
+  .seg button{border:none;background:var(--panel-2);color:var(--dim);font-family:inherit;font-size:12px;
+    letter-spacing:.3px;padding:10px 15px;cursor:pointer;transition:.14s;border-inline-start:1px solid var(--line);font-weight:600}
   .seg button:first-child{border-inline-start:none}
-  .seg button:hover{color:#eaf1f8;background:#1b222b}
-  .seg button.on{color:#eaf4ff;background:rgba(62,166,255,.2);box-shadow:inset 0 0 0 1px rgba(62,166,255,.35)}
+  .seg button:hover{color:var(--text);background:var(--panel)}
+  .seg button.on{color:var(--accent);background:rgba(62,166,255,.2);box-shadow:inset 0 0 0 1px rgba(62,166,255,.35)}
   select.inp{border:1px solid var(--line);background:var(--panel-2);color:var(--text);font-family:inherit;
     font-size:11px;padding:8px 10px;border-radius:4px;max-width:150px;outline:none}
   
   #genPanel{flex-basis:100%;display:none;gap:14px;align-items:center;flex-wrap:wrap;
     padding:12px 14px;margin-bottom:6px;border:1px solid var(--line);border-radius:5px;
-    background:#0c1017;box-shadow:inset 0 1px 3px rgba(0,0,0,.5)}
+    background:var(--panel-2);box-shadow:inset 0 1px 3px rgba(0,0,0,.5)}
   #genPanel.open{display:flex}
   #genPanel .warn{flex-basis:100%;font-size:10px;color:var(--warn);letter-spacing:.5px}
-  #genOnBtn{border:1px solid var(--hot);background:rgba(255,59,107,.1);color:#ff8aa5;
+  #genOnBtn{border:1px solid var(--hot);background:rgba(255,59,107,.1);color:var(--hot);
     font-family:inherit;font-size:12px;font-weight:600;letter-spacing:1px;padding:9px 16px;border-radius:4px;cursor:pointer}
   #genOnBtn.on{border-color:var(--accent);background:rgba(47,155,255,.12);color:var(--accent)}
   
   #rtPanel{position:relative;display:none;
     flex-direction:column;gap:10px;align-items:stretch;width:min(92%,360px);max-height:calc(100dvh - 32px);overflow:auto;padding:16px 18px;border:1px solid var(--accent);
-    border-radius:6px;background:rgba(13,17,23,.96);box-shadow:0 12px 48px rgba(0,0,0,.8)}
+    border-radius:6px;background:var(--panel);box-shadow:0 12px 48px rgba(0,0,0,.8)}
   #rtStatus{font-size:15px;color:var(--text);letter-spacing:.5px;text-align:center;min-height:24px;line-height:1.5}
   #rtStatus b{color:var(--accent);font-size:26px}
-  #rtCanvas{width:100%;height:120px;background:#0b0f16;border:1px solid var(--line);border-radius:4px}
+  #rtCanvas{width:100%;height:120px;background:var(--panel-2);border:1px solid var(--line);border-radius:4px}
   #rtPanel.open{display:flex}
   #rtClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
     font-size:12px;padding:8px 20px;border-radius:4px;cursor:pointer;align-self:center}
   
   #gainPanel{position:relative;display:none;
     flex-direction:column;gap:12px;width:min(94%,420px);max-height:calc(100dvh - 32px);overflow:auto;padding:16px 18px;border:1px solid var(--accent);
-    border-radius:6px;background:rgba(13,17,23,.96);box-shadow:0 12px 48px rgba(0,0,0,.8)}
+    border-radius:6px;background:var(--panel);box-shadow:0 12px 48px rgba(0,0,0,.8)}
   #gainPanel.open{display:flex}
   #gainPanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
   #gainPanel .sub{font-size:10px;color:var(--dim);letter-spacing:.5px;line-height:1.5}
@@ -202,31 +216,31 @@
 
   #savePanel{position:relative;display:none;
     flex-direction:column;gap:12px;width:min(94%,420px);max-height:calc(100dvh - 32px);overflow:auto;padding:16px 18px;border:1px solid var(--accent);
-    border-radius:6px;background:rgba(13,17,23,.96);box-shadow:0 12px 48px rgba(0,0,0,.8)}
+    border-radius:6px;background:var(--panel);box-shadow:0 12px 48px rgba(0,0,0,.8)}
   #savePanel.open{display:flex}
   #savePanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
   #savePanel .sub{font-size:10px;color:var(--dim);letter-spacing:.5px;line-height:1.5}
   #saveClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
     font-size:12px;padding:8px 20px;border-radius:4px;cursor:pointer;align-self:center}
-  .saveRow{display:flex;align-items:center;gap:8px;padding:7px 9px;border:1px solid var(--line);border-radius:4px;background:#0c1017;font-size:12px}
+  .saveRow{display:flex;align-items:center;gap:8px;padding:7px 9px;border:1px solid var(--line);border-radius:4px;background:var(--panel-2);font-size:12px}
   .saveRow .nm{flex:1;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .saveRow .meta{font-size:10px;color:var(--dim)}
-  .saveRow button{border:1px solid var(--line);background:#161b22;color:#c4d0de;font-family:inherit;font-size:11px;padding:4px 8px;border-radius:3px;cursor:pointer}
+  .saveRow button{border:1px solid var(--line);background:var(--panel);color:var(--text);font-family:inherit;font-size:11px;padding:4px 8px;border-radius:3px;cursor:pointer}
   .saveRow button:hover{border-color:var(--accent);color:var(--accent)}
 
-  #geqDock{flex:none;margin:0 10px 6px;border:1px solid var(--line);border-radius:5px;background:#12171f;overflow:hidden}
+  #geqDock{flex:none;margin:0 10px 6px;border:1px solid var(--line);border-radius:5px;background:var(--panel-2);overflow:hidden}
   #geqDockHead{display:flex;align-items:center;justify-content:space-between;padding:6px 12px;
-    background:linear-gradient(180deg,#1b222c,#161b22);border-bottom:1px solid var(--accent)}
+    background:var(--panel-2);border-bottom:1px solid var(--accent)}
   #geqDockTitle{font-size:12px;font-weight:600;letter-spacing:.5px;color:var(--accent)}
-  #geqDockToggle{border:1px solid var(--line);background:#0d1117;color:var(--text);font-size:12px;
+  #geqDockToggle{border:1px solid var(--line);background:var(--panel);color:var(--text);font-size:12px;
     cursor:pointer;padding:2px 12px;border-radius:4px;line-height:1.5}
   #geqDockToggle:hover{color:var(--accent);background:rgba(62,166,255,.1)}
-  #eqCurveCanvas{display:block;width:100%;height:234px;background:#12171f}
+  #eqCurveCanvas{display:block;width:100%;height:234px;background:var(--panel-2)}
   #geqDock.collapsed #eqCurveCanvas{display:none}
 
   #eqPanel{position:relative;display:none;
     flex-direction:column;gap:9px;width:min(94%,520px);max-height:calc(100dvh - 32px);overflow:auto;padding:16px 18px;border:1px solid var(--accent);
-    border-radius:6px;background:rgba(13,17,23,.96);box-shadow:0 12px 48px rgba(0,0,0,.8)}
+    border-radius:6px;background:var(--panel);box-shadow:0 12px 48px rgba(0,0,0,.8)}
   #eqPanel.open{display:flex}
   #eqPanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
   #eqPanel .sub{font-size:10px;color:var(--dim);letter-spacing:.5px;line-height:1.5}
@@ -237,24 +251,24 @@
   .eqRow.boost{background:rgba(47,155,255,.08);border-color:rgba(47,155,255,.4)}
   .eqRow .f{font-weight:600;min-width:64px}
   .eqRow .g{min-width:52px;color:var(--text)}
-  .eqRow.cut .g{color:#ff6b8b} .eqRow.boost .g{color:#7cc4ff}
+  .eqRow.cut .g{color:var(--hot)} .eqRow.boost .g{color:var(--accent)}
   .eqRow .q{color:var(--dim);font-size:11px}
   #eqClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
     font-size:12px;padding:8px 20px;border-radius:4px;cursor:pointer;align-self:center}
   
   #calPanel{position:relative;display:none;
     flex-direction:column;gap:12px;width:min(94%,440px);max-height:calc(100dvh - 32px);overflow:auto;padding:16px 18px;border:1px solid var(--accent);
-    border-radius:6px;background:rgba(13,17,23,.96);box-shadow:0 12px 48px rgba(0,0,0,.8)}
+    border-radius:6px;background:var(--panel);box-shadow:0 12px 48px rgba(0,0,0,.8)}
   #calPanel.open{display:flex}
   #calPanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
   #calList{display:flex;flex-direction:column;gap:6px;max-height:160px;overflow-y:auto;padding-inline-end:2px}
   .calRow{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-radius:5px;border:1px solid var(--line);
     font-size:12px;cursor:pointer;color:var(--text);background:var(--panel-2);transition:.15s}
   .calRow:hover{border-color:var(--accent)}
-  .calRow.on{border-color:var(--accent);background:rgba(62,166,255,.14);color:#fff;box-shadow:0 0 10px rgba(62,166,255,.2)}
+  .calRow.on{border-color:var(--accent);background:rgba(62,166,255,.14);color:var(--text);box-shadow:0 0 10px rgba(62,166,255,.2)}
   .calRow .nm{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
   .calRow .sub{color:var(--dim);font-size:11px;flex-shrink:0}
-  .calRow .del{color:#ff6b8b;font-size:14px;padding:2px 6px;line-height:1;border-radius:3px;flex-shrink:0}
+  .calRow .del{color:var(--hot);font-size:14px;padding:2px 6px;line-height:1;border-radius:3px;flex-shrink:0}
   .calRow .del:hover{background:rgba(255,59,107,.2)}
   .posName{flex:1;background:transparent;border:none;color:var(--text);font-family:inherit;font-size:12px;font-weight:600;outline:none;min-width:0}
   .posName:focus{border-bottom:1px solid var(--accent)}
@@ -263,37 +277,37 @@
   
   #tfPanel{position:relative;display:none;
     flex-direction:column;gap:12px;width:min(94%,520px);max-height:calc(100dvh - 32px);padding:16px 18px;border:1px solid var(--accent);
-    border-radius:6px;background:rgba(13,17,23,.96);box-shadow:0 12px 48px rgba(0,0,0,.8);overflow:auto}
+    border-radius:6px;background:var(--panel);box-shadow:0 12px 48px rgba(0,0,0,.8);overflow:auto}
   #tfPanel.open{display:flex}
   #tfPanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
   #tfPanel .sub{font-size:10px;color:var(--dim);letter-spacing:.5px;line-height:1.5}
   .chBar{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text)}
   .chBar .track{flex:1;height:8px;border-radius:4px;background:var(--line);overflow:hidden}
   .chBar .fill{height:100%;width:0%;background:var(--accent);transition:width .1s linear}
-  .chBar .fill.lo{background:#ff3b6b}
+  .chBar .fill.lo{background:var(--hot)}
   .chBar .fill.ok{background:#39d98a}
-  .chBar .fill.hi{background:#ffb020}
-  .chBar .fill.clip{background:#ff3b6b}
+  .chBar .fill.hi{background:var(--warn)}
+  .chBar .fill.clip{background:var(--hot)}
   .gainLbl{min-width:70px;font-size:10px;letter-spacing:.3px;text-align:start}
-  .gainLbl.lo{color:#ff6b8b}.gainLbl.ok{color:#39d98a}.gainLbl.hi{color:#ffb020}.gainLbl.clip{color:#ff3b6b;font-weight:700}
-  #tfCanvas{width:100%;height:150px;position:relative;flex-shrink:0;background:#0b0f16;border:1px solid var(--line);border-radius:4px}
+  .gainLbl.lo{color:var(--hot)}.gainLbl.ok{color:#39d98a}.gainLbl.hi{color:var(--warn)}.gainLbl.clip{color:var(--hot);font-weight:700}
+  #tfCanvas{width:100%;height:150px;position:relative;flex-shrink:0;background:var(--panel-2);border:1px solid var(--line);border-radius:4px}
   #tfGeqList{display:flex;flex-direction:column;gap:6px;z-index:2;width:100%}
   #tfBtns{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
   #tfClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;
     font-size:12px;padding:8px 20px;border-radius:4px;cursor:pointer;align-self:center}
   
-  .tfGrid{display:grid;grid-template-columns:repeat(auto-fill, minmax(92px, 1fr));gap:6px;max-height:220px;overflow-y:auto;padding:6px;border:1px solid var(--line);border-radius:4px;background:#0b0f16}
-  .tfItem{display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-radius:4px;border:1px solid var(--line);font-size:11px;background:var(--panel-2);font-variant-numeric:tabular-nums}
+  .tfGrid{display:grid;grid-template-columns:repeat(auto-fill, minmax(92px, 1fr));gap:6px;max-height:220px;overflow-y:auto;padding:6px;border:1px solid var(--line);border-radius:4px;background:var(--panel-2)}
+  .tfItem{display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-radius:4px;border:1px solid var(--line);font-size:11px;background:var(--panel);font-variant-numeric:tabular-nums}
   .tfItem.boost{background:rgba(80,230,140,0.12);border-color:rgba(80,230,140,0.4)}
   .tfItem.boost .g{color:#50e68c;font-weight:700}
   .tfItem.cut{background:rgba(255,59,107,0.12);border-color:rgba(255,59,107,0.4)}
-  .tfItem.cut .g{color:#ff6b8b;font-weight:700}
+  .tfItem.cut .g{color:var(--hot);font-weight:700}
   .tfItem.off{opacity:0.35;background:rgba(255,255,255,0.02)}
   .tfItem .f{color:var(--dim);font-weight:600}
   .tfItem .g{color:var(--text)}
 
   .err{position:absolute;bottom:14px;inset-inline:14px;z-index:5;background:rgba(255,59,107,.12);border:1px solid var(--hot);
-    color:#ffb3c4;padding:10px 14px;border-radius:4px;font-size:12px;line-height:1.6;display:none}
+    color:var(--hot);padding:10px 14px;border-radius:4px;font-size:12px;line-height:1.6;display:none}
 </style>
 </head>
 <body>
@@ -306,6 +320,7 @@
       <button id="mSpec">ווטרפול · Spectrograph</button>
       <button id="tfOverlayHdr" title="הצג מיק' + רפרנס יחד">מיק'/רפרנס · TF</button>
     </div>
+    <button id="sunBtn" title="מצב אור שמש / ניגודיות גבוהה" aria-label="מצב אור שמש">☀️</button>
     <button id="helpBtn" title="מצב עזרה — רחף על כפתור להסבר" aria-label="מצב עזרה">?</button>
     <div id="swatches" title="צבע האפליקציה" role="group" aria-label="צבע האפליקציה">
       <button class="sw on" data-c="#3ea6ff" style="background:#3ea6ff" aria-label="כחול" title="כחול"></button>
@@ -357,13 +372,19 @@
     </div>
     
     <div id="savePanel">
-      <h3>מדידות שמורות</h3>
+      <h3>מדידות שמורות וסשנים</h3>
       <div class="sub">שומר את המיקומים, האזורים, הדיליי והיעד — כדי לחזור למקום ולהשוות.</div>
       <div style="display:flex;gap:6px">
-        <input id="saveName" placeholder="שם (למשל: אולם הכפר · 15/8)" style="flex:1;background:#0c1017;border:1px solid var(--line);border-radius:4px;color:var(--text);font-family:inherit;font-size:12px;padding:8px">
+        <input id="saveName" placeholder="שם (למשל: אולם הכפר · 15/8)" style="flex:1;background:var(--panel-2);border:1px solid var(--line);border-radius:4px;color:var(--text);font-family:inherit;font-size:12px;padding:8px">
         <button id="saveNowBtn" class="toggle">שמור</button>
       </div>
-      <div id="saveList" style="display:flex;flex-direction:column;gap:5px;max-height:190px;overflow-y:auto"></div>
+      <div id="saveList" style="display:flex;flex-direction:column;gap:5px;max-height:160px;overflow-y:auto"></div>
+      
+      <div style="border-top:1px solid var(--line);padding-top:10px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        <button id="exportJsonBtn" class="toggle" title="יצוא כל הסשן והמדידות לקובץ JSON">📤 יצוא סשן (JSON)</button>
+        <button id="importJsonBtn" class="toggle" title="טען קובץ סשן JSON">📥 יבוא סשן (JSON)</button>
+        <input type="file" id="jsonFileInput" accept=".json" style="display:none">
+      </div>
       <button id="saveClose">סגור</button>
     </div>
     <div id="eqPanel">
@@ -444,7 +465,7 @@
       </div>
       <div id="areaList" style="max-height:132px;overflow-y:auto"></div>
       <button id="areaEqBtn" class="toggle" style="align-self:center">הצע EQ ממוצע לכל האזורים</button>
-      <canvas id="areaEqCanvas" style="width:100%;height:150px;background:#0b0f16;border:1px solid var(--line);border-radius:4px;display:none"></canvas>
+      <canvas id="areaEqCanvas" style="width:100%;height:150px;background:var(--panel-2);border:1px solid var(--line);border-radius:4px;display:none"></canvas>
       <div id="areaEqList"></div>
       <button id="areaClose">סגור</button>
     </div>
@@ -455,7 +476,7 @@
       <div id="calList"></div>
       <label class="toggle" style="cursor:pointer;align-self:center">➕ הוסף קובץ כיול<input id="calAdd" type="file" accept=".txt,.cal,.frd,.csv,.dat,.mdat,.gain,.zma,text/*" style="display:none"></label>
       <div class="sub" style="text-align:center">או הדבק את תוכן הקובץ כאן (תדר [רווח] dB):</div>
-      <textarea id="calPaste" placeholder="20&#9;0.39&#10;20.5&#9;0.39&#10;…" style="width:100%;height:70px;background:#0c1017;border:1px solid var(--line);border-radius:4px;color:var(--text);font-family:monospace;font-size:11px;padding:6px;resize:vertical"></textarea>
+      <textarea id="calPaste" placeholder="20&#9;0.39&#10;20.5&#9;0.39&#10;…" style="width:100%;height:70px;background:var(--panel-2);border:1px solid var(--line);border-radius:4px;color:var(--text);font-family:monospace;font-size:11px;padding:6px;resize:vertical"></textarea>
       <button class="toggle" id="calPasteBtn" style="align-self:center">טען מהטקסט</button>
       <button id="calResetBtn" class="toggle" style="align-self:center">אפס את כל הכיולים</button>
       <button id="calClose">סגור</button>
@@ -484,7 +505,7 @@
         <button class="toggle" id="tfMeasBtn">מדוד (6ש')</button>
         <button class="toggle" id="tfCsvBtn">CSV</button>
       </div>
-      <canvas id="tfCanvas" style="width:100%;height:234px;background:#0b0f16;border:1px solid var(--line);border-radius:4px;display:none"></canvas>
+      <canvas id="tfCanvas" style="width:100%;height:234px;background:var(--panel-2);border:1px solid var(--line);border-radius:4px;display:none"></canvas>
       <div class="seg" id="tfModeSeg" style="align-self:center">
         <button data-m="graphic" class="on">גרפיק</button>
         <button data-m="param">פרמטרי</button>
@@ -575,7 +596,7 @@
         <label>תדר סינוס <b id="genFreqVal">1000Hz</b></label>
         <div style="display:flex;gap:6px;align-items:center">
           <input type="range" id="genFreq" min="20" max="20000" step="1" value="1000" style="flex:1">
-          <input type="number" id="genFreqNum" min="20" max="20000" step="1" value="1000" style="width:72px;background:#0c1017;border:1px solid var(--line);border-radius:4px;color:var(--text);font-family:inherit;font-size:12px;padding:5px 6px;text-align:center">
+          <input type="number" id="genFreqNum" min="20" max="20000" step="1" value="1000" style="width:72px;background:var(--panel-2);border:1px solid var(--line);border-radius:4px;color:var(--text);font-family:inherit;font-size:12px;padding:5px 6px;text-align:center">
         </div>
       </div>
       <div class="ctrl" id="genSweepWrap" style="min-width:130px;display:none">
@@ -661,6 +682,7 @@
           <label>כיול SPL <b id="calVal">+0dB</b></label>
           <input type="range" id="cal" min="0" max="130" step="1" value="0">
         </div>
+        <button class="toggle" id="autoCalBtn" title="כיול אוטומטי מול פיסטונפון 1kHz">🎯 כיול 1kHz</button>
         <button class="toggle" id="wgtBtn">dBZ</button>
         <button class="toggle" id="leqBtn">אפס Leq</button>
       </div>
