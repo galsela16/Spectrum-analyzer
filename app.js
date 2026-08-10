@@ -2314,7 +2314,6 @@ function drawRta(){
 }
 
 function drawSpec(W,H,nyquist,bins,xForFreq){
-function drawSpec(W,H,nyquist,bins,xForFreq){
   if(!specCtx || !specCanvas) return;
   specCtx.drawImage(specCanvas,0,-1);
   const y=specCanvas.height-1;
