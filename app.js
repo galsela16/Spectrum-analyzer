@@ -1,3 +1,9 @@
+// פונקציית הגנה גלובלית - מונעת קריסה אם רכיב חסר ב-HTML
+function safeAddListener(id, event, fn) {
+  const el = document.getElementById(id);
+  if (el) el.addEventListener(event, fn);
+}
+
 const FMIN=20, FMAX=20000;
 let viewMin=20, viewMax=20000;
 let curBpo=6;
@@ -46,7 +52,7 @@ buildBands(6);
 function escapeHtml(s){ return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 const cv = document.getElementById('cv');
-const ctx = cv.getContext('2d');
+const ctx = cv ? cv.getContext('2d') : null;
 const dot = document.getElementById('dot');
 const idle = document.getElementById('idle');
 const errBox = document.getElementById('err');
@@ -115,6 +121,7 @@ let fbFrameCounter = 0;
 let smoothedDbfs = -120;
 
 function resize(){
+  if (!cv || !ctx) return;
   const r=cv.getBoundingClientRect();
   const MAXW=1440, MAXH=760;
   const dpr=Math.max(1, Math.min(window.devicePixelRatio||1, 2, MAXW/Math.max(1,r.width), MAXH/Math.max(1,r.height)));
@@ -133,7 +140,7 @@ function resize(){
 }
 window.addEventListener('resize',resize);
 
-document.getElementById('sunBtn').addEventListener('click', function(){
+safeAddListener('sunBtn', 'click', function(){
   sunMode = !sunMode;
   document.body.classList.toggle('sun-mode', sunMode);
   this.classList.toggle('on', sunMode);
@@ -144,24 +151,29 @@ document.getElementById('sunBtn').addEventListener('click', function(){
   }
 });
 
-document.getElementById('floor').addEventListener('input',e=>{
+safeAddListener('floor', 'input', e=>{
   floorDb=parseFloat(e.target.value);
-  document.getElementById('floorVal').textContent=floorDb+'dB';
+  const el = document.getElementById('floorVal');
+  if (el) el.textContent=floorDb+'dB';
   prefSet('rta_floor', e.target.value);
 });
-document.getElementById('smooth').addEventListener('input',e=>{
+
+safeAddListener('smooth', 'input', e=>{
   const v=parseFloat(e.target.value);
-  document.getElementById('smoothVal').textContent=v.toFixed(2);
+  const el = document.getElementById('smoothVal');
+  if (el) el.textContent=v.toFixed(2);
   if(analyser) analyser.smoothingTimeConstant=v;
   prefSet('rta_smooth', e.target.value);
 });
-document.getElementById('cal').addEventListener('input',e=>{
+
+safeAddListener('cal', 'input', e=>{
   calib=parseFloat(e.target.value);
-  document.getElementById('calVal').textContent=(calib>=0?'+':'')+calib+'dB';
+  const el = document.getElementById('calVal');
+  if (el) el.textContent=(calib>=0?'+':'')+calib+'dB';
   prefSet('rta_cal', e.target.value);
 });
 
-document.getElementById('autoCalBtn').addEventListener('click', autoCal1kHz);
+safeAddListener('autoCalBtn', 'click', autoCal1kHz);
 
 function autoCal1kHz(){
   if(!running || !analyser){ alert('קודם הפעל את המיקרופון.'); return; }
@@ -185,41 +197,42 @@ function autoCal1kHz(){
 
   calib = Math.round(targetSpl - peakVal);
   const slider = document.getElementById('cal');
-  slider.value = calib;
-  document.getElementById('calVal').textContent = (calib>=0?'+':'')+calib+'dB';
+  if (slider) slider.value = calib;
+  const el = document.getElementById('calVal');
+  if (el) el.textContent = (calib>=0?'+':'')+calib+'dB';
   prefSet('rta_cal', calib);
 
   alert('✓ הכיול הושלם בהצלחה!\nנקלט אות ב: '+peakVal.toFixed(1)+' dBFS\nכיול SPL עודכן ל: +'+calib+' dB');
 }
 
-// ---- TF Controls: Auto-Delay, Phase, Coherence ----
-document.getElementById('tfAutoDelayBtn').addEventListener('click', tfAutoDelay);
-document.getElementById('tfPhaseToggleBtn').addEventListener('click', function(){
+// ---- TF Controls: Main & Quick Floating Bar ----
+safeAddListener('tfAutoDelayBtn', 'click', tfAutoDelay);
+safeAddListener('qbAutoDelay', 'click', tfAutoDelay);
+
+safeAddListener('tfPhaseToggleBtn', 'click', function(){
   showTfPhase = !showTfPhase;
   this.classList.toggle('on', showTfPhase);
   const qbBtn = document.getElementById('qbPhase');
   if(qbBtn) qbBtn.classList.toggle('on', showTfPhase);
 });
-document.getElementById('tfCohToggleBtn').addEventListener('click', function(){
+safeAddListener('qbPhase', 'click', function(){
+  showTfPhase = !showTfPhase;
+  this.classList.toggle('on', showTfPhase);
+  const mainBtn = document.getElementById('tfPhaseToggleBtn');
+  if(mainBtn) mainBtn.classList.toggle('on', showTfPhase);
+});
+
+safeAddListener('tfCohToggleBtn', 'click', function(){
   showTfCoh = !showTfCoh;
   this.classList.toggle('on', showTfCoh);
   const qbBtn = document.getElementById('qbCoh');
   if(qbBtn) qbBtn.classList.toggle('on', showTfCoh);
 });
-
-// Event Listeners for TF Quick Floating Bar
-document.getElementById('qbAutoDelay').addEventListener('click', tfAutoDelay);
-document.getElementById('qbCoh').addEventListener('click', function(){
+safeAddListener('qbCoh', 'click', function(){
   showTfCoh = !showTfCoh;
   this.classList.toggle('on', showTfCoh);
   const mainBtn = document.getElementById('tfCohToggleBtn');
   if(mainBtn) mainBtn.classList.toggle('on', showTfCoh);
-});
-document.getElementById('qbPhase').addEventListener('click', function(){
-  showTfPhase = !showTfPhase;
-  this.classList.toggle('on', showTfPhase);
-  const mainBtn = document.getElementById('tfPhaseToggleBtn');
-  if(mainBtn) mainBtn.classList.toggle('on', showTfPhase);
 });
 
 function tfAutoDelay(){
@@ -238,30 +251,32 @@ function tfAutoDelay(){
   tfDelayMs = res.ms;
   tfDelaySamples = res.samples;
   const dist = (tfDelayMs / 1000) * 343;
-  document.getElementById('tfDelayInfo').textContent = `סנכרון דיליי TF: ${tfDelayMs.toFixed(2)} ms (~${dist.toFixed(2)}m)`;
+  const infoEl = document.getElementById('tfDelayInfo');
+  if (infoEl) infoEl.textContent = `סנכרון דיליי TF: ${tfDelayMs.toFixed(2)} ms (~${dist.toFixed(2)}m)`;
 }
 
-document.getElementById('fbSens').addEventListener('input',e=>{
+safeAddListener('fbSens', 'input', e=>{
   fbProm = 26 - parseFloat(e.target.value);
-  document.getElementById('fbSensVal').textContent = fbProm>=15?'נמוכה':fbProm>=10?'בינונית':'גבוהה';
+  const el = document.getElementById('fbSensVal');
+  if (el) el.textContent = fbProm>=15?'נמוכה':fbProm>=10?'בינונית':'גבוהה';
   prefSet('rta_fbSens', e.target.value);
 });
-document.getElementById('peakBtn').addEventListener('click',function(){
+safeAddListener('peakBtn', 'click', function(){
   peakHold=!peakHold; this.classList.toggle('on',peakHold); peaks.fill(0);
 });
-document.getElementById('fbBtn').addEventListener('click',function(){
-  fbOn=!fbOn; this.classList.toggle('on',fbOn); fbTrack.clear(); fbPanel.innerHTML='';
+safeAddListener('fbBtn', 'click', function(){
+  fbOn=!fbOn; this.classList.toggle('on',fbOn); fbTrack.clear(); if (fbPanel) fbPanel.innerHTML='';
 });
-document.getElementById('avgBtn').addEventListener('click',function(){
+safeAddListener('avgBtn', 'click', function(){
   avgOn=!avgOn; this.classList.toggle('on',avgOn); if(avgOn) avgBuf.fill(0);
 });
-document.getElementById('freezeBtn').addEventListener('click',function(){
+safeAddListener('freezeBtn', 'click', function(){
   frozen=!frozen;
   if(frozen){ snapCurve=lastV.slice(); this.classList.add('on'); this.textContent='הפשר תצוגה'; }
   else { snapCurve=null; this.classList.remove('on'); this.textContent='הקפא'; }
 });
-document.getElementById('pngBtn').addEventListener('click',exportPNG);
-document.getElementById('csvBtn').addEventListener('click',exportCSV);
+safeAddListener('pngBtn', 'click', exportPNG);
+safeAddListener('csvBtn', 'click', exportCSV);
 
 function stamp(){ const d=new Date(); const p=n=>(''+n).padStart(2,'0');
   return d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'_'+p(d.getHours())+p(d.getMinutes())+p(d.getSeconds()); }
@@ -270,6 +285,7 @@ function download(name, blobUrl){
   document.body.appendChild(a); a.click(); a.remove();
 }
 function exportPNG(){
+  if (!cv) return;
   const W=cv.clientWidth,H=cv.clientHeight,dpr=Math.min(window.devicePixelRatio||1,2);
   const off=document.createElement('canvas'); off.width=W*dpr; off.height=H*dpr;
   const o=off.getContext('2d'); o.scale(dpr,dpr);
@@ -284,9 +300,9 @@ function exportCSV(){
   download('rta_'+stamp()+'.csv', URL.createObjectURL(new Blob([rows],{type:'text/csv'})));
 }
 
-document.getElementById('exportJsonBtn').addEventListener('click', exportSessionJson);
-document.getElementById('importJsonBtn').addEventListener('click', ()=> document.getElementById('jsonFileInput').click());
-document.getElementById('jsonFileInput').addEventListener('change', importSessionJson);
+safeAddListener('exportJsonBtn', 'click', exportSessionJson);
+safeAddListener('importJsonBtn', 'click', ()=> { const el = document.getElementById('jsonFileInput'); if (el) el.click(); });
+safeAddListener('jsonFileInput', 'change', importSessionJson);
 
 function exportSessionJson(){
   const data = {
@@ -327,11 +343,11 @@ function importSessionJson(e){
       
       if(data.settings){
         const s = data.settings;
-        if(s.calib!==undefined){ calib = s.calib; document.getElementById('cal').value = calib; document.getElementById('calVal').textContent=(calib>=0?'+':'')+calib+'dB'; }
-        if(s.floorDb!==undefined){ floorDb = s.floorDb; document.getElementById('floor').value = floorDb; document.getElementById('floorVal').textContent=floorDb+'dB'; }
+        if(s.calib!==undefined){ calib = s.calib; const el=document.getElementById('cal'); if(el) el.value = calib; const txt=document.getElementById('calVal'); if(txt) txt.textContent=(calib>=0?'+':'')+calib+'dB'; }
+        if(s.floorDb!==undefined){ floorDb = s.floorDb; const el=document.getElementById('floor'); if(el) el.value = floorDb; const txt=document.getElementById('floorVal'); if(txt) txt.textContent=floorDb+'dB'; }
         if(s.targetMode) setTarget(s.targetMode);
-        if(s.sunMode!==undefined){ sunMode = s.sunMode; document.body.classList.toggle('sun-mode', sunMode); document.getElementById('sunBtn').classList.toggle('on', sunMode); }
-        if(s.tfDelayMs!==undefined){ tfDelayMs = s.tfDelayMs; document.getElementById('tfDelayInfo').textContent = `סנכרון דיליי TF: ${tfDelayMs.toFixed(2)} ms`; }
+        if(s.sunMode!==undefined){ sunMode = s.sunMode; document.body.classList.toggle('sun-mode', sunMode); const sb=document.getElementById('sunBtn'); if(sb) sb.classList.toggle('on', sunMode); }
+        if(s.tfDelayMs!==undefined){ tfDelayMs = s.tfDelayMs; const txt=document.getElementById('tfDelayInfo'); if(txt) txt.textContent = `סנכרון דיליי TF: ${tfDelayMs.toFixed(2)} ms`; }
       }
 
       persistSaves();
@@ -350,22 +366,26 @@ function importSessionJson(e){
   reader.readAsText(file);
   e.target.value = '';
 }
-document.getElementById('wgtBtn').addEventListener('click',function(){
+safeAddListener('wgtBtn', 'click', function(){
   weightMode = weightMode==='Z'?'A':weightMode==='A'?'C':'Z';
   this.textContent='dB'+weightMode;
   this.classList.toggle('on', weightMode!=='Z');
-  document.getElementById('wLbl').textContent=weightMode;
+  const el = document.getElementById('wLbl');
+  if (el) el.textContent=weightMode;
   leqSumP=0; leqN=0; splMax=-120;
   prefSet('rta_wgt', weightMode);
 });
-document.getElementById('leqBtn').addEventListener('click',()=>{ leqSumP=0; leqN=0; splMax=-120; });
+safeAddListener('leqBtn', 'click', ()=>{ leqSumP=0; leqN=0; splMax=-120; });
+
 document.querySelectorAll('#unitSeg button').forEach(b=>b.addEventListener('click',function(){
   document.querySelectorAll('#unitSeg button').forEach(x=>x.classList.remove('on'));
   this.classList.add('on'); meterUnit=this.dataset.u;
 }));
-document.getElementById('inSel').addEventListener('change',e=>{ userPickedIn = e.target.value!==''; switchInput(e.target.value); });
+
+safeAddListener('inSel', 'change', e=>{ userPickedIn = e.target.value!==''; switchInput(e.target.value); });
 
 function freqForX(px){
+  if (!cv) return FMIN;
   const W=cv.clientWidth;
   const lmin=Math.log(ISO[0]), lmax=Math.log(ISO[BANDS-1]);
   return Math.exp(lmin + Math.max(0,Math.min(1,px/W))*(lmax-lmin));
@@ -375,26 +395,31 @@ function applyZoom(xa,xb){
   if(fb/fa < 1.2) return;
   viewMin=Math.max(FMIN,fa); viewMax=Math.min(FMAX,fb);
   buildBands(curBpo);
-  document.getElementById('zoomBtn').style.display='block';
+  const el = document.getElementById('zoomBtn');
+  if (el) el.style.display='block';
 }
 function resetZoom(){
   viewMin=FMIN; viewMax=FMAX; buildBands(curBpo);
-  document.getElementById('zoomBtn').style.display='none';
+  const el = document.getElementById('zoomBtn');
+  if (el) el.style.display='none';
 }
-cv.addEventListener('pointerdown',e=>{
-  if(!running||mode!=='rta') return;
-  dragging=true; dragX0=dragX1=e.offsetX;
-  try{cv.setPointerCapture(e.pointerId);}catch(_){}
-});
-cv.addEventListener('pointermove',e=>{ cursorX=e.offsetX; if(dragging) dragX1=e.offsetX; });
-cv.addEventListener('pointerleave',()=>{ cursorX=null; });
-cv.addEventListener('pointerup',e=>{
-  if(!dragging) return; dragging=false;
-  if(Math.abs(dragX1-dragX0)>20) applyZoom(dragX0,dragX1);
-});
-cv.addEventListener('pointercancel',()=>{dragging=false;});
-cv.addEventListener('dblclick',()=>{ if(running) resetZoom(); });
-document.getElementById('zoomBtn').addEventListener('click',resetZoom);
+
+if (cv) {
+  cv.addEventListener('pointerdown',e=>{
+    if(!running||mode!=='rta') return;
+    dragging=true; dragX0=dragX1=e.offsetX;
+    try{cv.setPointerCapture(e.pointerId);}catch(_){}
+  });
+  cv.addEventListener('pointermove',e=>{ cursorX=e.offsetX; if(dragging) dragX1=e.offsetX; });
+  cv.addEventListener('pointerleave',()=>{ cursorX=null; });
+  cv.addEventListener('pointerup',e=>{
+    if(!dragging) return; dragging=false;
+    if(Math.abs(dragX1-dragX0)>20) applyZoom(dragX0,dragX1);
+  });
+  cv.addEventListener('pointercancel',()=>{dragging=false;});
+  cv.addEventListener('dblclick',()=>{ if(running) resetZoom(); });
+}
+safeAddListener('zoomBtn', 'click', resetZoom);
 
 function makeNoiseBuffer(type){
   const len=Math.floor(audioCtx.sampleRate*2);
@@ -476,7 +501,8 @@ function genApplyLevel(){
 }
 
 const genPanel=document.getElementById('genPanel');
-document.getElementById('genBtn').addEventListener('click',function(){
+safeAddListener('genBtn', 'click', function(){
+  if (!genPanel) return;
   const open=genPanel.classList.toggle('open');
   this.classList.toggle('on',open);
 });
@@ -484,46 +510,53 @@ document.getElementById('genBtn').addEventListener('click',function(){
 document.querySelectorAll('#genType button').forEach(b=>b.addEventListener('click',function(){
   document.querySelectorAll('#genType button').forEach(x=>x.classList.remove('on'));
   this.classList.add('on'); genType=this.dataset.t;
-  document.getElementById('genFreqWrap').style.display = genType==='sine'?'flex':'none';
-  document.getElementById('genSweepWrap').style.display = genType==='sweep'?'flex':'none';
+  const fWrap = document.getElementById('genFreqWrap');
+  if (fWrap) fWrap.style.display = genType==='sine'?'flex':'none';
+  const sWrap = document.getElementById('genSweepWrap');
+  if (sWrap) sWrap.style.display = genType==='sweep'?'flex':'none';
   if(genOn) genStart();
 }));
-document.getElementById('genSweep').addEventListener('input',e=>{
+
+safeAddListener('genSweep', 'input', e=>{
   genSweepDur=parseFloat(e.target.value);
-  document.getElementById('genSweepVal').textContent=genSweepDur.toFixed(1)+'ש\'';
+  const el = document.getElementById('genSweepVal');
+  if (el) el.textContent=genSweepDur.toFixed(1)+'ש\'';
 });
-document.getElementById('genLvl').addEventListener('input',e=>{
+safeAddListener('genLvl', 'input', e=>{
   genDb=parseFloat(e.target.value);
-  const el=document.getElementById('genLvlVal'); el.textContent=genDb+'dB';
-  el.style.color = genDb>=-16 ? 'var(--hot)' : (genDb>=-24?'var(--warn)':'var(--accent)');
+  const el=document.getElementById('genLvlVal');
+  if (el) {
+    el.textContent=genDb+'dB';
+    el.style.color = genDb>=-16 ? 'var(--hot)' : (genDb>=-24?'var(--warn)':'var(--accent)');
+  }
   genApplyLevel();
 });
+
 function applyGenHz(hz, from){
   hz=Math.max(20,Math.min(20000, hz||0));
   genHz=hz;
   const slider=document.getElementById('genFreq'), num=document.getElementById('genFreqNum');
-  if(from!=='slider') slider.value=Math.min(20000,hz);
-  if(from!=='num') num.value=Math.round(hz);
-  document.getElementById('genFreqVal').textContent=(genHz>=1000?(genHz/1000).toFixed(genHz%1000?2:1)+'k':genHz)+'Hz';
+  if(from!=='slider' && slider) slider.value=Math.min(20000,hz);
+  if(from!=='num' && num) num.value=Math.round(hz);
+  const txt = document.getElementById('genFreqVal');
+  if (txt) txt.textContent=(genHz>=1000?(genHz/1000).toFixed(genHz%1000?2:1)+'k':genHz)+'Hz';
   if(genOsc) genOsc.frequency.setTargetAtTime(genHz,audioCtx.currentTime,0.02);
 }
-document.getElementById('genFreq').addEventListener('input',e=>applyGenHz(parseFloat(e.target.value),'slider'));
-document.getElementById('genFreqNum').addEventListener('input',e=>applyGenHz(parseFloat(e.target.value),'num'));
-document.getElementById('genOnBtn').addEventListener('click',()=>{ genOn?genStop():genStart(); });
+
+safeAddListener('genFreq', 'input', e=>applyGenHz(parseFloat(e.target.value),'slider'));
+safeAddListener('genFreqNum', 'input', e=>applyGenHz(parseFloat(e.target.value),'num'));
+safeAddListener('genOnBtn', 'click', ()=>{ genOn?genStop():genStart(); });
 
 ['eqGenToggleBtn', 'areaGenToggleBtn'].forEach(id=>{
-  const el = document.getElementById(id);
-  if(el){
-    el.addEventListener('click', function(){
-      if(genOn && genType === 'pink'){
-        genStop();
-      } else {
-        genType = 'pink';
-        setGenTypeUI('pink');
-        genStart();
-      }
-    });
-  }
+  safeAddListener(id, 'click', function(){
+    if(genOn && genType === 'pink'){
+      genStop();
+    } else {
+      genType = 'pink';
+      setGenTypeUI('pink');
+      genStart();
+    }
+  });
 });
 
 function setTarget(mode){
@@ -535,6 +568,7 @@ function setTarget(mode){
   if(typeof tfFrames!=='undefined' && tfFrames) tfCompute();
 }
 document.querySelectorAll('.tgtSeg button').forEach(b=>b.addEventListener('click',function(){ setTarget(this.dataset.t); }));
+
 function setCutOnly(v){
   cutOnly=v;
   document.querySelectorAll('#cutOnlySeg button, #areaCutSeg button').forEach(b=>b.classList.toggle('on', (b.dataset.co==='1')===v));
@@ -553,8 +587,8 @@ document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',function
 
 const eqPanel=document.getElementById('eqPanel');
 const savePanel=document.getElementById('savePanel');
-document.getElementById('eqClose').addEventListener('click',closeModals);
-document.getElementById('eqBtn').addEventListener('click',()=>{ showModal(eqPanel); updateEqUI(); });
+safeAddListener('eqClose', 'click', closeModals);
+safeAddListener('eqBtn', 'click', ()=>{ showModal(eqPanel); updateEqUI(); });
 
 document.querySelectorAll('.respModeSeg button').forEach(b=>b.addEventListener('click',function(){
   if(this.dataset.rm==='dual'){ showModal(tfPanel); if(typeof tfResult!=='undefined' && tfResult) renderTFList(); }
@@ -564,7 +598,8 @@ document.querySelectorAll('#eqModeSwitchA button').forEach(b=>b.addEventListener
   if(this.dataset.go==='area'){ openAreas(); }
 }));
 
-document.getElementById('eqMeasBtn').addEventListener('click',()=>pickSource(measurePosition,5000));
+safeAddListener('eqMeasBtn', 'click', ()=>pickSource(measurePosition,5000));
+
 function setEqMode(m){
   eqMode=m;
   document.querySelectorAll('#eqModeSeg button, #areaModeSeg button').forEach(b=>b.classList.toggle('on', b.dataset.m===m));
@@ -576,15 +611,24 @@ document.querySelectorAll('#tfModeSeg button').forEach(b=>b.addEventListener('cl
   document.querySelectorAll('#tfModeSeg button').forEach(x=>x.classList.remove('on'));
   this.classList.add('on'); tfMode=this.dataset.m; if(tfResult) renderTFList();
 }));
-document.getElementById('eqResetBtn').addEventListener('click',()=>{ eqPositions=[]; eqMarks=null;
-  { const cr=document.getElementById('combResult'); if(cr){ cr.style.display='none'; cr.innerHTML=''; } } document.getElementById('eqList').innerHTML=''; document.getElementById('eqPosList').innerHTML=''; updateEqUI(); });
-document.getElementById('combBtn').addEventListener('click',()=>runCombCheck('combResult'));
+
+safeAddListener('eqResetBtn', 'click', ()=>{ eqPositions=[]; eqMarks=null;
+  { const cr=document.getElementById('combResult'); if(cr){ cr.style.display='none'; cr.innerHTML=''; } }
+  const eqL = document.getElementById('eqList'); if (eqL) eqL.innerHTML='';
+  const eqP = document.getElementById('eqPosList'); if (eqP) eqP.innerHTML='';
+  updateEqUI();
+});
+safeAddListener('combBtn', 'click', ()=>runCombCheck('combResult'));
 
 function updateEqUI(){
   const meas = measState==='measuring';
-  document.getElementById('eqSub').textContent = meas ? 'מודד… החזק יציב' : ('מיקומים שנמדדו: '+eqPositions.length);
-  document.getElementById('eqMeasBtn').textContent = meas ? 'מודד…' : (eqPositions.length?'מדוד מיקום נוסף':'מדוד מיקום (5ש\')');
-  document.getElementById('eqMeasBtn').style.opacity = meas?0.5:1;
+  const sub = document.getElementById('eqSub');
+  if (sub) sub.textContent = meas ? 'מודד… החזק יציב' : ('מיקומים שנמדדו: '+eqPositions.length);
+  const btn = document.getElementById('eqMeasBtn');
+  if (btn) {
+    btn.textContent = meas ? 'מודד…' : (eqPositions.length?'מדוד מיקום נוסף':'מדוד מיקום (5ש\')');
+    btn.style.opacity = meas?0.5:1;
+  }
 }
 
 function targetDb(f){
@@ -641,24 +685,30 @@ function syncGeqBtn(){
   const b=document.getElementById('geqShowBtn'), d=document.getElementById('geqDock');
   if(b&&d) b.classList.toggle('on', d.style.display!=='none');
 }
-document.getElementById('geqShowBtn').addEventListener('click',function(){
+
+safeAddListener('geqShowBtn', 'click', function(){
   const d=document.getElementById('geqDock');
+  if (!d) return;
   if(d.style.display==='none' || !d.style.display){
     if(!eqCurveData){ alert('אין עדיין תיקון להצגה — בצע מדידת תגובה קודם.'); return; }
     d.style.display='block'; d.classList.remove('collapsed');
-    document.getElementById('geqDockToggle').textContent='▼';
+    const tog = document.getElementById('geqDockToggle');
+    if (tog) tog.textContent='▼';
     drawGEQ(document.getElementById('eqCurveCanvas'), eqCurveData.freqs, eqCurveData.corr);
   } else d.style.display='none';
   syncGeqBtn();
 });
-document.getElementById('geqDockToggle').addEventListener('click',function(){
+
+safeAddListener('geqDockToggle', 'click', function(){
   const d=document.getElementById('geqDock');
+  if (!d) return;
   d.classList.toggle('collapsed');
   this.textContent = d.classList.contains('collapsed') ? '▲' : '▼';
   if(!d.classList.contains('collapsed') && eqCurveData) drawGEQ(document.getElementById('eqCurveCanvas'), eqCurveData.freqs, eqCurveData.corr);
 });
+
 function drawGEQ(c, freqs, corr){
-  if(c && c.parentElement && c.parentElement.classList.contains('collapsed')) return;
+  if(!c || (c.parentElement && c.parentElement.classList.contains('collapsed'))) return;
   const x=c.getContext('2d');
   const dpr=Math.min(window.devicePixelRatio||1,2);
   const CW=c.clientWidth||360, H=234;
@@ -722,6 +772,7 @@ function drawGEQ(c, freqs, corr){
   x.textAlign='left'; x.fillStyle=sunMode?'#475569':'rgba(150,165,180,.75)';
   x.fillText('הזז כל פס לפי הידית', 4, 12);
 }
+
 function micCalAt(f){
   if(!micCal||!micCal.f.length) return 0;
   const F=micCal.f, G=micCal.g;
@@ -749,6 +800,7 @@ function deriveActiveCal(){
 
 function renderCalList(){
   const box=document.getElementById('calList');
+  if (!box) return;
   let html='<div class="calRow'+(activeCalId===null?' on':'')+'" data-id=""><span class="nm">ללא כיול</span></div>';
   html+=micCalList.map(c=>'<div class="calRow'+(c.id===activeCalId?' on':'')+'" data-id="'+c.id+'">'+
     '<span class="nm" title="'+escapeHtml(c.name)+'">'+escapeHtml(c.name)+'</span><span class="sub">'+c.f.length+' נק\'</span><span class="del" data-del="'+c.id+'" title="מחק">🗑</span></div>').join('');
@@ -794,6 +846,7 @@ function parseCalText(text, fname){
   }
   return false;
 }
+
 async function addCalFromFile(file){
   try{
     let text=null;
@@ -807,21 +860,26 @@ async function addCalFromFile(file){
     alert('לא הצלחתי לקרוא את הקובץ.\nאם הוא ב־iCloud — הורד אותו מקומית קודם, ונסה קובץ בסיומת .txt / .cal / .frd.');
   }
 }
+
 const calPanel=document.getElementById('calPanel');
-document.getElementById('calBtn').addEventListener('click',()=>{ renderCalList(); showModal(calPanel); });
-document.getElementById('calClose').addEventListener('click',closeModals);
-document.getElementById('calAdd').addEventListener('change',e=>{ if(e.target.files[0]) addCalFromFile(e.target.files[0]); e.target.value=''; });
-document.getElementById('calPasteBtn').addEventListener('click',()=>{
+safeAddListener('calBtn', 'click', ()=>{ renderCalList(); showModal(calPanel); });
+safeAddListener('calClose', 'click', closeModals);
+safeAddListener('calAdd', 'change', e=>{ if(e.target.files[0]) addCalFromFile(e.target.files[0]); e.target.value=''; });
+safeAddListener('calPasteBtn', 'click', ()=>{
   const t=document.getElementById('calPaste').value;
   if(!t.trim()){ alert('הדבק קודם את תוכן הקובץ.'); return; }
   if(parseCalText(t,'כיול מודבק')) document.getElementById('calPaste').value='';
   else alert('לא זיהיתי נתונים. כל שורה צריכה להיות: תדר [רווח/טאב] dB.');
 });
-calPanel.addEventListener('dragover',e=>{ e.preventDefault(); calPanel.style.borderColor='var(--accent)'; });
-calPanel.addEventListener('dragleave',()=>{ calPanel.style.borderColor=''; });
-calPanel.addEventListener('drop',e=>{ e.preventDefault(); calPanel.style.borderColor='';
-  const f=e.dataTransfer.files[0]; if(f) addCalFromFile(f); });
-document.getElementById('calResetBtn').addEventListener('click',()=>{
+
+if (calPanel) {
+  calPanel.addEventListener('dragover',e=>{ e.preventDefault(); calPanel.style.borderColor='var(--accent)'; });
+  calPanel.addEventListener('dragleave',()=>{ calPanel.style.borderColor=''; });
+  calPanel.addEventListener('drop',e=>{ e.preventDefault(); calPanel.style.borderColor='';
+    const f=e.dataTransfer.files[0]; if(f) addCalFromFile(f); });
+}
+
+safeAddListener('calResetBtn', 'click', ()=>{
   if(!micCalList.length){ return; }
   if(!confirm('לאפס ולמחוק את כל קבצי הכיולים?')) return;
   micCalList=[]; activeCalId=null; deriveActiveCal(); saveCalStore(); renderCalList();
@@ -829,9 +887,10 @@ document.getElementById('calResetBtn').addEventListener('click',()=>{
 
 const modalBg=document.getElementById('modalBg');
 ['rtPanel','eqPanel','calPanel','tfPanel','areaPanel','dlyPanel','savePanel'].forEach(id=>{
-  const p=document.getElementById(id); if(p) modalBg.appendChild(p);
+  const p=document.getElementById(id); if(p && modalBg) modalBg.appendChild(p);
 });
-function showModal(p){ closeModals(); p.classList.add('open'); modalBg.classList.add('show'); }
+
+function showModal(p){ if (!p || !modalBg) return; closeModals(); p.classList.add('open'); modalBg.classList.add('show'); }
 function abortRT60(){
   if(rt60State!=='capture' && !rt60Timer) return;
   rt60State='idle';
@@ -842,41 +901,53 @@ function abortRT60(){
 }
 function closeModals(){
   abortRT60();
-  ['rtPanel','eqPanel','calPanel','tfPanel','areaPanel','dlyPanel','savePanel'].forEach(id=>document.getElementById(id).classList.remove('open'));
-  modalBg.classList.remove('show');
+  ['rtPanel','eqPanel','calPanel','tfPanel','areaPanel','dlyPanel','savePanel'].forEach(id=>{
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('open');
+  });
+  if (modalBg) modalBg.classList.remove('show');
 }
-modalBg.addEventListener('click',e=>{ if(e.target===modalBg) closeModals(); });
+
+if (modalBg) modalBg.addEventListener('click',e=>{ if(e.target===modalBg) closeModals(); });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeModals(); });
 
 const areaPanel=document.getElementById('areaPanel');
 document.querySelectorAll('#eqModeSwitchB button').forEach(b=>b.addEventListener('click',function(){
   if(this.dataset.go==='avg'){ showModal(eqPanel); updateEqUI(); }
 }));
+
 function openAreas(){
   renderAreaList();
   document.querySelectorAll('#areaModeSeg button').forEach(b=>b.classList.toggle('on', b.dataset.m===eqMode));
   document.querySelectorAll('#areaCutSeg button').forEach(b=>b.classList.toggle('on', (b.dataset.co==='1')===cutOnly));
   showModal(areaPanel);
 }
-document.getElementById('areaClose').addEventListener('click',closeModals);
-document.getElementById('areaMeasBtn').addEventListener('click',()=>pickSource(measureArea,5000));
+
+safeAddListener('areaClose', 'click', closeModals);
+safeAddListener('areaMeasBtn', 'click', ()=>pickSource(measureArea,5000));
+
 let pendingMeasureFn=null, pendingDur=5000;
 const srcOverlay=document.getElementById('srcOverlay');
 function pickSource(fn, dur){
   if(!running){ alert('קודם הפעל את המיקרופון.'); return; }
-  pendingMeasureFn=fn; pendingDur=dur||5000; srcOverlay.classList.add('show');
+  pendingMeasureFn=fn; pendingDur=dur||5000; if (srcOverlay) srcOverlay.classList.add('show');
 }
-srcOverlay.addEventListener('click',e=>{ if(e.target===srcOverlay) srcOverlay.classList.remove('show'); });
+if (srcOverlay) srcOverlay.addEventListener('click',e=>{ if(e.target===srcOverlay) srcOverlay.classList.remove('show'); });
+
 document.querySelectorAll('#srcBox button').forEach(b=>b.addEventListener('click',function(){
-  srcOverlay.classList.remove('show');
+  if (srcOverlay) srcOverlay.classList.remove('show');
   const src=this.dataset.src; if(src==='cancel'||!pendingMeasureFn) return;
   runWithSource(src, pendingMeasureFn, pendingDur); pendingMeasureFn=null;
 }));
+
 function setGenTypeUI(kind){
   document.querySelectorAll('#genType button').forEach(x=>x.classList.toggle('on', x.dataset.t===kind));
-  document.getElementById('genFreqWrap').style.display='none';
-  document.getElementById('genSweepWrap').style.display = kind==='sweep'?'flex':'none';
+  const fWrap = document.getElementById('genFreqWrap');
+  if (fWrap) fWrap.style.display='none';
+  const sWrap = document.getElementById('genSweepWrap');
+  if (sWrap) sWrap.style.display = kind==='sweep'?'flex':'none';
 }
+
 function runWithSource(kind, measureFn, durMs){
   durMs=durMs||5000;
   if(kind==='sweep') durMs=Math.max(durMs, genSweepDur*1000+600);
@@ -890,8 +961,8 @@ function runWithSource(kind, measureFn, durMs){
   }, 450+durMs+300);
 }
 
-document.getElementById('areaCombBtn').addEventListener('click',()=>runCombCheck('areaCombResult'));
-document.getElementById('areaResetBtn').addEventListener('click',()=>{
+safeAddListener('areaCombBtn', 'click', ()=>runCombCheck('areaCombResult'));
+safeAddListener('areaResetBtn', 'click', ()=>{
   areas=[];
   { const cr=document.getElementById('areaCombResult'); if(cr){ cr.style.display='none'; cr.innerHTML=''; } }
   const ac=document.getElementById('areaEqCanvas'); if(ac) ac.style.display='none';
@@ -899,7 +970,8 @@ document.getElementById('areaResetBtn').addEventListener('click',()=>{
   eqMarks=null; eqCurveData=null; hideGeqDock();
   renderAreaList();
 });
-document.getElementById('areaEqBtn').addEventListener('click',suggestAreaEQ);
+safeAddListener('areaEqBtn', 'click', suggestAreaEQ);
+
 function suggestAreaEQ(){
   if(!areas.length){ alert('מדוד לפחות אזור אחד.'); return; }
   const n=GEQ.length;
@@ -911,16 +983,19 @@ function suggestAreaEQ(){
   eqMarks=[]; for(let k=0;k<n;k++){ if(corr[k]!=null && Math.abs(corr[k])>=1.0) eqMarks.push({f:GEQ[k],gain:corr[k],type:corr[k]<0?'cut':'boost'}); }
   eqCurveData={freqs:GEQ.slice(), corr:corr.slice()};
 
-  const cv2=document.getElementById('areaEqCanvas'); cv2.style.display='block'; drawGEQ(cv2,GEQ,corr);
+  const cv2=document.getElementById('areaEqCanvas'); if (cv2) { cv2.style.display='block'; drawGEQ(cv2,GEQ,corr); }
 
   const head = '<div class="sub" style="margin-bottom:6px; color:var(--text); font-weight:600;">ממוצע ' + areas.length + ' אזורים · יעד ' + (targetMode==='house'?'House':'שטוח') + ':</div>';
-  document.getElementById('areaEqList').innerHTML = head + (eqMode==='param' ? corrParamHtml(corr) : corrGridHtml(corr, null));
+  const eqL = document.getElementById('areaEqList');
+  if (eqL) eqL.innerHTML = head + (eqMode==='param' ? corrParamHtml(corr) : corrGridHtml(corr, null));
 }
 
 function updateAreaMeasBtn(){
   const b=document.getElementById('areaMeasBtn'), meas=areaState==='measuring';
+  if (!b) return;
   b.textContent = meas?'מודד… החזק יציב':'מדוד אזור חדש (5ש\')'; b.style.opacity=meas?.5:1;
 }
+
 function measureArea(){
   if(!running){ alert('קודם הפעל את המיקרופון.'); return; }
   if(areas.length>=4){ alert('הגעת ל־4 אזורים — מחק אחד כדי להוסיף.'); return; }
@@ -942,8 +1017,10 @@ function measureArea(){
     areaState='idle'; updateAreaMeasBtn(); renderAreaList();
   },5000);
 }
+
 function renderAreaList(){
   const box=document.getElementById('areaList');
+  if (!box) return;
   if(!areas.length){ box.innerHTML='<div class="sub">אין אזורים עדיין — מדוד את הראשון.</div>'; return; }
   box.innerHTML=areas.map((a,i)=>
     '<div class="areaRow"><span class="dot" style="background:'+a.color+'"></span>'+
@@ -961,18 +1038,19 @@ function renderAreaList(){
 }
 
 const tfPanel=document.getElementById('tfPanel');
-document.getElementById('tfClose').addEventListener('click',closeModals);
-document.getElementById('tfSwapBtn').addEventListener('click',function(){ tfSwap=!tfSwap; this.classList.toggle('on',tfSwap); });
+safeAddListener('tfClose', 'click', closeModals);
+safeAddListener('tfSwapBtn', 'click', function(){ tfSwap=!tfSwap; this.classList.toggle('on',tfSwap); });
+
 function setTfOverlay(on){
   tfOverlay=on;
   const a=document.getElementById('tfOverlayBtn'), b=document.getElementById('tfOverlayHdr');
   if(a) a.classList.toggle('on',on);
   if(b) b.classList.toggle('on',on);
 }
-document.getElementById('tfOverlayBtn').addEventListener('click',()=>setTfOverlay(!tfOverlay));
-document.getElementById('tfOverlayHdr').addEventListener('click',()=>setTfOverlay(!tfOverlay));
-document.getElementById('tfMeasBtn').addEventListener('click',()=>pickSource(tfMeasure,6000));
-document.getElementById('tfCsvBtn').addEventListener('click',tfExportCsv);
+safeAddListener('tfOverlayBtn', 'click', ()=>setTfOverlay(!tfOverlay));
+safeAddListener('tfOverlayHdr', 'click', ()=>setTfOverlay(!tfOverlay));
+safeAddListener('tfMeasBtn', 'click', ()=>pickSource(tfMeasure,6000));
+safeAddListener('tfCsvBtn', 'click', tfExportCsv);
 
 function detectComb(){
   if(!floatData || !audioCtx) return null;
@@ -994,6 +1072,7 @@ function detectComb(){
   const inRange = delayMs>=1.4 && delayMs<=6.5;
   return {spacingHz, delayMs, strength:best.val, depth, inRange};
 }
+
 function runCombCheck(resultId){
   const el=document.getElementById(resultId||'combResult'); if(!el) return;
   el.style.display='block';
@@ -1013,6 +1092,7 @@ function runCombCheck(resultId){
     el.innerHTML='<b style="color:#39d98a">✓ לא זוהה ביטול משמעותי</b><br><span style="font-size:11px;color:var(--dim)">התגובה חלקה יחסית.</span>';
   }
 }
+
 function updateTfLevels(){
   if(!floatDataRef || !analyserRef) return;
   analyser.getFloatTimeDomainData(timeData);
@@ -1020,8 +1100,8 @@ function updateTfLevels(){
   analyserRef.getFloatTimeDomainData(timeDataRef);
   setGainEl(document.getElementById('tfMicFill'), document.getElementById('tfMicDb'), levelDb(timeData,2048));
   setGainEl(document.getElementById('tfRefFill'), document.getElementById('tfRefDb'), levelDb(timeDataRef,2048));
-  document.getElementById('tfL1').textContent = tfSwap?"כניסה 1 → רפרנס":"כניסה 1 → מיק'";
-  document.getElementById('tfL2').textContent = tfSwap?"כניסה 2 → מיק'":"כניסה 2 → רפרנס";
+  const l1 = document.getElementById('tfL1'); if (l1) l1.textContent = tfSwap?"כניסה 1 → רפרנס":"כניסה 1 → מיק'";
+  const l2 = document.getElementById('tfL2'); if (l2) l2.textContent = tfSwap?"כניסה 2 → מיק'":"כניסה 2 → רפרנס";
   
   const N=1024, maxLag=Math.min(4800, timeDataRef.length-N-1);
   const oa=timeData.length-N;
@@ -1054,18 +1134,21 @@ function updateTfLevels(){
     if(tip){ tip.textContent = bestVa<1e-6||bestVb<1e-6 ? '(אין אות)' : _tfCorr<-0.2?'⚠ פולריות הפוכה?' : _tfCorr>0.6?'✓':' '; }
   }
 }
+
 function tfMeasure(){
   if(!running||!analyserRef){ alert('הפעל מיקרופון עם כרטיס קול (input סטריאו).'); return; }
   if(measureBusy()){ alert('מדידה אחרת פעילה — המתן לסיומה.'); return; }
   unfreezeForMeasure();
   const bins=floatData.length;
   tfMic=new Float64Array(bins); tfRef=new Float64Array(bins); tfFrames=0; tfState='measuring';
-  const btn=document.getElementById('tfMeasBtn'); btn.textContent='מודד…'; btn.style.opacity=.5;
+  const btn=document.getElementById('tfMeasBtn');
+  if (btn) { btn.textContent='מודד…'; btn.style.opacity=.5; }
   setTimeout(()=>{
-    tfState='idle'; btn.textContent='מדוד שוב (6ש\')'; btn.style.opacity=1;
+    tfState='idle'; if (btn) { btn.textContent='מדוד שוב (6ש\')'; btn.style.opacity=1; }
     tfCompute();
   },6000);
 }
+
 function tfCompute(){
   if(!tfFrames){ return; }
   const bins=tfMic.length, nyq=audioCtx.sampleRate/2, R6=Math.pow(2,1/6);
@@ -1084,15 +1167,18 @@ function tfCompute(){
   const on=rel.filter(Boolean).length;
   const corr=buildCorr(H, rel);
   tfResult={corr,H,rel};
-  document.getElementById('tfInfo').textContent = on? 'הזז בגרפיק־EQ לפי הערכים (±6dB מקס). מוצגים רק פסים אמינים עם תיקון משמעותי.' :
-    'רפרנס חלש/חסר — ודא שערוץ 2 מקבל אות מהמיקסר, או לחץ "החלף ערוצים".';
+  const tfInfoEl = document.getElementById('tfInfo');
+  if (tfInfoEl) {
+    tfInfoEl.textContent = on? 'הזז בגרפיק־EQ לפי הערכים (±6dB מקס). מוצגים רק פסים אמינים עם תיקון משמעותי.' :
+      'רפרנס חלש/חסר — ודא שערוץ 2 מקבל אות מהמיקסר, או לחץ "החלף ערוצים".';
+  }
   renderTFList();
 }
 
 function renderTFList(){
   const box = document.getElementById('tfGeqList');
   const cv2 = document.getElementById('tfCanvas');
-  if(!tfResult){ box.innerHTML = ''; cv2.style.display = 'none'; return; }
+  if(!tfResult){ if(box) box.innerHTML = ''; if(cv2) cv2.style.display = 'none'; return; }
   
   showGeqDock('תיקון EQ · דו־ערוצי');
   drawGEQ(document.getElementById('eqCurveCanvas'), GEQ, tfResult.corr);
@@ -1100,11 +1186,11 @@ function renderTFList(){
 
   if(tfMode==='param'){
     const head='<div class="sub" style="margin-bottom:6px;color:var(--text);font-weight:600;">EQ פרמטרי (יעד '+(targetMode==='house'?'House':'שטוח')+'):</div>';
-    box.innerHTML = head + corrParamHtml(tfResult.corr);
+    if(box) box.innerHTML = head + corrParamHtml(tfResult.corr);
     return;
   }
   const head='<div class="sub" style="margin-bottom:6px; color:var(--text); font-weight:600;">ערכי תיקון לגרפיק-EQ (31 פסים):</div>';
-  box.innerHTML = head + corrGridHtml(tfResult.corr, tfResult.rel);
+  if(box) box.innerHTML = head + corrGridHtml(tfResult.corr, tfResult.rel);
 }
 
 function tfExportCsv(){
@@ -1115,14 +1201,15 @@ function tfExportCsv(){
 }
 
 const dlyPanel=document.getElementById('dlyPanel');
-document.getElementById('dlyBtn').addEventListener('click',()=>{
+safeAddListener('dlyBtn', 'click', ()=>{
   showModal(dlyPanel);
   if(running && !workletReady){
     const st=document.getElementById('dlyStatus');
     if(st){ st.innerHTML='<span style="color:var(--warn)">⚠ מנוע ההקלטה לא נטען — מדידת דיליי לא תעבוד. פתח את האתר דרך שרת/HTTPS (לא כקובץ מקומי).</span>'; }
   }
 });
-document.getElementById('dlyClose').addEventListener('click',closeModals);
+safeAddListener('dlyClose', 'click', closeModals);
+
 function resetDelay(){
   dlyState='idle';
   dlySpeakers.forEach((s,i)=>{ s.ms=null; s.name=dlyName(i); });
@@ -1130,8 +1217,8 @@ function resetDelay(){
   const st=document.getElementById('dlyStatus'); if(st) st.textContent='—';
   renderDlySpk();
 }
-document.getElementById('dlyReset').addEventListener('click',resetDelay);
-document.getElementById('dlyMeasBtn').addEventListener('click',()=>pickSource(measureDelay,2100));
+safeAddListener('dlyReset', 'click', resetDelay);
+safeAddListener('dlyMeasBtn', 'click', ()=>pickSource(measureDelay,2100));
 
 function fft(re,im,inv){
   const n=re.length;
@@ -1156,6 +1243,7 @@ document.querySelectorAll('#meterModeSeg button').forEach(b=>b.addEventListener(
   document.querySelectorAll('#meterModeSeg button').forEach(x=>x.classList.remove('on'));
   this.classList.add('on'); meterMode=this.dataset.m;
 }));
+
 function levelDb(buf,n){
   const len=buf.length; n=n||len; const start=Math.max(0,len-n);
   if(meterMode==='peak'){ let m=0; for(let i=start;i<len;i++){ const a=Math.abs(buf[i]); if(a>m)m=a; } return 20*Math.log10(m+1e-9); }
@@ -1183,6 +1271,7 @@ function setGain(id, db){ setGainEl(document.getElementById(id+'Fill'), document
 
 function measureDelay(){ runDelayCapture(document.getElementById('dlyMeasBtn'), (res, silent)=>{
   const st=document.getElementById('dlyStatus');
+  if(!st) return;
   if(res==null){
     st.textContent = silent==='mic' ? 'המיקרופון לא קלט אות — בדוק גיין/חיבור.'
                    : silent==='ref' ? 'כניסה 2 (רפרנס) שקטה — ודא ניתוב רפרנס מהמיקסר.'
@@ -1191,12 +1280,13 @@ function measureDelay(){ runDelayCapture(document.getElementById('dlyMeasBtn'), 
   const ms=res.ms, dist=Math.abs(ms)/1000*343;
   st.innerHTML='דיליי ≈ <b>'+ms.toFixed(2)+' ms</b><br><span style="font-size:11px;color:var(--dim)">≈ '+dist.toFixed(2)+' מ\' · '+(ms>=0?'המיק\' מאחר אחרי הרפרנס':'המיק\' מקדים את הרפרנס')+'</span>';
 }); }
+
 function runDelayCapture(btn, cb){
   if(!running||!analyserRef||!source){ alert('צריך כרטיס קול עם input סטריאו (מיק\'+רפרנס).'); return; }
   if(measureBusy()){ alert('מדידה אחרת פעילה — המתן לסיומה.'); return; }
   unfreezeForMeasure();
   dlyState='measuring';
-  const prevTxt=btn.textContent; btn.textContent='מקליט…'; btn.style.opacity=.5;
+  const prevTxt=btn?btn.textContent:''; if(btn){ btn.textContent='מקליט…'; btn.style.opacity=.5; }
   const sr=audioCtx.sampleRate;
   const captureSec = (genOn && genType==='sweep') ? Math.min(10, genSweepDur+0.6) : 2.0;
   const want=Math.floor(sr*captureSec);
@@ -1206,7 +1296,7 @@ function runDelayCapture(btn, cb){
     workletNode = new AudioWorkletNode(audioCtx, 'recorder-worklet');
   } catch(e) {
     alert('AudioWorklet לא נטען. פתח את האתר דרך שרת (למשל Live Server ב-VSCode) ולא כקובץ מתיקייה.');
-    dlyState='idle'; btn.textContent=prevTxt; btn.style.opacity=1;
+    dlyState='idle'; if(btn){ btn.textContent=prevTxt; btn.style.opacity=1; }
     return;
   }
 
@@ -1224,7 +1314,7 @@ function runDelayCapture(btn, cb){
   setTimeout(()=>{
     workletNode.port.postMessage({ cmd: 'stop' });
     try{ source.disconnect(workletNode); }catch(_){} try{ workletNode.disconnect(); }catch(_){} try{ mute.disconnect(); }catch(_){}
-    dlyState='idle'; btn.textContent=prevTxt; btn.style.opacity=1;
+    dlyState='idle'; if(btn){ btn.textContent=prevTxt; btn.style.opacity=1; }
     const m = tfSwap? ref: mic, r = tfSwap? mic: ref;
     const rmsOf=(a)=>{ let s=0; for(let i=0;i<a.length;i++) s+=a[i]*a[i]; return Math.sqrt(s/a.length); };
     const micRms=rmsOf(m), refRms=rmsOf(r);
@@ -1237,12 +1327,14 @@ const DLY_NAMES=['Top','Sub','FF'];
 function dlyName(i){ return DLY_NAMES[i] || ('רמקול '+(i+1)); }
 let dlySpeakers=[{name:dlyName(0),ms:null},{name:dlyName(1),ms:null}];
 let dlyAnchor=0;
+
 function setDlyCount(n){
   const cur=dlySpeakers.length;
   if(n>cur){ for(let i=cur;i<n;i++) dlySpeakers.push({name:dlyName(i),ms:null}); }
   else if(n<cur){ dlySpeakers=dlySpeakers.slice(0,n); if(dlyAnchor>=n) dlyAnchor=0; }
   renderDlySpk();
 }
+
 function renderDlySpk(){
   const box=document.getElementById('dlySpk'); if(!box) return;
   box.innerHTML=dlySpeakers.map((s,i)=>{
@@ -1271,6 +1363,7 @@ function renderDlySpk(){
     }),2100);
   }));
 }
+
 document.querySelectorAll('#dlyCountSeg button').forEach(b=>b.addEventListener('click',function(){
   document.querySelectorAll('#dlyCountSeg button').forEach(x=>x.classList.remove('on'));
   this.classList.add('on'); setDlyCount(+this.dataset.n);
@@ -1359,6 +1452,7 @@ function unfreezeForMeasure(){
   frozen=false; snapCurve=null;
   const fz=document.getElementById('freezeBtn'); if(fz){ fz.classList.remove('on'); fz.textContent='הקפא'; }
 }
+
 function measurePosition(){
   if(!running){ alert('קודם הפעל את המיקרופון.'); return; }
   if(measureBusy()){ alert('מדידה אחרת פעילה — המתן לסיומה.'); return; }
@@ -1378,6 +1472,7 @@ function measurePosition(){
     computeAndShow(); updateEqUI(); renderEqList();
   },5000);
 }
+
 function renderEqList(){
   const box=document.getElementById('eqPosList'); if(!box) return;
   if(!eqPositions.length){ box.innerHTML=''; return; }
@@ -1388,22 +1483,25 @@ function renderEqList(){
     const i=+this.dataset.i; if(eqPositions[i]) eqPositions[i].name=this.value; }));
   box.querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',function(){
     const i=+this.dataset.del; eqPositions.splice(i,1);
-    if(eqPositions.length) computeAndShow(); else { eqMarks=null; eqCurveData=null; document.getElementById('eqList').innerHTML=''; hideGeqDock(); }
+    if(eqPositions.length) computeAndShow(); else { eqMarks=null; eqCurveData=null; const eqL=document.getElementById('eqList'); if(eqL) eqL.innerHTML=''; hideGeqDock(); }
     updateEqUI(); renderEqList();
   }));
 }
+
 function avgPositions(){
   if(!eqPositions.length) return null;
   const out=new Float32Array(GEQ.length);
   for(let k=0;k<GEQ.length;k++){ let p=0; for(const pos of eqPositions) p+=db2lin(pos.db[k]); out[k]=10*Math.log10(p/eqPositions.length+1e-12); }
   return out;
 }
+
 function bandDbFromBins(bd,fLo,fHi,nyq,bins){
   let lo=Math.floor(fLo/nyq*bins), hi=Math.ceil(fHi/nyq*bins);
   lo=Math.max(0,lo);hi=Math.min(bins-1,hi);if(hi<lo)hi=lo;
   let p=0; for(let i=lo;i<=hi;i++) p+=db2lin(bd[i]);
   return 10*Math.log10(p+1e-12);
 }
+
 function computeAndShow(noModal){
   if(!eqPositions.length){ alert('מדוד לפחות מיקום אחד.'); return; }
   const band=avgPositions();
@@ -1429,6 +1527,7 @@ function computeAndShow(noModal){
   renderEqResult();
   if(!noModal) showModal(eqPanel);
 }
+
 function paramFromCorr(corr){
   const cand=[];
   for(let k=1;k<GEQ.length-1;k++){ const v=corr[k], pv=corr[k-1], nv=corr[k+1];
@@ -1450,32 +1549,35 @@ function renderEqResult(){
   const head='<div class="sub" style="margin-bottom:6px; color:var(--text); font-weight:600;">יעד '+(targetMode==='house'?'House':'שטוח')+
     (micCal?' · כיול פעיל':' · ללא כיול')+' · '+eqPositions.length+' מיקומים:</div>';
   const box=document.getElementById('eqList');
-  box.innerHTML = head + (eqMode==='graphic' ? corrGridHtml(lastEqCorr, null) : corrParamHtml(lastEqCorr));
+  if (box) box.innerHTML = head + (eqMode==='graphic' ? corrGridHtml(lastEqCorr, null) : corrParamHtml(lastEqCorr));
 }
 
 const rtPanel=document.getElementById('rtPanel'), rtStatus=document.getElementById('rtStatus');
-document.getElementById('rtClose').addEventListener('click',closeModals);
-document.getElementById('rtRange').addEventListener('input',e=>{
+safeAddListener('rtClose', 'click', closeModals);
+safeAddListener('rtRange', 'input', e=>{
   rtRange=parseFloat(e.target.value);
-  document.getElementById('rtRangeVal').textContent=rtRange+'dB';
+  const txt = document.getElementById('rtRangeVal');
+  if (txt) txt.textContent=rtRange+'dB';
   if(rt60Samples.length) analyzeRT60();
 });
-document.getElementById('rtLevel').addEventListener('input',e=>{
+safeAddListener('rtLevel', 'input', e=>{
   rtLevel=parseInt(e.target.value,10);
-  document.getElementById('rtLevelVal').textContent=rtLevel+'dB';
+  const txt = document.getElementById('rtLevelVal');
+  if (txt) txt.textContent=rtLevel+'dB';
 });
-document.getElementById('rtRunBtn').addEventListener('click',startRT60);
-document.getElementById('rtBtn').addEventListener('click',()=>{
+safeAddListener('rtRunBtn', 'click', startRT60);
+safeAddListener('rtBtn', 'click', ()=>{
   if(!running||!audioCtx){ alert('קודם הפעל את המיקרופון.'); return; }
   showModal(rtPanel);
   { const c=document.getElementById('rtCanvas'); if(c) c.style.display='none'; }
-  rtStatus.innerHTML='כוונן עוצמה, ואז לחץ "התחל מדידה".';
+  if (rtStatus) rtStatus.innerHTML='כוונן עוצמה, ואז לחץ "התחל מדידה".';
 });
+
 function startRT60(){
   if(!running||!audioCtx){ alert('קודם הפעל את המיקרופון.'); return; }
   if(measureBusy()){ alert('מדידה אחרת פעילה — המתן לסיומה.'); return; }
   unfreezeForMeasure();
-  rtStatus.innerHTML='מכין… משמיע רעש ורוד';
+  if (rtStatus) rtStatus.innerHTML='מכין… משמיע רעש ורוד';
   const prevGenOn = genOn;
   const restoreType=genType; genType='pink';
   if(!genOn){ genStart(); }
@@ -1484,7 +1586,7 @@ function startRT60(){
   const prevSmooth=analyser.smoothingTimeConstant; analyser.smoothingTimeConstant=0;
 
   setTimeout(()=>{
-    rtStatus.innerHTML='מודד דעיכה…';
+    if (rtStatus) rtStatus.innerHTML='מודד דעיכה…';
     rt60Samples=[]; rt60State='capture';
     const nyq=audioCtx.sampleRate/2;
     const bandEdges=RT_BANDS.map(fc=>{ const bins=floatData.length;
@@ -1536,8 +1638,10 @@ function analyzeDecay(series, cutT, needRange){
   const rt60=-60/slope;
   return { rt60:(slope<0 && rt60>0.05 && rt60<10)?rt60:null, span:hi-lo, steady, noise, post, slope, intercept };
 }
+
 function analyzeRT60(){
   const s=rt60Samples;
+  if(!rtStatus) return;
   if(s.length<20){ rtStatus.innerHTML='מדידה נכשלה — נדגמו רק '+s.length+' דגימות.<br><span style="font-size:11px;color:var(--dim)">ודא שהמיקרופון פעיל ונסה שוב.</span>'; return; }
   const bb=analyzeDecay(s.map(x=>({t:x.t,db:x.db})), rt60CutT, rtRange);
   if(!bb || bb.post.length<10){ rtStatus.innerHTML='מדידה נכשלה — לא נלכדה דעיכה.'; return; }
@@ -1566,6 +1670,7 @@ function analyzeRT60(){
     drawRTPlot(bb.post, bb.steady, null, 0);
   }
 }
+
 function drawRTPlot(post, steady, slope, intercept){
   const c=document.getElementById('rtCanvas'); if(!c) return;
   c.style.display='block';
@@ -1584,12 +1689,15 @@ function drawRTPlot(post, steady, slope, intercept){
     x.moveTo(X(0),Y(intercept)); x.lineTo(X(tMax),Y(intercept+slope*tMax)); x.stroke(); x.setLineDash([]);
   }
 }
-document.getElementById('res').addEventListener('input',e=>{
+
+safeAddListener('res', 'input', e=>{
   const bpo=Math.max(3,Math.min(24,parseInt(e.target.value,10)));
-  document.getElementById('resVal').textContent='1/'+bpo+' אוקטבה';
+  const txt = document.getElementById('resVal');
+  if (txt) txt.textContent='1/'+bpo+' אוקטבה';
   buildBands(bpo);
   prefSet('rta_res', bpo);
 });
+
 function setFft(n){
   fftSize=n;
   if(analyser){
@@ -1601,43 +1709,46 @@ function setFft(n){
     _pfx=null;
   }
 }
+
 document.querySelectorAll('#fftSeg button').forEach(b=>b.addEventListener('click',function(){
   document.querySelectorAll('#fftSeg button').forEach(x=>x.classList.remove('on'));
   this.classList.add('on'); setFft(parseInt(this.dataset.n,10)); prefSet('rta_fft', this.dataset.n);
 }));
-document.getElementById('mRta').addEventListener('click',()=>setMode('rta'));
-document.getElementById('mSpec').addEventListener('click',()=>setMode('spec'));
-document.getElementById('startBtn').addEventListener('click',()=>start());
-document.getElementById('stopBtn').addEventListener('click',resetSession);
+
+safeAddListener('mRta', 'click', ()=>setMode('rta'));
+safeAddListener('mSpec', 'click', ()=>setMode('spec'));
+safeAddListener('startBtn', 'click', ()=>start());
+safeAddListener('stopBtn', 'click', resetSession);
+
 function resetSession(){
   if(audioCtx && audioCtx.state==='suspended') audioCtx.resume();
   const tr = stream && stream.getAudioTracks && stream.getAudioTracks()[0];
   if(running && (!tr || tr.readyState==='ended')){ stop(); start(); return; }
   peaks.fill(0); avgBuf.fill(0); snapCurve=null; frozen=false;
-  const fz=document.getElementById('freezeBtn'); fz.classList.remove('on'); fz.textContent='הקפא';
+  const fz=document.getElementById('freezeBtn'); if (fz) { fz.classList.remove('on'); fz.textContent='הקפא'; }
   eqPositions=[]; eqMarks=null; eqCurveData=null; lastEqCorr=null;
   { const pl=document.getElementById('eqPosList'); if(pl) pl.innerHTML=''; const el=document.getElementById('eqList'); if(el) el.innerHTML=''; }
-  document.getElementById('eqList').innerHTML=''; hideGeqDock();
+  hideGeqDock();
   updateEqUI();
   areas=[]; renderAreaList();
-  document.getElementById('areaEqCanvas').style.display='none';
-  document.getElementById('areaEqList').innerHTML='';
-  tfResult=null; document.getElementById('tfGeqList').innerHTML='';
-  document.getElementById('tfCanvas').style.display='none';
+  const ac=document.getElementById('areaEqCanvas'); if(ac) ac.style.display='none';
+  const al=document.getElementById('areaEqList'); if(al) al.innerHTML='';
+  tfResult=null; const tg=document.getElementById('tfGeqList'); if(tg) tg.innerHTML='';
+  const tc=document.getElementById('tfCanvas'); if(tc) tc.style.display='none';
   resetDelay();
-  fbTrack.clear(); fbPanel.innerHTML='';
+  fbTrack.clear(); if(fbPanel) fbPanel.innerHTML='';
   leqSumP=0; leqN=0; splMax=-120; lvlPeak=-120;
   targetMode='flat'; document.querySelectorAll('.tgtSeg button').forEach(b=>b.classList.toggle('on', b.dataset.t==='flat'));
-  weightMode='Z'; const wb=document.getElementById('wgtBtn'); wb.textContent='dBZ'; wb.classList.remove('on'); document.getElementById('wLbl').textContent='Z';
-  if(viewMin!==FMIN||viewMax!==FMAX){ viewMin=FMIN; viewMax=FMAX; buildBands(curBpo); document.getElementById('zoomBtn').style.display='none'; }
+  weightMode='Z'; const wb=document.getElementById('wgtBtn'); if (wb) { wb.textContent='dBZ'; wb.classList.remove('on'); } const wLbl=document.getElementById('wLbl'); if (wLbl) wLbl.textContent='Z';
+  if(viewMin!==FMIN||viewMax!==FMAX){ viewMin=FMIN; viewMax=FMAX; buildBands(curBpo); const zb=document.getElementById('zoomBtn'); if(zb) zb.style.display='none'; }
   if(genOn) genStop();
   closeModals();
 }
 
 function setMode(m){
   mode=m;
-  document.getElementById('mRta').classList.toggle('on',m==='rta');
-  document.getElementById('mSpec').classList.toggle('on',m==='spec');
+  const mr = document.getElementById('mRta'); if (mr) mr.classList.toggle('on',m==='rta');
+  const ms = document.getElementById('mSpec'); if (ms) ms.classList.toggle('on',m==='spec');
   if(specCtx){
     specCtx.fillStyle=sunMode ? '#f8fafc' : '#0d1117';
     specCtx.fillRect(0,0,specCanvas.width,specCanvas.height);
@@ -1656,7 +1767,7 @@ function buildWeighting(nyquist,bins){
 }
 
 async function start(deviceId){
-  errBox.style.display='none';
+  if (errBox) errBox.style.display='none';
   try{
     const audio = {
       echoCancellation: false,
@@ -1688,7 +1799,7 @@ async function start(deviceId){
 
     const track = stream.getAudioTracks()[0];
     track.addEventListener('ended',()=>{
-      if(!running) return;
+      if(!running || !errBox) return;
       errBox.style.display='block';
       errBox.textContent='מקור הקלט נותק. חבר מחדש ולחץ "אפס סשן".';
     });
@@ -1703,7 +1814,8 @@ async function start(deviceId){
 
     analyser = audioCtx.createAnalyser();
     analyser.fftSize = fftSize;
-    analyser.smoothingTimeConstant = parseFloat(document.getElementById('smooth').value);
+    const smEl = document.getElementById('smooth');
+    analyser.smoothingTimeConstant = smEl ? parseFloat(smEl.value) : 0.7;
     analyser.minDecibels = -100; 
     analyser.maxDecibels = -10;
 
@@ -1731,17 +1843,20 @@ async function start(deviceId){
     
     buildWeighting(audioCtx.sampleRate / 2, analyser.frequencyBinCount);
     resize();
-    peaks.fill(0); fbTrack.clear(); fbPanel.innerHTML = ''; lvlPeak = -120;
+    peaks.fill(0); fbTrack.clear(); if(fbPanel) fbPanel.innerHTML = ''; lvlPeak = -120;
     leqSumP = 0; leqN = 0; splMax = -120;
     smoothedDbfs = -120;
-    running = true; idle.style.display = 'none'; dot.classList.add('live');
-    meterEl.style.display = 'flex'; document.getElementById('stats').style.display = 'flex';
-    document.getElementById('stopBtn').style.display = '';
+    running = true; if(idle) idle.style.display = 'none'; if(dot) dot.classList.add('live');
+    if(meterEl) meterEl.style.display = 'flex';
+    const stEl = document.getElementById('stats'); if(stEl) stEl.style.display = 'flex';
+    const sbEl = document.getElementById('stopBtn'); if(sbEl) sbEl.style.display = '';
     populateInputs();
     draw();
   } catch(e) {
-    errBox.style.display = 'block';
-    errBox.textContent = 'לא ניתן לגשת למיקרופון: ' + (e.message || e.name) + '. יש לאשר הרשאה ולהריץ מעל HTTPS.';
+    if (errBox) {
+      errBox.style.display = 'block';
+      errBox.textContent = 'לא ניתן לגשת למיקרופון: ' + (e.message || e.name) + '. יש לאשר הרשאה ולהריץ מעל HTTPS.';
+    }
   }
 }
 
@@ -1751,29 +1866,34 @@ async function populateInputs(){
     const devs=await navigator.mediaDevices.enumerateDevices();
     const ins=devs.filter(d=>d.kind==='audioinput');
     const sel=document.getElementById('inSel');
-    sel.innerHTML='';
-    { const o=document.createElement('option'); o.value=''; o.textContent='ברירת מחדל של המערכת'; sel.appendChild(o); }
-    ins.forEach((d,i)=>{
-      if(d.deviceId==='default'||d.deviceId==='') return;
-      const o=document.createElement('option');
-      o.value=d.deviceId; o.textContent=d.label||('מיקרופון '+(i+1));
-      sel.appendChild(o);
-    });
-    sel.value = userPickedIn ? (activeInId||'') : '';
+    if (sel) {
+      sel.innerHTML='';
+      { const o=document.createElement('option'); o.value=''; o.textContent='ברירת מחדל של המערכת'; sel.appendChild(o); }
+      ins.forEach((d,i)=>{
+        if(d.deviceId==='default'||d.deviceId==='') return;
+        const o=document.createElement('option');
+        o.value=d.deviceId; o.textContent=d.label||('מיקרופון '+(i+1));
+        sel.appendChild(o);
+      });
+      sel.value = userPickedIn ? (activeInId||'') : '';
+    }
 
     const outs=devs.filter(d=>d.kind==='audiooutput');
     const osel=document.getElementById('outSel');
-    osel.innerHTML='';
-    { const o=document.createElement('option'); o.value=''; o.textContent='ברירת מחדל של המערכת'; osel.appendChild(o); }
-    outs.forEach((d,i)=>{
-      if(d.deviceId==='default'||d.deviceId==='') return;
-      const o=document.createElement('option');
-      o.value=d.deviceId; o.textContent=d.label||('פלט '+(i+1));
-      osel.appendChild(o);
-    });
-    osel.value = userPickedOut ? (outSinkId||'') : '';
+    if (osel) {
+      osel.innerHTML='';
+      { const o=document.createElement('option'); o.value=''; o.textContent='ברירת מחדל של המערכת'; osel.appendChild(o); }
+      outs.forEach((d,i)=>{
+        if(d.deviceId==='default'||d.deviceId==='') return;
+        const o=document.createElement('option');
+        o.value=d.deviceId; o.textContent=d.label||('פלט '+(i+1));
+        osel.appendChild(o);
+      });
+      osel.value = userPickedOut ? (outSinkId||'') : '';
+    }
   }catch(e){}
 }
+
 let outSinkId=null;
 async function applyOutput(deviceId){
   outSinkId=deviceId;
@@ -1782,7 +1902,8 @@ async function applyOutput(deviceId){
   }catch(e){}
   return false;
 }
-document.getElementById('outSel').addEventListener('change',async e=>{
+
+safeAddListener('outSel', 'change', async e=>{
   userPickedOut = e.target.value!=='';
   const ok=await applyOutput(e.target.value);
   if(!ok) alert('הדפדפן לא תומך בבחירת יציאת פלט. הגדר את הפלט ב־macOS: הגדרות → סאונד → פלט.');
@@ -1805,11 +1926,12 @@ function stop(){
   const gb=document.getElementById('genOnBtn'); if(gb){gb.classList.remove('on');gb.textContent='▶ הפעל אות';}
   if(stream) stream.getTracks().forEach(t=>t.stop());
   if(audioCtx) audioCtx.close();
-  dot.classList.remove('live'); idle.style.display='flex';
-  document.getElementById('stopBtn').style.display='none';
-  meterEl.style.display='none'; document.getElementById('stats').style.display='none';
-  peakHzEl.textContent='—'; fbPanel.innerHTML='';
-  ctx.clearRect(0,0,cv.clientWidth,cv.clientHeight);
+  if(dot) dot.classList.remove('live'); if(idle) idle.style.display='flex';
+  const sbEl = document.getElementById('stopBtn'); if(sbEl) sbEl.style.display='none';
+  if(meterEl) meterEl.style.display='none';
+  const stEl = document.getElementById('stats'); if(stEl) stEl.style.display='none';
+  if(peakHzEl) peakHzEl.textContent='—'; if(fbPanel) fbPanel.innerHTML='';
+  if(ctx && cv) ctx.clearRect(0,0,cv.clientWidth,cv.clientHeight);
 }
 
 function norm(db){ return Math.max(0,Math.min(1,(db-floorDb)/(ceilDb-floorDb))); }
@@ -1836,10 +1958,12 @@ function updateLevel(){
   const now=performance.now();
   if(smoothedDbfs>lvlPeak || now-lvlPeakT>1500){ lvlPeak=smoothedDbfs; lvlPeakT=now; }
   const pct=v=>Math.max(0,Math.min(100,(v+60)/60*100));
-  meterFill.style.width=pct(smoothedDbfs)+'%';
-  meterPeak.style.insetInlineStart=pct(lvlPeak)+'%';
-  if(meterUnit==='SPL') meterVal.textContent=(smoothedDbfs+calib).toFixed(0)+' dB SPL≈';
-  else meterVal.textContent=smoothedDbfs.toFixed(1)+' dBFS';
+  if(meterFill) meterFill.style.width=pct(smoothedDbfs)+'%';
+  if(meterPeak) meterPeak.style.insetInlineStart=pct(lvlPeak)+'%';
+  if(meterVal) {
+    if(meterUnit==='SPL') meterVal.textContent=(smoothedDbfs+calib).toFixed(0)+' dB SPL≈';
+    else meterVal.textContent=smoothedDbfs.toFixed(1)+' dBFS';
+  }
 
   const w = weightMode==='A'?weightA : weightMode==='C'?weightC : null;
   let p=0;
@@ -1853,9 +1977,9 @@ function updateLevel(){
   const leq = 10*Math.log10(leqSumP/Math.max(1,leqN)+1e-12) + calib;
   const unit = calib>0 ? ' dB'+weightMode : '';
   const fmt=x=>x.toFixed(1)+unit;
-  document.getElementById('splNow').textContent=fmt(lvl);
-  document.getElementById('splLeq').textContent=fmt(leq);
-  document.getElementById('splMax').textContent=fmt(splMax);
+  const sNow = document.getElementById('splNow'); if(sNow) sNow.textContent=fmt(lvl);
+  const sLeq = document.getElementById('splLeq'); if(sLeq) sLeq.textContent=fmt(leq);
+  const sMax = document.getElementById('splMax'); if(sMax) sMax.textContent=fmt(splMax);
 }
 
 let _lastDraw=0;
@@ -1876,7 +2000,7 @@ function draw(){
     for(let i=0;i<srcData.length;i++) areaAccum[i]+=db2lin(srcData[i]);
     areaFrames++;
   }
-  if(analyserRef && floatDataRef && (tfState==='measuring' || tfPanel.classList.contains('open'))){
+  if(analyserRef && floatDataRef && (tfState==='measuring' || (tfPanel && tfPanel.classList.contains('open')))){
     analyserRef.getFloatFrequencyData(floatDataRef);
     if(tfState==='measuring' && tfMic){
       const mic = tfSwap? floatDataRef : floatData;
@@ -1887,25 +2011,25 @@ function draw(){
       }
       tfFrames++;
     }
-    if(tfPanel.classList.contains('open')) updateTfLevels();
+    if(tfPanel && tfPanel.classList.contains('open')) updateTfLevels();
   }
-  if(analyserRef && floatDataRef && dlyPanel.classList.contains('open')){
+  if(analyserRef && floatDataRef && dlyPanel && dlyPanel.classList.contains('open')){
     analyser.getFloatTimeDomainData(timeData);
     if(!timeDataRef || timeDataRef.length!==analyserRef.fftSize) timeDataRef=new Float32Array(analyserRef.fftSize);
     analyserRef.getFloatTimeDomainData(timeDataRef);
     setGain('dlyMic', levelDb(timeData,2048));
     setGain('dlyRef', levelDb(timeDataRef,2048));
   }
-  if(eqPanel.classList.contains('open')){
+  if(eqPanel && eqPanel.classList.contains('open')){
     analyser.getFloatTimeDomainData(timeData);
     const targetData = timeData;
     setGainEl(document.getElementById('eqMicFill'), document.getElementById('eqMicGain'), levelDb(targetData,2048));
   }
-  if(areaPanel.classList.contains('open')){
+  if(areaPanel && areaPanel.classList.contains('open')){
     analyser.getFloatTimeDomainData(timeData);
     setGainEl(document.getElementById('areaMicFill'), document.getElementById('areaMicGain'), levelDb(timeData,2048));
   }
-  if(genPanel.classList.contains('open')){
+  if(genPanel && genPanel.classList.contains('open')){
     analyser.getFloatTimeDomainData(timeData);
     const micDb=levelDb(timeData,2048);
     setGainEl(document.getElementById('gainMicFill'), document.getElementById('gainMicGain'), micDb);
@@ -1920,11 +2044,12 @@ function draw(){
       tip.textContent=msg; tip.style.color=col;
     }
   }
-  if(rtPanel.classList.contains('open')){
+  if(rtPanel && rtPanel.classList.contains('open')){
     analyser.getFloatTimeDomainData(timeData);
     setGainEl(document.getElementById('rtLvlFill'), document.getElementById('rtLvlGain'), levelDb(timeData,2048));
   }
   updateLevel();
+  if(!cv || !ctx) return;
   const W=cv.clientWidth,H=cv.clientHeight;
   const nyquist=audioCtx.sampleRate/2, bins=floatData.length;
   const logMin=Math.log(ISO[0]), logMax=Math.log(ISO[BANDS-1]);
@@ -2004,7 +2129,7 @@ function drawRta(W,H,nyquist,bins,xForFreq){
   [0.25,0.5,0.75].forEach(p=>{ctx.globalAlpha=.3;ctx.strokeStyle=sunMode?'#cbd5e1':'#2b3646';ctx.beginPath();ctx.moveTo(0,plotH*p);ctx.lineTo(W,plotH*p);ctx.stroke();ctx.globalAlpha=1;});
 
   const bw=W/BANDS, gap=Math.max(0.5,bw*0.12);
-  const tfOpen = ((tfOverlay || (typeof tfPanel!=='undefined' && tfPanel.classList.contains('open'))) && floatDataRef && analyserRef);
+  const tfOpen = ((tfOverlay || (typeof tfPanel!=='undefined' && tfPanel && tfPanel.classList.contains('open'))) && floatDataRef && analyserRef);
   
   const qBar = document.getElementById('tfQuickBar');
   if(qBar) qBar.classList.toggle('show', tfOpen);
@@ -2144,7 +2269,7 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     ctx.strokeStyle='rgba(47,155,255,.8)'; ctx.lineWidth=1;
     ctx.strokeRect(xa,0,xb-xa,plotH);
   }
-  if(targetMode!=='off' && (eqPanel.classList.contains('open')||areaPanel.classList.contains('open'))){
+  if(targetMode!=='off' && ((eqPanel && eqPanel.classList.contains('open'))||(areaPanel && areaPanel.classList.contains('open')))){
     ctx.strokeStyle='rgba(80,230,140,.8)'; ctx.setLineDash([6,5]); ctx.lineWidth=2; ctx.beginPath();
     for(let b=0;b<BANDS;b++){
       const ty=Math.max(0.05, Math.min(0.95, 0.55 + targetDb(ISO[b])*0.03));
@@ -2212,7 +2337,7 @@ function drawRta(W,H,nyquist,bins,xForFreq){
   let exactHz=0;
   if(peakBand>=0 && peakVal>0.05){
     const fc=ISO[peakBand];
-    let lo=Math.floor((fc/R)/nyquist*bins), hi=Math.ceil((fc*R)/nyquist*bins);
+    let lo=Math.floor((fc/R)/nyquist*bins), hi=Math.ceil((fc/R)/nyquist*bins);
     lo=Math.max(1,lo); hi=Math.min(bins-1,hi);
     let bMax=-999, bi=lo;
     for(let i=lo;i<=hi;i++){ if(floatData[i]>bMax){ bMax=floatData[i]; bi=i; } }
@@ -2221,11 +2346,14 @@ function drawRta(W,H,nyquist,bins,xForFreq){
       if(d!==0) idx=bi+0.5*(a-c)/d; }
     exactHz=idx*nyquist/bins;
   }
-  peakHzEl.textContent = exactHz>0
-    ? (exactHz>=1000?(exactHz/1000).toFixed(3)+' kHz':Math.round(exactHz)+' Hz') : '—';
+  if(peakHzEl) {
+    peakHzEl.textContent = exactHz>0
+      ? (exactHz>=1000?(exactHz/1000).toFixed(3)+' kHz':Math.round(exactHz)+' Hz') : '—';
+  }
 }
 
 function drawSpec(W,H,nyquist,bins,xForFreq){
+  if(!specCtx || !specCanvas) return;
   specCtx.drawImage(specCanvas,0,-1);
   const y=specCanvas.height-1;
   for(let px=0;px<specCanvas.width;px++){
@@ -2247,7 +2375,7 @@ function drawSpec(W,H,nyquist,bins,xForFreq){
   });
   let pk=-Infinity,pkf=0;
   for(let i=1;i<bins;i++){ if(floatData[i]>pk){pk=floatData[i]; pkf=i*nyquist/bins;} }
-  peakHzEl.textContent= pk>floorDb ? (pkf>=1000?(pkf/1000).toFixed(1)+' kHz':Math.round(pkf)+' Hz') : '—';
+  if(peakHzEl) peakHzEl.textContent= pk>floorDb ? (pkf>=1000?(pkf/1000).toFixed(1)+' kHz':Math.round(pkf)+' Hz') : '—';
 }
 
 const FB_MINDB=-50;
@@ -2294,7 +2422,8 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v159';
+const verEl = document.getElementById('ver');
+if(verEl) verEl.textContent='v159';
 
 let accentRgb=[62,166,255];
 function applyAccent(hex){
@@ -2307,7 +2436,7 @@ function applyAccent(hex){
 function lsGet(k){ try{ return localStorage.getItem(k); }catch(_){ return null; } }
 function prefSet(k,v){ try{ localStorage.setItem(k, v); }catch(_){} }
 
-document.getElementById('refCurveBtn').addEventListener('click',function(){
+safeAddListener('refCurveBtn', 'click', function(){
   if(refCurve){ refCurve=null; this.classList.remove('on'); this.textContent='שמור כ״לפני״'; return; }
   if(!running || !lastV.length){ alert('הפעל מיקרופון ונגן אות לפני שמירת עקומת ייחוס.'); return; }
   refCurve={ v:lastV.slice(), bands:BANDS };
@@ -2318,6 +2447,7 @@ const SAVE_KEY='rta_saves';
 let saves=[];
 function loadSaves(){ try{ const r=lsGet(SAVE_KEY); saves=r?JSON.parse(r):[]; }catch(_){ saves=[]; } }
 function persistSaves(){ try{ localStorage.setItem(SAVE_KEY, JSON.stringify(saves)); }catch(_){ alert('לא ניתן לשמור (אחסון מלא או חסום).'); } }
+
 function snapshotState(name){
   return {
     id:'s'+Date.now(), name:name, date:new Date().toISOString().slice(0,10),
@@ -2329,6 +2459,7 @@ function snapshotState(name){
     calName: micCal ? (micCalList.find(c=>c.id===activeCalId)||{}).name||null : null
   };
 }
+
 function renderSaveList(){
   const box=document.getElementById('saveList'); if(!box) return;
   if(!saves.length){ box.innerHTML='<div class="sub">אין מדידות שמורות עדיין.</div>'; return; }
@@ -2348,6 +2479,7 @@ function renderSaveList(){
     saves=saves.filter(x=>x.id!==b.dataset.rm); persistSaves(); renderSaveList();
   }));
 }
+
 function loadSave(id){
   const s=saves.find(x=>x.id===id); if(!s) return;
   if(measureBusy()){ alert('מדידה פעילה — המתן לסיומה.'); return; }
@@ -2371,10 +2503,12 @@ function loadSave(id){
   if(s.calName && (!micCal || (micCalList.find(c=>c.id===activeCalId)||{}).name!==s.calName))
     alert('שים לב: המדידה נשמרה עם כיול "'+s.calName+'". ודא שאותו כיול פעיל.');
 }
-document.getElementById('saveBtn').addEventListener('click',()=>{ renderSaveList(); showModal(savePanel); });
-document.getElementById('saveClose').addEventListener('click',closeModals);
-document.getElementById('saveNowBtn').addEventListener('click',()=>{
+
+safeAddListener('saveBtn', 'click', ()=>{ renderSaveList(); showModal(savePanel); });
+safeAddListener('saveClose', 'click', closeModals);
+safeAddListener('saveNowBtn', 'click', ()=>{
   const inp=document.getElementById('saveName');
+  if(!inp) return;
   const name=(inp.value||'').trim();
   if(!name){ alert('תן שם למדידה.'); inp.focus(); return; }
   if(!eqPositions.length && !areas.length && !dlySpeakers.some(s=>s.ms!=null)){
@@ -2398,15 +2532,17 @@ loadSaves();
   if(tgt) setTarget(tgt);
   const wgt=lsGet('rta_wgt');
   if(wgt && wgt!=='Z'){ weightMode=wgt; const wb=document.getElementById('wgtBtn');
-    wb.textContent='dB'+wgt; wb.classList.add('on'); document.getElementById('wLbl').textContent=wgt; }
+    if(wb) { wb.textContent='dB'+wgt; wb.classList.add('on'); } const wLbl=document.getElementById('wLbl'); if(wLbl) wLbl.textContent=wgt; }
   const sm = lsGet('rta_sunmode');
   if(sm === '1'){ sunMode = true; document.body.classList.add('sun-mode'); const sb = document.getElementById('sunBtn'); if(sb) sb.classList.add('on'); }
 })();
+
 (function initAccent(){
   const saved=lsGet('rta_accent');
   if(saved){ applyAccent(saved);
     document.querySelectorAll('#swatches .sw').forEach(b=>b.classList.toggle('on', b.dataset.c===saved)); }
 })();
+
 document.querySelectorAll('#swatches .sw').forEach(b=>b.addEventListener('click',function(){
   document.querySelectorAll('#swatches .sw').forEach(x=>x.classList.remove('on'));
   this.classList.add('on'); applyAccent(this.dataset.c);
@@ -2415,6 +2551,7 @@ document.querySelectorAll('#swatches .sw').forEach(b=>b.addEventListener('click'
 const sigTint=document.getElementById('sigTint');
 let _lastTint='';
 function updateSignalTint(){
+  if (!sigTint) return;
   if(!genOn){ if(_lastTint!==''){ sigTint.classList.remove('on'); _lastTint=''; } return; }
   let rgb=null;
   if(genType==='white') rgb='rgba(235,242,250,.16)';
@@ -2427,6 +2564,7 @@ function updateSignalTint(){
   if(rgb){ if(rgb!==_lastTint){ sigTint.style.boxShadow='inset 0 0 140px 30px '+rgb; _lastTint=rgb; } sigTint.classList.add('on'); }
   else if(_lastTint!==''){ sigTint.classList.remove('on'); _lastTint=''; }
 }
+
 const HELP={
   mRta:'תצוגת ספקטרום — עוצמה לפי תדר, בזמן אמת.',
   mSpec:'ווטרפול — הספקטרום לאורך זמן.',
@@ -2488,18 +2626,22 @@ const HELP={
   geqShowBtn:'הצג/הסתר את תצוגת תיקון ה-EQ\n(בנק הפיידרים מתחת לגרף).',
   combBtn:'בדיקת ביטולי פאזה (comb): מזהה אדוות\nתקופתיות בגרף ומעריך את הפרש הזמן שגורם להן.'
 };
+
 let helpMode=false;
 const helpTip=document.createElement('div'); helpTip.id='helpTip'; document.body.appendChild(helpTip);
-document.getElementById('helpBtn').addEventListener('click',function(){
+
+safeAddListener('helpBtn', 'click', function(){
   helpMode=!helpMode; this.classList.toggle('on',helpMode); document.body.classList.toggle('help-on',helpMode);
   if(!helpMode) helpTip.style.display='none';
 });
+
 function helpTextFor(target){
   let txt=null;
   const idEl=target.closest && target.closest('[id]'); if(idEl) txt=HELP[idEl.id];
   if(!txt && target.closest){ const cEl=target.closest('.tgtSeg'); if(cEl) txt=HELP.tgtSeg; }
   return txt;
 }
+
 function showHelpTip(txt,cx,cy){
   if(!txt){ helpTip.style.display='none'; return; }
   helpTip.textContent=txt; helpTip.style.whiteSpace='pre-line'; helpTip.style.display='block';
@@ -2507,6 +2649,7 @@ function showHelpTip(txt,cx,cy){
   const y=Math.max(8,Math.min(cy+16, innerHeight-helpTip.offsetHeight-10));
   helpTip.style.left=x+'px'; helpTip.style.top=y+'px';
 }
+
 document.addEventListener('mousemove',e=>{
   if(!helpMode) return;
   showHelpTip(helpTextFor(e.target), e.clientX, e.clientY);
@@ -2563,11 +2706,17 @@ if(navigator.mediaDevices && navigator.mediaDevices.addEventListener){
 }
 document.addEventListener('visibilitychange',()=>{ if(!document.hidden) reviveAudio(); });
 window.addEventListener('focus',reviveAudio);
+
 resize();
+
 if('ResizeObserver' in window){
-  const _ro=new ResizeObserver(()=>{ resize(); });
-  _ro.observe(document.getElementById('stage'));
+  const stageEl = document.getElementById('stage');
+  if (stageEl) {
+    const _ro=new ResizeObserver(()=>{ resize(); });
+    _ro.observe(stageEl);
+  }
 }
+
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
     navigator.serviceWorker.register('sw.js').then(reg=>{
