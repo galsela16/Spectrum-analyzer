@@ -12,7 +12,6 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <title>גל אנלייזר</title>
 <style>
-  /* Heebo — bundled locally for offline PWA. Hebrew + Latin (numbers) subsets per weight. */
   @font-face{font-family:'Heebo';font-style:normal;font-weight:400;font-display:swap;
     src:url('fonts/heebo-latin-400-normal.woff2') format('woff2');
     unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+2000-206F,U+2074,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215;}
@@ -67,6 +66,23 @@
   .modes button.on{border-color:var(--accent);color:var(--accent);background:rgba(47,155,255,.08)}
   #stage{flex:1;position:relative;min-height:0}
   #stage>canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+  
+  .tfQuickBar{
+    position:absolute; top:10px; inset-inline-start:10px; z-index:8;
+    display:none; gap:6px; background:rgba(13,17,23,.85); backdrop-filter:blur(6px);
+    padding:5px 8px; border:1px solid var(--line); border-radius:6px; box-shadow:0 4px 16px rgba(0,0,0,.4);
+  }
+  body.sun-mode .tfQuickBar{ background:rgba(255,255,255,.9); }
+  .tfQuickBar.show{ display:flex; align-items:center; }
+  .tfQuickBar button{
+    border:1px solid var(--line); background:var(--panel-2); color:var(--text);
+    font-family:inherit; font-size:11px; font-weight:600; padding:5px 10px;
+    border-radius:4px; cursor:pointer; transition:.12s; white-space:nowrap;
+  }
+  .tfQuickBar button.on{
+    border-color:var(--accent); color:var(--accent); background:rgba(62,166,255,.16);
+  }
+
   .idle{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
     gap:16px;text-align:center;padding:24px;z-index:4}
   .idle p{color:var(--dim);font-size:13px;line-height:1.7;max-width:300px}
@@ -332,6 +348,14 @@
 
   <div id="stage">
     <canvas id="cv"></canvas>
+    
+    <!-- Quick Floating Bar for Live TF Mode -->
+    <div id="tfQuickBar" class="tfQuickBar">
+      <button id="qbAutoDelay" title="סנכרון דיליי אוטומטי">⏱️ Auto-Delay</button>
+      <button id="qbCoh" class="on" title="הצג/הסתר קוהרנטיות">📊 Coh</button>
+      <button id="qbPhase" title="הצג/הסתר פאזה">📐 Phase</button>
+    </div>
+
     <div id="fbPanel"></div>
     <div class="readout"><span>PEAK</span><b id="peakHz">—</b></div>
     <div class="stats" id="stats" style="display:none">
