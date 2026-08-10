@@ -6,6 +6,7 @@ let ISO=[], BANDS=0, R=1;
 let peaks=[];
 let avgBuf=[], snapCurve=null, lastV=[], lastBandDb=[], frozen=false;
 let refCurve=null;
+let abA=null, abB=null, abView='off';
 let sunMode=false;
 
 // ---- TF Advanced Engine Variables ----
@@ -291,7 +292,7 @@ safeOn('jsonFileInput', 'change', importSessionJson);
 
 function exportSessionJson(){
   const data = {
-    version: 'v161',
+    version: 'v162',
     timestamp: new Date().toISOString(),
     saves: saves,
     eqPositions: eqPositions.map(p=>({name:p.name, db:Array.from(p.db)})),
@@ -2110,6 +2111,37 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     ctx.fillStyle='#b57bff'; ctx.font='11px monospace'; ctx.textAlign='start';
     ctx.fillText('- - לפני', 10, tfOpen?(showTfCoh&&showTfPhase?70:showTfCoh||showTfPhase?56:42):14);
   }
+
+  // ---- השוואת A/B (לפני/אחרי כיוון) ----
+  if(abView!=='off' && (abA || abB)){
+    const trace=(snap,color)=>{
+      if(!snap || !snap.f || !snap.f.length) return;
+      ctx.strokeStyle=color; ctx.lineWidth=2; ctx.beginPath();
+      for(let i=0;i<snap.f.length;i++){
+        const x=xForFreq(snap.f[i]), yy=plotH-norm(snap.db[i])*plotH;
+        i===0?ctx.moveTo(x,yy):ctx.lineTo(x,yy);
+      }
+      ctx.stroke();
+    };
+    ctx.font='11px monospace'; ctx.textAlign='start';
+    let ly = tfOpen ? 92 : 28;
+    if((abView==='A'||abView==='both') && abA){ trace(abA,'#f59e0b'); ctx.fillStyle='#f59e0b'; ctx.fillText('— לפני (A)',10,ly); ly+=14; }
+    if((abView==='B'||abView==='both') && abB){ trace(abB,'#22c55e'); ctx.fillStyle='#22c55e'; ctx.fillText('— אחרי (B)',10,ly); ly+=14; }
+    if(abView==='delta' && abA && abB){
+      const midY=plotH/2;
+      ctx.setLineDash([4,4]); ctx.strokeStyle=sunMode?'rgba(0,0,0,.25)':'rgba(255,255,255,.28)';
+      ctx.beginPath(); ctx.moveTo(0,midY); ctx.lineTo(W,midY); ctx.stroke(); ctx.setLineDash([]);
+      ctx.strokeStyle='#39d98a'; ctx.lineWidth=2.5; ctx.beginPath();
+      const n=Math.min(abA.f.length, abB.f.length);
+      for(let i=0;i<n;i++){
+        const diff=abB.db[i]-abA.db[i];
+        const x=xForFreq(abA.f[i]), yy=midY-(diff*(plotH/40));
+        i===0?ctx.moveTo(x,yy):ctx.lineTo(x,yy);
+      }
+      ctx.stroke();
+      ctx.fillStyle='#39d98a'; ctx.fillText('Δ אחרי−לפני · קו אמצע=0 · טווח ±20dB',10,ly);
+    }
+  }
   if(snapCurve && snapCurve.length===BANDS){
     ctx.strokeStyle='#ffb020'; ctx.lineWidth=2; ctx.beginPath();
     for(let b=0;b<BANDS;b++){
@@ -2295,7 +2327,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v161';
+document.getElementById('ver').textContent='v162';
 
 let accentRgb=[62,166,255];
 function applyAccent(hex){
@@ -2314,6 +2346,27 @@ safeOn('refCurveBtn', 'click',function(){
   refCurve={ v:lastV.slice(), bands:BANDS };
   this.classList.add('on'); this.textContent='נקה ״לפני״';
 });
+
+// ---- A/B: לפני/אחרי כיוון ----
+function abSnapshot(){ return { f: ISO.slice(), db: lastBandDb.slice() }; }
+function syncAbSeg(){ document.querySelectorAll('#abViewSeg button').forEach(x=>x.classList.toggle('on', x.dataset.v===abView)); }
+safeOn('abCapA','click',function(){
+  if(!running || !lastBandDb.length){ alert('הפעל מיקרופון ונגן אות (למשל פינק נויז) לפני לכידת ״לפני״.'); return; }
+  abA=abSnapshot(); this.classList.add('on'); this.textContent='✓ לפני (A)';
+  if(abView==='off'){ abView='both'; syncAbSeg(); }
+});
+safeOn('abCapB','click',function(){
+  if(!running || !lastBandDb.length){ alert('הפעל מיקרופון ונגן אות לפני לכידת ״אחרי״.'); return; }
+  abB=abSnapshot(); this.classList.add('on'); this.textContent='✓ אחרי (B)';
+  if(abView==='off'){ abView='both'; syncAbSeg(); }
+});
+safeOn('abClear','click',function(){
+  abA=null; abB=null; abView='off';
+  const a=document.getElementById('abCapA'); if(a){ a.classList.remove('on'); a.textContent='לכוד לפני (A)'; }
+  const b=document.getElementById('abCapB'); if(b){ b.classList.remove('on'); b.textContent='לכוד אחרי (B)'; }
+  syncAbSeg();
+});
+document.querySelectorAll('#abViewSeg button').forEach(b=>b.addEventListener('click',function(){ abView=this.dataset.v; syncAbSeg(); }));
 
 const SAVE_KEY='rta_saves';
 let saves=[];

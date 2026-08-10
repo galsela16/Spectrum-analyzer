@@ -721,6 +721,21 @@
           </div>
         </div>
       </div>
+      <div class="trow">
+        <button class="toggle" id="abCapA" title="לכוד את התגובה הנוכחית כמצב ״לפני״ (A)">לכוד לפני (A)</button>
+        <button class="toggle" id="abCapB" title="לכוד את התגובה הנוכחית כמצב ״אחרי״ (B)">לכוד אחרי (B)</button>
+        <div class="ctrl" style="flex:0 0 auto;align-items:flex-start;min-width:auto">
+          <label>השוואת A/B</label>
+          <div class="seg" id="abViewSeg">
+            <button data-v="off" class="on">—</button>
+            <button data-v="A">A</button>
+            <button data-v="B">B</button>
+            <button data-v="both">A+B</button>
+            <button data-v="delta">Δ</button>
+          </div>
+        </div>
+        <button class="toggle" id="abClear" title="נקה את A ו-B">נקה A/B</button>
+      </div>
     </div>
 
     <div class="tabpage" data-page="tune">
@@ -748,7 +763,6 @@
           <label>כיול SPL <b id="calVal">+0dB</b></label>
           <input type="range" id="cal" min="0" max="130" step="1" value="0">
         </div>
-        <button class="toggle" id="autoCalBtn" title="כיול אוטומטי מול פיסטונפון 1kHz">🎯 כיול 1kHz</button>
         <button class="toggle" id="wgtBtn">dBZ</button>
         <button class="toggle" id="leqBtn">אפס Leq</button>
       </div>
