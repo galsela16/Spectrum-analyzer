@@ -2269,15 +2269,57 @@ function drawRta(){
     if(!frozen) analyser.getFloatFrequencyData(floatData);
     if(typeof computeComplexTf === 'function') computeComplexTf(floatData, floatDataRef);
 
+    const nBins = floatData.length;
+
+    // חשב dB לכל רצועת ISO ע"י איגוד הבינים בתוך רוחב הרצועה (fc/R .. fc*R)
+    if(!frozen){
+      for(let b = 0; b < BANDS; b++){
+        const fc = ISO[b];
+        const corr = typeof getCalCorrection === 'function' ? getCalCorrection(fc) : 0;
+        let dB = bandDbFromBins(floatData, fc / R, fc * R, nyquist, nBins) + calib + corr;
+        if(avgOn){
+          const lin = db2lin(dB);
+          avgBuf[b] = avgBuf[b] > 0 ? (avgBuf[b] * 0.85 + lin * 0.15) : lin;
+          dB = 10 * Math.log10(avgBuf[b] + 1e-12);
+        }
+        lastBandDb[b] = dB;
+        lastV[b] = norm(dB);
+        if(lastV[b] > peaks[b]) peaks[b] = lastV[b];
+        else peaks[b] = Math.max(0, peaks[b] - 0.004);
+      }
+    }
+
+    // עקומת ״לפני״ (refCurve) — קו מקווקו אפור
+    if(refCurve && refCurve.v && refCurve.bands === BANDS){
+      ctx.beginPath();
+      ctx.strokeStyle = sunMode ? 'rgba(100,116,139,0.9)' : 'rgba(148,163,184,0.7)';
+      ctx.lineWidth = 1.5; ctx.setLineDash([5,4]);
+      for(let b = 0; b < BANDS; b++){
+        const x = xForFreq(ISO[b]), y = plotH - refCurve.v[b] * plotH;
+        b === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.stroke(); ctx.setLineDash([]);
+    }
+
+    // Peak Hold — שכבת שיאים שקופה
+    if(peakHold){
+      ctx.beginPath();
+      ctx.strokeStyle = sunMode ? 'rgba(2,132,199,0.35)' : 'rgba(62,166,255,0.35)';
+      ctx.lineWidth = 1;
+      for(let b = 0; b < BANDS; b++){
+        const x = xForFreq(ISO[b]), y = plotH - peaks[b] * plotH;
+        b === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+    }
+
+    // העקומה החיה (או הקפואה) — נקודה אחת לכל רצועה
+    const curve = (frozen && snapCurve) ? snapCurve : lastV;
     ctx.beginPath();
     ctx.strokeStyle = sunMode ? '#0284c7' : '#3ea6ff'; ctx.lineWidth = 2;
-    for(let i = 0; i < floatData.length; i++){
-      const f = (i / floatData.length) * nyquist;
-      if(f < viewMin || f > viewMax) continue;
-      const x = xForFreq(f);
-      const corr = typeof getCalCorrection === 'function' ? getCalCorrection(f) : 0;
-      const y = plotH - norm(floatData[i] + calib + corr) * plotH;
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    for(let b = 0; b < BANDS; b++){
+      const x = xForFreq(ISO[b]), y = plotH - curve[b] * plotH;
+      b === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
     }
     ctx.stroke();
   }
