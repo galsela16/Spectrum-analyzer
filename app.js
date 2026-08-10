@@ -5,6 +5,8 @@ let ISO=[], BANDS=0, R=1;
 let peaks=[];
 let avgBuf=[], snapCurve=null, lastV=[], lastBandDb=[], frozen=false;
 let refCurve=null;   // 'before' curve for A/B comparison (declared early: buildBands() touches it)
+let sunMode=false;
+
 function buildBands(bpo){
   curBpo=bpo;
   ISO=[];
@@ -63,8 +65,7 @@ let genType='pink', genOn=false, genGain=null, genSrc=null, genOsc=null;
 let genDb=-34, genHz=1000, targetMode='flat';
 let fftSize=16384;   // FFT resolution (accuracy vs speed) — "balanced" default is smoother on laptops
 let _pfx=null;   // per-frame prefix-sum of linear power (perf)
-// dB→linear lookup: analyser output is clamped to [minDecibels, maxDecibels] (-100..-10),
-// so a small table covering -140..0 dB at 0.25dB steps is exact enough for power sums.
+
 const _D2L_LO=-140, _D2L_STEP=0.05, _D2L_N=Math.round((0-_D2L_LO)/_D2L_STEP)+1;
 const _d2l=new Float64Array(_D2L_N);
 for(let i=0;i<_D2L_N;i++) _d2l[i]=Math.pow(10,(_D2L_LO+i*_D2L_STEP)*0.1);
@@ -98,23 +99,34 @@ let smoothedDbfs = -120;
 
 function resize(){
   const r=cv.getBoundingClientRect();
-  // cap the backing resolution in BOTH dimensions so a maximized Retina canvas doesn't
-  // render millions of extra pixels (the cause of the full-screen slowdown).
   const MAXW=1440, MAXH=760;
   const dpr=Math.max(1, Math.min(window.devicePixelRatio||1, 2, MAXW/Math.max(1,r.width), MAXH/Math.max(1,r.height)));
   cv.width=Math.round(r.width*dpr); cv.height=Math.round(r.height*dpr);
   ctx.setTransform(dpr,0,0,dpr,0,0);
-  // preserve the waterfall history across resizes instead of wiping it
+  
   const oldSpec=specCanvas;
   const nc=document.createElement('canvas');
   nc.width=Math.max(2,Math.floor(Math.min(r.width,MAXW)));
   nc.height=Math.max(2,Math.floor(Math.min(r.height,MAXH)));
   const nctx=nc.getContext('2d');
-  nctx.fillStyle='#0d1117'; nctx.fillRect(0,0,nc.width,nc.height);
+  nctx.fillStyle=sunMode ? '#f8fafc' : '#0d1117'; 
+  nctx.fillRect(0,0,nc.width,nc.height);
   if(oldSpec){ try{ nctx.drawImage(oldSpec,0,0,nc.width,nc.height); }catch(_){} }
   specCanvas=nc; specCtx=nctx;
 }
 window.addEventListener('resize',resize);
+
+// ---- Outdoor / Sun Mode ----
+document.getElementById('sunBtn').addEventListener('click', function(){
+  sunMode = !sunMode;
+  document.body.classList.toggle('sun-mode', sunMode);
+  this.classList.toggle('on', sunMode);
+  prefSet('rta_sunmode', sunMode ? '1' : '0');
+  if(specCtx){
+    specCtx.fillStyle = sunMode ? '#f8fafc' : '#0d1117';
+    specCtx.fillRect(0,0,specCanvas.width,specCanvas.height);
+  }
+});
 
 document.getElementById('floor').addEventListener('input',e=>{
   floorDb=parseFloat(e.target.value);
@@ -132,6 +144,39 @@ document.getElementById('cal').addEventListener('input',e=>{
   document.getElementById('calVal').textContent=(calib>=0?'+':'')+calib+'dB';
   prefSet('rta_cal', e.target.value);
 });
+
+// ---- Auto SPL Calibration (1kHz Pistonphone) ----
+document.getElementById('autoCalBtn').addEventListener('click', autoCal1kHz);
+
+function autoCal1kHz(){
+  if(!running || !analyser){ alert('קודם הפעל את המיקרופון.'); return; }
+  const choice = prompt('בחר עוצמת כיול פיסטונפון (SPL):\n1 = 94 dB\n2 = 114 dB', '1');
+  if(!choice) return;
+  const targetSpl = choice === '2' ? 114 : 94;
+
+  alert('חבר את המכייל למים/מיקרופון והפעל אותו על 1kHz.\nלחץ אישור כשהאות יציב.');
+
+  analyser.getFloatFrequencyData(floatData);
+  const nyq = audioCtx.sampleRate / 2, bins = floatData.length;
+  const iLo = Math.floor(950 / nyq * bins), iHi = Math.ceil(1050 / nyq * bins);
+  
+  let peakVal = -999;
+  for(let i=iLo; i<=iHi; i++){ if(floatData[i] > peakVal) peakVal = floatData[i]; }
+
+  if(peakVal < -60){
+    alert('לא זוהה אות 1kHz מספיק חזק (נקלט: '+peakVal.toFixed(1)+' dBFS).\nודא שהמכייל פועל ומחובר היטב.');
+    return;
+  }
+
+  calib = Math.round(targetSpl - peakVal);
+  const slider = document.getElementById('cal');
+  slider.value = calib;
+  document.getElementById('calVal').textContent = (calib>=0?'+':'')+calib+'dB';
+  prefSet('rta_cal', calib);
+
+  alert('✓ הכיול הושלם בהצלחה!\nנקלט אות ב: '+peakVal.toFixed(1)+' dBFS\nכיול SPL עודכן ל: +'+calib+' dB');
+}
+
 document.getElementById('fbSens').addEventListener('input',e=>{
   fbProm = 26 - parseFloat(e.target.value);
   document.getElementById('fbSensVal').textContent = fbProm>=15?'נמוכה':fbProm>=10?'בינונית':'גבוהה';
@@ -164,7 +209,8 @@ function exportPNG(){
   const W=cv.clientWidth,H=cv.clientHeight,dpr=Math.min(window.devicePixelRatio||1,2);
   const off=document.createElement('canvas'); off.width=W*dpr; off.height=H*dpr;
   const o=off.getContext('2d'); o.scale(dpr,dpr);
-  o.fillStyle='#0d1117'; o.fillRect(0,0,W,H);
+  o.fillStyle=sunMode ? '#f8fafc' : '#0d1117'; 
+  o.fillRect(0,0,W,H);
   o.drawImage(cv,0,0,W,H);
   download('rta_'+stamp()+'.png', off.toDataURL('image/png'));
 }
@@ -172,6 +218,73 @@ function exportCSV(){
   let rows='freq_hz,level_db\n';
   for(let b=0;b<BANDS;b++) rows+=Math.round(ISO[b])+','+lastBandDb[b].toFixed(1)+'\n';
   download('rta_'+stamp()+'.csv', URL.createObjectURL(new Blob([rows],{type:'text/csv'})));
+}
+
+// ---- Full Session JSON Import / Export ----
+document.getElementById('exportJsonBtn').addEventListener('click', exportSessionJson);
+document.getElementById('importJsonBtn').addEventListener('click', ()=> document.getElementById('jsonFileInput').click());
+document.getElementById('jsonFileInput').addEventListener('change', importSessionJson);
+
+function exportSessionJson(){
+  const data = {
+    version: 'v158',
+    timestamp: new Date().toISOString(),
+    saves: saves,
+    eqPositions: eqPositions.map(p=>({name:p.name, db:Array.from(p.db)})),
+    areas: areas.map(a=>({name:a.name, color:a.color, db:Array.from(a.db), show:a.show})),
+    dlySpeakers: dlySpeakers,
+    dlyAnchor: dlyAnchor,
+    micCalList: micCalList,
+    activeCalId: activeCalId,
+    settings: {
+      calib, floorDb, curBpo, fftSize, targetMode, weightMode, sunMode
+    }
+  };
+  const jsonStr = JSON.stringify(data, null, 2);
+  const blob = new Blob([jsonStr], {type: 'application/json'});
+  download('gal_session_'+stamp()+'.json', URL.createObjectURL(blob));
+}
+
+function importSessionJson(e){
+  const file = e.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(evt){
+    try {
+      const data = JSON.parse(evt.target.result);
+      if(!data || typeof data !== 'object'){ throw new Error('קובץ לא תקין'); }
+      
+      if(data.saves) saves = data.saves;
+      if(data.eqPositions) eqPositions = data.eqPositions.map(p=>({name:p.name, db:Float32Array.from(p.db)}));
+      if(data.areas) areas = data.areas.map(a=>({name:a.name, color:a.color, db:Float32Array.from(a.db), show:a.show!==false}));
+      if(data.dlySpeakers) dlySpeakers = data.dlySpeakers;
+      if(data.dlyAnchor!==undefined) dlyAnchor = data.dlyAnchor;
+      if(data.micCalList) micCalList = data.micCalList;
+      if(data.activeCalId!==undefined) activeCalId = data.activeCalId;
+      
+      if(data.settings){
+        const s = data.settings;
+        if(s.calib!==undefined){ calib = s.calib; document.getElementById('cal').value = calib; document.getElementById('calVal').textContent=(calib>=0?'+':'')+calib+'dB'; }
+        if(s.floorDb!==undefined){ floorDb = s.floorDb; document.getElementById('floor').value = floorDb; document.getElementById('floorVal').textContent=floorDb+'dB'; }
+        if(s.targetMode) setTarget(s.targetMode);
+        if(s.sunMode!==undefined){ sunMode = s.sunMode; document.body.classList.toggle('sun-mode', sunMode); document.getElementById('sunBtn').classList.toggle('on', sunMode); }
+      }
+
+      persistSaves();
+      saveCalStore();
+      deriveActiveCal();
+      renderSaveList();
+      renderEqList();
+      renderAreaList();
+      renderDlySpk();
+      if(eqPositions.length) computeAndShow();
+      alert('✓ הסשן נטען בהצלחה!');
+    } catch(err) {
+      alert('שגיאה שטעינת הקובץ: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
 }
 
 document.getElementById('wgtBtn').addEventListener('click',function(){
@@ -255,7 +368,7 @@ function genStop(){
 function scheduleSweepCycle(){
   if(!genOn || genType!=='sweep' || !genOsc) return;
   const t=audioCtx.currentTime;
-  sweepStartT=t;   // for the signal-tint hue tracking
+  sweepStartT=t;
   try{
     genOsc.frequency.cancelScheduledValues(t);
     genOsc.frequency.setValueAtTime(20, t);
@@ -265,7 +378,7 @@ function scheduleSweepCycle(){
 }
 function genStart(){
   if(!running||!audioCtx){ alert('קודם הפעל את המיקרופון (כדי שהאודיו יהיה פעיל).'); return; }
-  if(audioCtx.state==='suspended') audioCtx.resume();   // safety: ensure output is live
+  if(audioCtx.state==='suspended') audioCtx.resume();
   genStop();
   genGain=audioCtx.createGain(); genGain.gain.value=0;
   if(genType==='sine' || genType==='sweep'){
@@ -319,7 +432,7 @@ document.getElementById('genSweep').addEventListener('input',e=>{
 document.getElementById('genLvl').addEventListener('input',e=>{
   genDb=parseFloat(e.target.value);
   const el=document.getElementById('genLvlVal'); el.textContent=genDb+'dB';
-  el.style.color = genDb>=-16 ? '#ff3b6b' : (genDb>=-24?'#ffd166':'var(--accent)');
+  el.style.color = genDb>=-16 ? 'var(--hot)' : (genDb>=-24?'var(--warn)':'var(--accent)');
   genApplyLevel();
 });
 function applyGenHz(hz, from){
@@ -354,7 +467,7 @@ function setTarget(mode){
   targetMode=mode;
   prefSet('rta_target', mode);
   document.querySelectorAll('.tgtSeg button').forEach(b=>b.classList.toggle('on', b.dataset.t===mode));
-  if(eqPositions.length) computeAndShow(true);   // refresh without hijacking whichever panel is open
+  if(eqPositions.length) computeAndShow(true);
   if(areas.length) suggestAreaEQ();
   if(typeof tfFrames!=='undefined' && tfFrames) tfCompute();
 }
@@ -362,7 +475,7 @@ document.querySelectorAll('.tgtSeg button').forEach(b=>b.addEventListener('click
 function setCutOnly(v){
   cutOnly=v;
   document.querySelectorAll('#cutOnlySeg button, #areaCutSeg button').forEach(b=>b.classList.toggle('on', (b.dataset.co==='1')===v));
-  if(eqPositions.length) computeAndShow(true);   // refresh eq data without forcing its modal open
+  if(eqPositions.length) computeAndShow(true);
   if(areas.length) suggestAreaEQ();
   if(typeof tfFrames!=='undefined' && tfFrames) tfCompute();
 }
@@ -379,7 +492,7 @@ const eqPanel=document.getElementById('eqPanel');
 const savePanel=document.getElementById('savePanel');
 document.getElementById('eqClose').addEventListener('click',closeModals);
 document.getElementById('eqBtn').addEventListener('click',()=>{ showModal(eqPanel); updateEqUI(); });
-// unified response tool: single-channel (spatial) ↔ dual-channel (TF)
+
 document.querySelectorAll('.respModeSeg button').forEach(b=>b.addEventListener('click',function(){
   if(this.dataset.rm==='dual'){ showModal(tfPanel); if(typeof tfResult!=='undefined' && tfResult) renderTFList(); }
   else { showModal(eqPanel); updateEqUI(); }
@@ -387,8 +500,6 @@ document.querySelectorAll('.respModeSeg button').forEach(b=>b.addEventListener('
 document.querySelectorAll('#eqModeSwitchA button').forEach(b=>b.addEventListener('click',function(){
   if(this.dataset.go==='area'){ openAreas(); }
 }));
-
-
 
 document.getElementById('eqMeasBtn').addEventListener('click',()=>pickSource(measurePosition,5000));
 function setEqMode(m){
@@ -417,27 +528,27 @@ function targetDb(f){
   if(targetMode==='house') return Math.max(-5,Math.min(6, -1.0*Math.log2(f/250)));
   return 0;
 }
-// ---- shared EQ-correction math (one source of truth for all three measurement paths) ----
+
 function clampCorrBand(f, raw){
-  const maxBoost = cutOnly ? 0 : (f>500?1.5:4);   // limit boosts (protect drivers/headroom)
+  const maxBoost = cutOnly ? 0 : (f>500?1.5:4);
   const maxCut   = f>500?-4:-9;
   return Math.max(maxCut, Math.min(maxBoost, raw));
 }
-function eqOffset(resp, rel){                        // avg level over the reliable 200–4000Hz bands
+function eqOffset(resp, rel){
   let os=0,on=0;
   for(let k=0;k<GEQ.length;k++){ if(rel[k] && GEQ[k]>=200 && GEQ[k]<=4000){ os+=resp[k]-targetDb(GEQ[k]); on++; } }
   return on?os/on:0;
 }
-function buildCorr(resp, rel){                       // resp[k] measured dB per GEQ band, rel[k] reliability mask
+function buildCorr(resp, rel){
   const off=eqOffset(resp, rel);
   return GEQ.map((f,k)=> rel[k] ? clampCorrBand(f, -(resp[k]-targetDb(f)-off)) : null);
 }
-// reliability mask by absolute level: a band is trusted if it's within 30dB of the loudest band and in 40–16kHz
+
 function relByLevel(resp){
   const maxR=Math.max(...resp);
   return GEQ.map((f,k)=> resp[k]>maxR-30 && f>=40 && f<=16000);
 }
-// ---- shared correction-list renderers (graphic fader grid / parametric list) ----
+
 function corrGridHtml(corr, rel){
   let html='<div class="tfGrid">';
   for(let k=0;k<GEQ.length;k++){
@@ -485,8 +596,6 @@ document.getElementById('geqDockToggle').addEventListener('click',function(){
 });
 function drawGEQ(c, freqs, corr){
   if(c && c.parentElement && c.parentElement.classList.contains('collapsed')) return;
-  // Rendered as a physical graphic-EQ fader bank: one fader per band, knob position =
-  // how far to move that band. Matches the device being adjusted, so no mental translation.
   const x=c.getContext('2d');
   const dpr=Math.min(window.devicePixelRatio||1,2);
   const CW=c.clientWidth||360, H=234;
@@ -494,63 +603,60 @@ function drawGEQ(c, freqs, corr){
   x.setTransform(dpr,0,0,dpr,0,0);
   const W=CW;
   x.clearRect(0,0,W,H);
-  const top=34, bot=H-46, mid=(top+bot)/2, scale=(bot-top)/2/9;   // ±9dB travel
+  const top=34, bot=H-46, mid=(top+bot)/2, scale=(bot-top)/2/9;
   const n=freqs.length, slot=W/n, kw=Math.max(9,Math.min(18,slot*0.80)), kh=11;
 
-  x.fillStyle='#12171f'; x.fillRect(0,0,W,H);
-  // 0 / ±6 reference lines
+  x.fillStyle=sunMode ? '#f0f4f8' : '#12171f'; 
+  x.fillRect(0,0,W,H);
+
   x.font='9px monospace'; x.textAlign='left';
   [6,0,-6].forEach(d=>{ const yy=mid-d*scale;
-    x.strokeStyle = d===0 ? 'rgba(255,255,255,.30)' : 'rgba(255,255,255,.10)';
+    x.strokeStyle = d===0 ? (sunMode?'rgba(0,0,0,.3)':'rgba(255,255,255,.30)') : (sunMode?'rgba(0,0,0,.1)':'rgba(255,255,255,.10)');
     x.setLineDash(d===0?[]:[2,3]); x.beginPath(); x.moveTo(0,yy); x.lineTo(W,yy); x.stroke();
-    x.fillStyle='rgba(160,175,190,.75)'; x.fillText((d>0?'+':'')+d, 2, yy-2); });
+    x.fillStyle=sunMode?'#475569':'rgba(160,175,190,.75)'; x.fillText((d>0?'+':'')+d, 2, yy-2); });
   x.setLineDash([]);
 
   for(let k=0;k<n;k++){
     const cx=slot*k+slot/2, v=corr[k];
-    // fader slot
-    x.strokeStyle='rgba(255,255,255,.20)'; x.lineWidth=Math.max(3,kw*0.34);
+    x.strokeStyle=sunMode?'rgba(0,0,0,.2)':'rgba(255,255,255,.20)'; x.lineWidth=Math.max(3,kw*0.34);
     x.lineCap='round'; x.beginPath(); x.moveTo(cx,top); x.lineTo(cx,bot); x.stroke();
     if(v==null) continue;
     const yy=mid-Math.max(-9,Math.min(9,v))*scale;
-    // travel from centre, tinted by direction
-    x.strokeStyle = v>0.4?'rgba(80,230,140,.75)' : v<-0.4?'rgba(255,90,120,.75)' : 'rgba(255,255,255,.22)';
+    x.strokeStyle = v>0.4?'rgba(80,230,140,.75)' : v<-0.4?'rgba(255,90,120,.75)' : (sunMode?'rgba(0,0,0,.22)':'rgba(255,255,255,.22)');
     x.beginPath(); x.moveTo(cx,mid); x.lineTo(cx,yy); x.stroke();
-    // knob
-    const col = v>0.4?'#5ce89a' : v<-0.4?'#ff6b8b' : '#9fb0c2';
-    x.save(); x.shadowColor='rgba(0,0,0,.6)'; x.shadowBlur=3; x.shadowOffsetY=1;
+    const col = v>0.4?'#5ce89a' : v<-0.4?'#ff6b8b' : (sunMode?'#64748b':'#9fb0c2');
+    x.save(); x.shadowColor='rgba(0,0,0,.4)'; x.shadowBlur=3; x.shadowOffsetY=1;
     x.fillStyle=col; x.strokeStyle='rgba(0,0,0,.7)'; x.lineWidth=1;
     x.beginPath();
     if(x.roundRect) x.roundRect(cx-kw/2, yy-kh/2, kw, kh, 2);
     else x.rect(cx-kw/2, yy-kh/2, kw, kh);
     x.fill(); x.stroke(); x.restore();
-    x.fillStyle='rgba(0,0,0,.55)'; x.fillRect(cx-kw/2+2, yy-0.5, kw-4, 1);   // knob line
-    // numeric value beside the knob — needed for precise dialing on a real EQ
+    x.fillStyle='rgba(0,0,0,.55)'; x.fillRect(cx-kw/2+2, yy-0.5, kw-4, 1);
     if(Math.abs(v)>=0.4){
       const txt=(v>0?'+':'')+ (Math.abs(v)>=10 ? v.toFixed(0) : v.toFixed(1));
       x.save(); x.translate(cx, v>0 ? yy-kh/2-3 : yy+kh/2+3); x.rotate(-Math.PI/2);
       x.textAlign = v>0 ? 'left' : 'right';
-      x.font='9px monospace'; x.fillStyle = v>0?'#8ff0b8':'#ff9db1';
+      x.font='9px monospace'; x.fillStyle = v>0?'#15803d':'#b91c1c';
       x.fillText(txt, 0, 3); x.restore();
     }
   }
-  // frequency under every fader (rotated so all 31 fit), plus the strongest band callout
+
   x.font='9px monospace';
   for(let k=0;k<n;k++){
     const f=freqs[k], cx=slot*k+slot/2;
     const lbl = f>=1000 ? (f/1000)+'k' : String(f);
     x.save(); x.translate(cx, bot+6); x.rotate(-Math.PI/2);
-    x.textAlign='right'; x.fillStyle= corr[k]==null ? 'rgba(120,132,146,.6)' : 'rgba(170,185,200,.95)';
+    x.textAlign='right'; x.fillStyle= corr[k]==null ? (sunMode?'rgba(0,0,0,.4)':'rgba(120,132,146,.6)') : (sunMode?'#0f172a':'rgba(170,185,200,.95)');
     x.fillText(lbl, 0, 3); x.restore();
   }
   let worst=null;
   for(let k=0;k<n;k++){ const v=corr[k]; if(v==null) continue; if(!worst||Math.abs(v)>Math.abs(worst.v)) worst={v,k}; }
   if(worst && Math.abs(worst.v)>=0.5){
     const f=freqs[worst.k];
-    x.textAlign='right'; x.fillStyle=worst.v>0?'#8ff0b8':'#ff9db1';
+    x.textAlign='right'; x.fillStyle=worst.v>0?'#16a34a':'#dc2626';
     x.fillText('הכי חריג: '+(f>=1000?(f/1000).toFixed(1)+'k':Math.round(f))+'Hz '+(worst.v>0?'+':'')+worst.v.toFixed(1)+'dB', W-4, 12);
   }
-  x.textAlign='left'; x.fillStyle='rgba(150,165,180,.75)';
+  x.textAlign='left'; x.fillStyle=sunMode?'#475569':'rgba(150,165,180,.75)';
   x.fillText('הזז כל פס לפי הידית', 4, 12);
 }
 function micCalAt(f){
@@ -604,7 +710,6 @@ function renderCalList(){
 function parseCalText(text, fname){
   text=String(text||'').replace(/^\uFEFF/,'');
   const F=[],G=[];
-  // freq  gain  (optional extra columns) — separated by space/tab/comma/semicolon
   const lineRe=/^([+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)[\s,;]+([+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/;
   text.split(/\r?\n/).forEach(line=>{
     const m=line.trim().match(lineRe);
@@ -612,8 +717,6 @@ function parseCalText(text, fname){
       if(isFinite(f)&&isFinite(g)&&f>0&&f<200000) { F.push(f); G.push(g); } }
   });
   if(F.length>1){
-    // interpolation assumes strictly ascending frequencies — sort and de-dupe so an
-    // unsorted or duplicated file can't silently produce a wrong calibration curve
     const pts=F.map((f,i)=>[f,G[i]]).sort((a,b)=>a[0]-b[0]);
     const F2=[],G2=[];
     for(const [f,g] of pts){
@@ -675,7 +778,7 @@ function abortRT60(){
   if(rtStatus) rtStatus.textContent='המדידה בוטלה.';
 }
 function closeModals(){
-  abortRT60();   // don't leave a measurement (and the generator) running in the background
+  abortRT60();
   ['rtPanel','eqPanel','calPanel','tfPanel','areaPanel','dlyPanel','savePanel'].forEach(id=>document.getElementById(id).classList.remove('open'));
   modalBg.classList.remove('show');
 }
@@ -713,7 +816,7 @@ function setGenTypeUI(kind){
 }
 function runWithSource(kind, measureFn, durMs){
   durMs=durMs||5000;
-  if(kind==='sweep') durMs=Math.max(durMs, genSweepDur*1000+600);   // ensure a full sweep is captured
+  if(kind==='sweep') durMs=Math.max(durMs, genSweepDur*1000+600);
   if(kind==='external'){ measureFn(); return; }
   const prevOn=genOn, prevType=genType;
   genType=kind; setGenTypeUI(kind); genStart();
@@ -811,29 +914,26 @@ document.getElementById('tfCsvBtn').addEventListener('click',tfExportCsv);
 function detectComb(){
   if(!floatData || !audioCtx) return null;
   const bins=floatData.length, nyq=audioCtx.sampleRate/2;
-  const loF=200, hiF=8000, M=600;   // resample spectrum to a linear grid (comb is periodic in linear Hz)
+  const loF=200, hiF=8000, M=600;
   const grid=new Float64Array(M);
   for(let i=0;i<M;i++){ const f=loF+(hiF-loF)*i/(M-1); const b=Math.round(f/nyq*bins); grid[i]=floatData[Math.max(0,Math.min(bins-1,b))]; }
-  const W=25, rip=new Float64Array(M);   // detrend → keep only the ripple
+  const W=25, rip=new Float64Array(M);
   for(let i=0;i<M;i++){ let s=0,c=0; for(let j=-W;j<=W;j++){const k=i+j; if(k>=0&&k<M){s+=grid[k];c++;}} rip[i]=grid[i]-s/c; }
   let mean=0; for(let i=0;i<M;i++) mean+=rip[i]; mean/=M; for(let i=0;i<M;i++) rip[i]-=mean;
   let norm=0; for(let i=0;i<M;i++) norm+=rip[i]*rip[i];
   if(norm<1e-9) return null;
-  let best={lag:0,val:0};   // autocorrelation → periodicity
+  let best={lag:0,val:0};
   for(let lag=4;lag<M/2;lag++){ let s=0; for(let i=0;i<M-lag;i++) s+=rip[i]*rip[i+lag]; const v=s/norm; if(v>best.val) best={lag,val:v}; }
   const dfPerPoint=(hiF-loF)/(M-1);
   const spacingHz=best.lag*dfPerPoint;
   const delayMs=spacingHz>0?1000/spacingHz:0;
   let depth=0; for(let i=0;i<M;i++) depth+=rip[i]*rip[i]; depth=Math.sqrt(depth/M)*2;
-  // Validated range: the ripple period must fit several cycles inside the 200-8000Hz
-  // analysis window. Outside ~1.5-6ms the autocorrelation locks onto a wrong lag and
-  // reports a confident but wrong delay, so results outside that range are not trusted.
   const inRange = delayMs>=1.4 && delayMs<=6.5;
   return {spacingHz, delayMs, strength:best.val, depth, inRange};
 }
 function runCombCheck(resultId){
   const el=document.getElementById(resultId||'combResult'); if(!el) return;
-  el.style.display='block';   // only occupies space once there's a result
+  el.style.display='block';
   const r=detectComb();
   if(!r){ el.innerHTML='<span style="color:var(--dim)">אין מספיק אות. נגן רעש ורוד ונסה שוב.</span>'; return; }
   const detected = r.strength>0.28 && r.depth>1.5;
@@ -859,14 +959,11 @@ function updateTfLevels(){
   setGainEl(document.getElementById('tfRefFill'), document.getElementById('tfRefDb'), levelDb(timeDataRef,2048));
   document.getElementById('tfL1').textContent = tfSwap?"כניסה 1 → רפרנס":"כניסה 1 → מיק'";
   document.getElementById('tfL2').textContent = tfSwap?"כניסה 2 → מיק'":"כניסה 2 → רפרנס";
-  // Phase correlation between mic and reference. The mic always lags the reference by
-  // the acoustic flight time, and even a fraction of a millisecond de-correlates the
-  // two completely — so we scan backwards through the reference for the best alignment.
-  // Without this the meter reads ~0 at any real mic distance and can never show polarity.
-  const N=1024, maxLag=Math.min(4800, timeDataRef.length-N-1);   // up to ~100ms @48k (~34m)
+  
+  const N=1024, maxLag=Math.min(4800, timeDataRef.length-N-1);
   const oa=timeData.length-N;
   let bestAbs=0, r=0, bestLag=0, bestVa=0, bestVb=0;
-  let _cVa=0, _cVb=0;   // variances of the last window pair corrAt looked at
+  let _cVa=0, _cVb=0;
   const corrAt=(ob)=>{
     let sa=0,sb=0,saa=0,sbb=0,sab=0;
     for(let i=0;i<N;i++){ const x=timeData[oa+i], y=timeDataRef[ob+i]; sa+=x;sb+=y;saa+=x*x;sbb+=y*y;sab+=x*y; }
@@ -874,21 +971,21 @@ function updateTfLevels(){
     _cVa=va; _cVb=vb;
     return den>1e-9 ? cov/den : 0;
   };
-  for(let lag=0; lag<=maxLag; lag+=4){          // coarse scan
+  for(let lag=0; lag<=maxLag; lag+=4){
     const ob=timeDataRef.length-N-lag; if(ob<0) break;
     const c=corrAt(ob); if(Math.abs(c)>bestAbs){ bestAbs=Math.abs(c); r=c; bestLag=lag; bestVa=_cVa; bestVb=_cVb; }
   }
-  for(let lag=Math.max(0,bestLag-6); lag<=Math.min(maxLag,bestLag+6); lag++){   // refine
+  for(let lag=Math.max(0,bestLag-6); lag<=Math.min(maxLag,bestLag+6); lag++){
     const ob=timeDataRef.length-N-lag; if(ob<0) continue;
     const c=corrAt(ob); if(Math.abs(c)>bestAbs){ bestAbs=Math.abs(c); r=c; bestVa=_cVa; bestVb=_cVb; }
   }
-  _tfCorr += ((r||0)-_tfCorr)*0.15;   // smooth
+  _tfCorr += ((r||0)-_tfCorr)*0.15;
   const fill=document.getElementById('tfCorrFill'), val=document.getElementById('tfCorrVal'), tip=document.getElementById('tfCorrTip');
   if(fill){
     const w=Math.abs(_tfCorr)*50;
     fill.style.width=w+'%';
     if(_tfCorr>=0){ fill.style.right='50%'; fill.style.left='auto'; } else { fill.style.left='50%'; fill.style.right='auto'; }
-    const col=_tfCorr>0.4?'#39d98a':_tfCorr<-0.2?'#ff6b8b':'#ffd166';
+    const col=_tfCorr>0.4?'#39d98a':_tfCorr<-0.2?'var(--hot)':'var(--warn)';
     fill.style.background=col;
     if(val){ val.textContent=_tfCorr.toFixed(2); val.style.color=col; }
     if(tip){ tip.textContent = bestVa<1e-6||bestVb<1e-6 ? '(אין אות)' : _tfCorr<-0.2?'⚠ פולריות הפוכה?' : _tfCorr>0.6?'✓':' '; }
@@ -920,7 +1017,6 @@ function tfCompute(){
     refMax=Math.max(refMax,refB[k]);
   }
   if(micCal){ for(let k=0;k<GEQ.length;k++) H[k]-=micCalAt(GEQ[k]); }
-  // reliability here is reference-based (a band is trusted where channel-2 has real signal)
   const rel=GEQ.map((f,k)=> refB[k]>refMax-25 && f>=40 && f<=16000);
   const on=rel.filter(Boolean).length;
   const corr=buildCorr(H, rel);
@@ -958,7 +1054,7 @@ function tfExportCsv(){
 const dlyPanel=document.getElementById('dlyPanel');
 document.getElementById('dlyBtn').addEventListener('click',()=>{
   showModal(dlyPanel);
-  if(running && !workletReady){   // proactively warn instead of failing only when they press "measure"
+  if(running && !workletReady){
     const st=document.getElementById('dlyStatus');
     if(st){ st.innerHTML='<span style="color:var(--warn)">⚠ מנוע ההקלטה לא נטען — מדידת דיליי לא תעבוד. פתח את האתר דרך שרת/HTTPS (לא כקובץ מקומי).</span>'; }
   }
@@ -998,7 +1094,7 @@ document.querySelectorAll('#meterModeSeg button').forEach(b=>b.addEventListener(
   this.classList.add('on'); meterMode=this.dataset.m;
 }));
 function levelDb(buf,n){
-  const len=buf.length; n=n||len; const start=Math.max(0,len-n);   // most-recent n samples
+  const len=buf.length; n=n||len; const start=Math.max(0,len-n);
   if(meterMode==='peak'){ let m=0; for(let i=start;i<len;i++){ const a=Math.abs(buf[i]); if(a>m)m=a; } return 20*Math.log10(m+1e-9); }
   let s=0; for(let i=start;i<len;i++){ const v=buf[i]; s+=v*v; } return 20*Math.log10(Math.sqrt(s/(len-start))+1e-9);
 }
@@ -1012,7 +1108,7 @@ function setGainEl(fill,lbl,db){
   let s=db;
   if(fill){
     s=fill._sdb; if(s==null||!isFinite(s)) s=db;
-    s += (db>s ? 0.55 : 0.035) * (db - s);   // same attack/release as the main meter
+    s += (db>s ? 0.55 : 0.035) * (db - s);
     fill._sdb=s;
     fill.style.width=Math.max(2,Math.min(100,(s+60)/60*100))+'%';
   }
@@ -1039,7 +1135,7 @@ function runDelayCapture(btn, cb){
   dlyState='measuring';
   const prevTxt=btn.textContent; btn.textContent='מקליט…'; btn.style.opacity=.5;
   const sr=audioCtx.sampleRate;
-  const captureSec = (genOn && genType==='sweep') ? Math.min(10, genSweepDur+0.6) : 2.0;   // cover a full sweep if used
+  const captureSec = (genOn && genType==='sweep') ? Math.min(10, genSweepDur+0.6) : 2.0;
   const want=Math.floor(sr*captureSec);
   const mic=new Float32Array(want), ref=new Float32Array(want); let pos=0;
   let workletNode;
@@ -1067,14 +1163,13 @@ function runDelayCapture(btn, cb){
     try{ source.disconnect(workletNode); }catch(_){} try{ workletNode.disconnect(); }catch(_){} try{ mute.disconnect(); }catch(_){}
     dlyState='idle'; btn.textContent=prevTxt; btn.style.opacity=1;
     const m = tfSwap? ref: mic, r = tfSwap? mic: ref;
-    // sanity: if either channel is essentially silent, the correlation peak is noise — reject it
     const rmsOf=(a)=>{ let s=0; for(let i=0;i<a.length;i++) s+=a[i]*a[i]; return Math.sqrt(s/a.length); };
     const micRms=rmsOf(m), refRms=rmsOf(r);
     if(micRms<1e-4 || refRms<1e-4){ cb(null, micRms<1e-4?'mic':'ref'); return; }
     cb(computeDelay(r, m, sr));
   }, captureSec*1000+100);
 }
-// multi-speaker alignment (2/4/6), align to a chosen anchor
+
 const DLY_NAMES=['Top','Sub','FF'];
 function dlyName(i){ return DLY_NAMES[i] || ('רמקול '+(i+1)); }
 let dlySpeakers=[{name:dlyName(0),ms:null},{name:dlyName(1),ms:null}];
@@ -1193,12 +1288,10 @@ function computeDelay(ref, mic, sr){
 }
 
 function measureBusy(){
-  // only one measurement may drive the generator/analyser at a time
   return measState==='measuring' || areaState==='measuring' || tfState==='measuring'
       || dlyState==='measuring' || rt60State==='capture';
 }
 function unfreezeForMeasure(){
-  // a frozen display holds stale FFT data — measuring from it would be wrong
   if(!frozen) return;
   frozen=false; snapCurve=null;
   const fz=document.getElementById('freezeBtn'); if(fz){ fz.classList.remove('on'); fz.textContent='הקפא'; }
@@ -1211,7 +1304,6 @@ function measurePosition(){
   measAccum=new Float64Array(srcData.length); measFrames=0; measState='measuring';
   updateEqUI();
   setTimeout(()=>{
-    // reduce to the 31 GEQ bands right away — keeps storage tiny (31 vs ~16k numbers/position)
     const bins=measAccum.length, nyq=audioCtx.sampleRate/2, R6=Math.pow(2,1/6);
     const db=GEQ.map(fc=>{
       let lo=Math.floor((fc/R6)/nyq*bins), hi=Math.ceil((fc*R6)/nyq*bins);
@@ -1237,7 +1329,7 @@ function renderEqList(){
     updateEqUI(); renderEqList();
   }));
 }
-function avgPositions(){   // power-average the positions across the 31 GEQ bands → dB per band
+function avgPositions(){
   if(!eqPositions.length) return null;
   const out=new Float32Array(GEQ.length);
   for(let k=0;k<GEQ.length;k++){ let p=0; for(const pos of eqPositions) p+=db2lin(pos.db[k]); out[k]=10*Math.log10(p/eqPositions.length+1e-12); }
@@ -1251,13 +1343,9 @@ function bandDbFromBins(bd,fLo,fHi,nyq,bins){
 }
 function computeAndShow(noModal){
   if(!eqPositions.length){ alert('מדוד לפחות מיקום אחד.'); return; }
-  const band=avgPositions();   // already 31-band dB (aligned to GEQ)
+  const band=avgPositions();
   if(!band) return;
   const resp=GEQ.map((fc,k)=> band[k] - (micCal?micCalAt(fc):0));
-  // reliability guard: a measurement taken with no signal (PA off, mic muted, gain at zero)
-  // still yields a smooth-looking curve from the noise floor. Refuse instead of advising on noise.
-  // Criterion is absolute band level — pink through a good system is deliberately FLAT,
-  // so any "flatness" test here would wrongly reject valid measurements.
   {
     const inBand=resp.filter((v,k)=>GEQ[k]>=63&&GEQ[k]<=8000);
     if(Math.max(...inBand) < -62){
@@ -1328,9 +1416,9 @@ function startRT60(){
   const prevGenOn = genOn;
   const restoreType=genType; genType='pink';
   if(!genOn){ genStart(); }
-  const boost=rtLevel;   // RT60 playback level (user-set; needs a strong steady state)
+  const boost=rtLevel;
   if(genGain) genGain.gain.setTargetAtTime(Math.pow(10,boost/20),audioCtx.currentTime,0.1);
-  const prevSmooth=analyser.smoothingTimeConstant; analyser.smoothingTimeConstant=0;  // no smearing of the decay
+  const prevSmooth=analyser.smoothingTimeConstant; analyser.smoothingTimeConstant=0;
 
   setTimeout(()=>{
     rtStatus.innerHTML='מודד דעיכה…';
@@ -1339,7 +1427,6 @@ function startRT60(){
     const bandEdges=RT_BANDS.map(fc=>{ const bins=floatData.length;
       let lo=Math.floor((fc/1.4142)/nyq*bins), hi=Math.ceil((fc*1.4142)/nyq*bins);
       return [Math.max(0,lo),Math.min(bins-1,hi)]; });
-    // dedicated high-rate sampler (~100/s), independent of the 30fps draw cap — captures fast decays cleanly
     if(rt60Timer) clearInterval(rt60Timer);
     rt60Timer=setInterval(()=>{
       if(rt60State!=='capture' || !analyser) return;
@@ -1369,7 +1456,6 @@ function startRT60(){
 }
 
 const RT_BANDS=[125,250,500,1000,2000,4000];
-// analyze one decay series → {rt60, span} or null
 function analyzeDecay(series, cutT, needRange){
   const pre=series.filter(x=>x.t<cutT);
   const steady = pre.length? pre.reduce((a,x)=>a+x.db,0)/pre.length : Math.max(...series.map(x=>x.db));
@@ -1392,7 +1478,6 @@ function analyzeRT60(){
   if(s.length<20){ rtStatus.innerHTML='מדידה נכשלה — נדגמו רק '+s.length+' דגימות.<br><span style="font-size:11px;color:var(--dim)">ודא שהמיקרופון פעיל ונסה שוב.</span>'; return; }
   const bb=analyzeDecay(s.map(x=>({t:x.t,db:x.db})), rt60CutT, rtRange);
   if(!bb || bb.post.length<10){ rtStatus.innerHTML='מדידה נכשלה — לא נלכדה דעיכה.'; return; }
-  // per-octave-band RT60
   let bandsHtml='';
   if(s[0].bands){
     bandsHtml='<div class="tfGrid" style="margin-top:8px">';
@@ -1420,13 +1505,13 @@ function analyzeRT60(){
 }
 function drawRTPlot(post, steady, slope, intercept){
   const c=document.getElementById('rtCanvas'); if(!c) return;
-  c.style.display='block';   // only shown once there's something to plot
+  c.style.display='block';
   const x=c.getContext('2d');
   const W=c.width, H=c.height; x.clearRect(0,0,W,H);
   const tMax=Math.max(0.5, post.length?post[post.length-1].t:1);
   const dbMin=steady-65, dbMax=steady+3;
   const X=t=>t/tMax*W, Y=db=>H-(db-dbMin)/(dbMax-dbMin)*H;
-  x.strokeStyle='#2b3646'; x.fillStyle='#8b97a5'; x.font='9px monospace';
+  x.strokeStyle=sunMode?'#cbd5e1':'#2b3646'; x.fillStyle=sunMode?'#475569':'#8b97a5'; x.font='9px monospace';
   for(let d=0;d>=-60;d-=10){ const yy=Y(steady+d); x.globalAlpha=.5;
     x.beginPath();x.moveTo(0,yy);x.lineTo(W,yy);x.stroke(); x.globalAlpha=1; x.fillText(d+'dB',2,yy-2); }
   x.strokeStyle='#2f9bff'; x.lineWidth=1.5; x.beginPath();
@@ -1490,7 +1575,10 @@ function setMode(m){
   mode=m;
   document.getElementById('mRta').classList.toggle('on',m==='rta');
   document.getElementById('mSpec').classList.toggle('on',m==='spec');
-  if(specCtx){specCtx.fillStyle='#0d1117';specCtx.fillRect(0,0,specCanvas.width,specCanvas.height);}
+  if(specCtx){
+    specCtx.fillStyle=sunMode ? '#f8fafc' : '#0d1117';
+    specCtx.fillRect(0,0,specCanvas.width,specCanvas.height);
+  }
 }
 
 function buildWeighting(nyquist,bins){
@@ -1505,7 +1593,7 @@ function buildWeighting(nyquist,bins){
 }
 
 async function start(deviceId){
-  errBox.style.display='none';   // clear any stale error from a previous attempt
+  errBox.style.display='none';
   try{
     const audio = {
       echoCancellation: false,
@@ -1528,7 +1616,7 @@ async function start(deviceId){
       workletReady=true;
     } catch(err) {
       workletReady=false;
-      console.warn('AudioWorklet failed to load. Delay measurement might not work without a server.', err);
+      console.warn('AudioWorklet failed to load.', err);
     }
 
     source = audioCtx.createMediaStreamSource(stream);
@@ -1536,8 +1624,6 @@ async function start(deviceId){
     source.channelCountMode = 'explicit';
 
     const track = stream.getAudioTracks()[0];
-    // if the interface is unplugged the track ends silently — surface it instead of
-    // leaving a frozen-looking graph with no explanation
     track.addEventListener('ended',()=>{
       if(!running) return;
       errBox.style.display='block';
@@ -1549,7 +1635,7 @@ async function start(deviceId){
     const ci = document.getElementById('chCount');
     if(ci){
       if(chReceived>=2){ ci.textContent='ערוצים: '+chReceived+' ✓ סטריאו'; ci.style.color='#39d98a'; }
-      else { ci.innerHTML='ערוצים: 1 ⚠ מונו — אין ערוץ 2'+(!isSafari?' · לערוץ 2 השתמש ב-Safari':''); ci.style.color='#ff6b8b'; }
+      else { ci.innerHTML='ערוצים: 1 ⚠ מונו — אין ערוץ 2'+(!isSafari?' · לערוץ 2 השתמש ב-Safari':''); ci.style.color='var(--hot)'; }
     }
 
     analyser = audioCtx.createAnalyser();
@@ -1596,8 +1682,6 @@ async function start(deviceId){
   }
 }
 
-// By default the app follows the computer's current system default in/out.
-// These flip to true only if the user manually overrides a device for the session.
 let userPickedIn=false, userPickedOut=false;
 async function populateInputs(){
   try{
@@ -1607,12 +1691,12 @@ async function populateInputs(){
     sel.innerHTML='';
     { const o=document.createElement('option'); o.value=''; o.textContent='ברירת מחדל של המערכת'; sel.appendChild(o); }
     ins.forEach((d,i)=>{
-      if(d.deviceId==='default'||d.deviceId==='') return;   // the explicit default option already covers this
+      if(d.deviceId==='default'||d.deviceId==='') return;
       const o=document.createElement('option');
       o.value=d.deviceId; o.textContent=d.label||('מיקרופון '+(i+1));
       sel.appendChild(o);
     });
-    sel.value = userPickedIn ? (activeInId||'') : '';   // '' = system default
+    sel.value = userPickedIn ? (activeInId||'') : '';
 
     const outs=devs.filter(d=>d.kind==='audiooutput');
     const osel=document.getElementById('outSel');
@@ -1637,7 +1721,7 @@ async function applyOutput(deviceId){
 }
 document.getElementById('outSel').addEventListener('change',async e=>{
   userPickedOut = e.target.value!=='';
-  const ok=await applyOutput(e.target.value);   // '' resets the sink to the system default
+  const ok=await applyOutput(e.target.value);
   if(!ok) alert('הדפדפן לא תומך בבחירת יציאת פלט. הגדר את הפלט ב־macOS: הגדרות → סאונד → פלט.');
 });
 
@@ -1651,7 +1735,6 @@ async function switchInput(deviceId){
 
 function stop(){
   running=false; if(raf) cancelAnimationFrame(raf);
-  // clear any in-flight measurement so nothing is left stuck in a 'measuring' state
   if(rt60Timer){ clearInterval(rt60Timer); rt60Timer=null; }
   rt60State='idle'; measState='idle'; areaState='idle'; dlyState='idle';
   analyserRef=null; floatDataRef=null; tfState='idle'; eqCurveData=null;
@@ -1676,16 +1759,15 @@ function heat(t){
 }
 function fLabel(f){return f>=1000?(f%1000?(f/1000).toFixed(1):f/1000)+'k':''+f;}
 
-/* התאמת דינמיקת המד: עלייה מהירה לקלט חדש, ודעיכה איטית (Slow Release = 0.035) לתנועה אנלוגית וטבעית */
 function updateLevel(){
   if(!analyserMeter) return;
   analyserMeter.getFloatTimeDomainData(timeDataMeter);
   const dbfs = levelDb(timeDataMeter, 2048);
 
   if (dbfs > smoothedDbfs) {
-    smoothedDbfs += (dbfs - smoothedDbfs) * 0.55; // Fast Attack
+    smoothedDbfs += (dbfs - smoothedDbfs) * 0.55;
   } else {
-    smoothedDbfs += (dbfs - smoothedDbfs) * 0.035; // Slow & Smooth Decay
+    smoothedDbfs += (dbfs - smoothedDbfs) * 0.035;
   }
 
   const now=performance.now();
@@ -1704,7 +1786,7 @@ function updateLevel(){
     p += db2lin(floatData[i]+wdb);
   }
   const lvl = 10*Math.log10(p+1e-12) + calib;
-  if(!frozen){ leqSumP += p; leqN++; if(lvl>splMax) splMax=lvl; }   // frozen data is stale — don't skew Leq/Max
+  if(!frozen){ leqSumP += p; leqN++; if(lvl>splMax) splMax=lvl; }
   const leq = 10*Math.log10(leqSumP/Math.max(1,leqN)+1e-12) + calib;
   const unit = calib>0 ? ' dB'+weightMode : '';
   const fmt=x=>x.toFixed(1)+unit;
@@ -1717,10 +1799,10 @@ let _lastDraw=0;
 function draw(){
   raf=requestAnimationFrame(draw);
   const now=performance.now();
-  if(now-_lastDraw < 32) return;   // ~30fps cap — halves the render/compute load, imperceptible on an audio graph
+  if(now-_lastDraw < 32) return;
   _lastDraw=now;
   updateSignalTint();
-  if(!frozen) analyser.getFloatFrequencyData(floatData);   // frozen → hold the last spectrum static
+  if(!frozen) analyser.getFloatFrequencyData(floatData);
   if(measState==='measuring' && measAccum){
     const srcData = floatData;
     for(let i=0;i<srcData.length;i++) measAccum[i]+=db2lin(srcData[i]);
@@ -1768,10 +1850,10 @@ function draw(){
     if(tip){
       let msg, col='var(--dim)';
       if(!genOn) msg='נגן אות כדי לבדוק את הרמות.';
-      else if(micDb>=-1){ msg='⚠ קליפ! הורד את גיין המיק\' במיקסר.'; col='#ff6b8b'; }
-      else if(micDb>=-8){ msg='חזק — אפשר להוריד מעט גיין מיק\'.'; col='#ffd166'; }
+      else if(micDb>=-1){ msg='⚠ קליפ! הורד את גיין המיק\' במיקסר.'; col='var(--hot)'; }
+      else if(micDb>=-8){ msg='חזק — אפשר להוריד מעט גיין מיק\'.'; col='var(--warn)'; }
       else if(micDb>=-40){ msg='✓ רמה טובה — אפשר למדוד.'; col='#39d98a'; }
-      else { msg='חלש — הגבר גיין מיק\' במיקסר או העלה עוצמת PA.'; col='#ffd166'; }
+      else { msg='חלש — הגבר גיין מיק\' במיקסר או העלה עוצמת PA.'; col='var(--warn)'; }
       tip.textContent=msg; tip.style.color=col;
     }
   }
@@ -1789,18 +1871,16 @@ function draw(){
   else drawSpec(W,H,nyquist,bins,xForFreq);
 
   fbFrameCounter++;
-  // frozen data repeats the same frame, which the detector would read as a sustained
-  // (i.e. feedback) tone — skip detection while frozen to avoid false alarms
   if(fbOn && !frozen && fbFrameCounter % 4 === 0) detectFeedback(nyquist,bins);
 }
 
 function drawRta(W,H,nyquist,bins,xForFreq){
   ctx.clearRect(0,0,W,H);
-  // build a prefix-sum of linear power ONCE per frame → each band's energy is O(1)
-  // (previously each band re-summed thousands of FFT bins; that was the main CPU cost).
+  if(sunMode){
+    ctx.fillStyle = '#f8fafc';
+    ctx.fillRect(0,0,W,H);
+  }
   if(!_pfx || _pfx.length!==bins+1) _pfx=new Float64Array(bins+1);
-  // dB→linear via a 0.25dB-step lookup table: replaces ~16k Math.pow() calls per frame,
-  // which was the single biggest per-frame cost (especially at fftSize 32768).
   { let acc=0; _pfx[0]=0; for(let i=0;i<bins;i++){ acc+=db2lin(floatData[i]); _pfx[i+1]=acc; } }
   const bandPowDb=(fLo,fHi)=>{
     let lo=Math.floor(fLo/nyquist*bins), hi=Math.ceil(fHi/nyquist*bins);
@@ -1810,14 +1890,16 @@ function drawRta(W,H,nyquist,bins,xForFreq){
   const meterH = (meterEl && meterEl.style.display!=='none') ? 40 : 6;
   const plotH = H - meterH - 16;
   const labelY = H - meterH - 4;
-  ctx.strokeStyle='#2b3646'; ctx.fillStyle='#aeb9c7'; ctx.font='11px monospace'; ctx.textAlign='center';
+  ctx.strokeStyle=sunMode ? '#cbd5e1' : '#2b3646'; 
+  ctx.fillStyle=sunMode ? '#475569' : '#aeb9c7'; 
+  ctx.font='11px monospace'; ctx.textAlign='center';
   const lo=ISO[0], hi=ISO[BANDS-1];
   [20,31.5,50,100,200,500,1000,2000,5000,10000,20000].filter(f=>f>=lo&&f<=hi).forEach(f=>{
     const x=xForFreq(f);
     ctx.globalAlpha=.6; ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,plotH);ctx.stroke(); ctx.globalAlpha=1;
     ctx.fillText(fLabel(f)+'Hz',x,labelY);
   });
-  [0.25,0.5,0.75].forEach(p=>{ctx.globalAlpha=.3;ctx.strokeStyle='#2b3646';ctx.beginPath();ctx.moveTo(0,plotH*p);ctx.lineTo(W,plotH*p);ctx.stroke();ctx.globalAlpha=1;});
+  [0.25,0.5,0.75].forEach(p=>{ctx.globalAlpha=.3;ctx.strokeStyle=sunMode?'#cbd5e1':'#2b3646';ctx.beginPath();ctx.moveTo(0,plotH*p);ctx.lineTo(W,plotH*p);ctx.stroke();ctx.globalAlpha=1;});
 
   const bw=W/BANDS, gap=Math.max(0.5,bw*0.12);
   const tfOpen = ((tfOverlay || (typeof tfPanel!=='undefined' && tfPanel.classList.contains('open'))) && floatDataRef && analyserRef);
@@ -1835,12 +1917,12 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     if(!tfOpen){
       const x=b*bw+gap/2, barW=bw-gap;
       const barH=v*plotH, y=plotH-barH;
-      let col= v<0.85?'rgba('+accentRgb[0]+','+accentRgb[1]+','+accentRgb[2]+','+(0.4+v).toFixed(2)+')' : '#ff3b6b';
+      let col= v<0.85?'rgba('+accentRgb[0]+','+accentRgb[1]+','+accentRgb[2]+','+(0.4+v).toFixed(2)+')' : 'var(--hot)';
       ctx.fillStyle=col; ctx.fillRect(x,y,barW,barH);
       if(peakHold){
         if(v>=peaks[b]) peaks[b]=v; else peaks[b]=Math.max(0,peaks[b]-0.005);
         const py=plotH-peaks[b]*plotH;
-        ctx.fillStyle='rgba(255,255,255,.85)'; ctx.fillRect(x,py-2,barW,2);
+        ctx.fillStyle=sunMode?'#0f172a':'rgba(255,255,255,.85)'; ctx.fillRect(x,py-2,barW,2);
       }
     }
   }
@@ -1856,7 +1938,6 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     const stepPx = 1;
     for(let px = 0; px <= W; px += stepPx){
       const f = freqForX(px);
-      // שימוש ב-R שמחושב לפי סליידר הרזולוציה (curBpo)
       const fLo = f / R;
       const fHi = f * R;
       const mDb = bandPowDb(fLo, fHi);
@@ -1871,11 +1952,11 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     ctx.strokeStyle='rgb('+accentRgb.join(',')+')'; ctx.lineWidth=2; ctx.lineJoin='round'; ctx.stroke();
     
     ctx.beginPath(); refPts.forEach(([x,y],i)=> i?ctx.lineTo(x,y):ctx.moveTo(x,y));
-    ctx.strokeStyle='#ffb020'; ctx.lineWidth=2; ctx.lineJoin='round'; ctx.stroke();
+    ctx.strokeStyle='#d97706'; ctx.lineWidth=2; ctx.lineJoin='round'; ctx.stroke();
     
     ctx.font='11px monospace'; ctx.textAlign='start';
     ctx.fillStyle='rgb('+accentRgb.join(',')+')'; ctx.fillText('— '+(tfSwap?'רפרנס':"מיקרופון"), 10, 14);
-    ctx.fillStyle='#ffb020'; ctx.fillText('— '+(tfSwap?"מיקרופון":'רפרנס'), 10, 28);
+    ctx.fillStyle='#d97706'; ctx.fillText('— '+(tfSwap?"מיקרופון":'רפרנס'), 10, 28);
   }
   
   if(refCurve && refCurve.v && refCurve.bands===BANDS){
@@ -1910,8 +1991,8 @@ function drawRta(W,H,nyquist,bins,xForFreq){
       ctx.fillStyle='#ffb020'; ctx.beginPath(); ctx.arc(x,yy,3,0,6.28); ctx.fill();
       ctx.font='10px monospace'; ctx.textAlign='center';
       const tw=ctx.measureText(lbl).width+6;
-      ctx.fillStyle='rgba(13,17,23,.9)'; ctx.fillRect(x-tw/2, yy-16, tw, 13);
-      ctx.fillStyle='#ffd27a'; ctx.fillText(lbl, x, yy-6);
+      ctx.fillStyle=sunMode?'#f1f5f9':'rgba(13,17,23,.9)'; ctx.fillRect(x-tw/2, yy-16, tw, 13);
+      ctx.fillStyle='#b45309'; ctx.fillText(lbl, x, yy-6);
     });
   }
   if(dragging && Math.abs(dragX1-dragX0)>4){
@@ -1921,11 +2002,9 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     ctx.strokeRect(xa,0,xb-xa,plotH);
   }
   if(targetMode!=='off' && (eqPanel.classList.contains('open')||areaPanel.classList.contains('open'))){
-    // guide shape derived from the SAME targetDb() used for the actual correction, so what you
-    // see matches what the app aims for (flat = level line, house = the real bass-up/treble-down tilt)
     ctx.strokeStyle='rgba(80,230,140,.8)'; ctx.setLineDash([6,5]); ctx.lineWidth=2; ctx.beginPath();
     for(let b=0;b<BANDS;b++){
-      const ty=Math.max(0.05, Math.min(0.95, 0.55 + targetDb(ISO[b])*0.03));   // 0.03 display-units per dB
+      const ty=Math.max(0.05, Math.min(0.95, 0.55 + targetDb(ISO[b])*0.03));
       const x=b*bw+bw/2, yy=plotH-ty*plotH;
       b===0?ctx.moveTo(x,yy):ctx.lineTo(x,yy);
     }
@@ -1936,7 +2015,7 @@ function drawRta(W,H,nyquist,bins,xForFreq){
   if(cursorX!=null && cursorX>=0 && cursorX<=W){
     const cf=freqForX(cursorX);
     const bi=Math.max(0,Math.min(BANDS-1,Math.floor(cursorX/bw)));
-    ctx.strokeStyle='rgba(255,255,255,.55)'; ctx.setLineDash([3,3]); ctx.lineWidth=1;
+    ctx.strokeStyle=sunMode?'rgba(0,0,0,.55)':'rgba(255,255,255,.55)'; ctx.setLineDash([3,3]); ctx.lineWidth=1;
     ctx.beginPath();ctx.moveTo(cursorX,0);ctx.lineTo(cursorX,plotH);ctx.stroke(); ctx.setLineDash([]);
     const fl=cf>=1000?(cf/1000).toFixed(2)+'kHz':Math.round(cf)+'Hz';
     const lvl=(lastBandDb[bi]!=null&&lastBandDb[bi]>-119)?('  '+Math.round(lastBandDb[bi])+'dB'):'';
@@ -1944,9 +2023,9 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     ctx.font='12px monospace'; ctx.textAlign='left';
     const tw=ctx.measureText(label).width+12;
     let tx=Math.max(2,Math.min(W-tw-2, cursorX-tw/2));
-    ctx.fillStyle='rgba(13,17,23,.92)'; ctx.fillRect(tx,plotH-22,tw,18);
+    ctx.fillStyle=sunMode?'#ffffff':'rgba(13,17,23,.92)'; ctx.fillRect(tx,plotH-22,tw,18);
     ctx.strokeStyle='rgba(47,155,255,.7)'; ctx.strokeRect(tx,plotH-22,tw,18);
-    ctx.fillStyle='#e6ecf3'; ctx.fillText(label,tx+6,plotH-9);
+    ctx.fillStyle=sunMode?'#0f172a':'#e6ecf3'; ctx.fillText(label,tx+6,plotH-9);
   }
   const visAreas=areas.filter(a=>a.show);
   if(visAreas.length){
@@ -1963,13 +2042,12 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     visAreas.forEach((a,i)=>{
       const y=30+i*16;
       ctx.fillStyle=a.color; ctx.fillRect(8,y-8,16,3);
-      ctx.fillStyle='#e6ecf3'; ctx.fillText(a.name,28,y-2);
+      ctx.fillStyle=sunMode?'#0f172a':'#e6ecf3'; ctx.fillText(a.name,28,y-2);
     });
   }
-  // feedback markers — sustained peaks flagged by detectFeedback, drawn on the spectrum
   if(fbOn && fbTrack.size){
     const flagged=[];
-    for(const [,rec] of fbTrack){ if(rec.hold>=FB_CONFIRM && rec.swing<FB_MAXSWING) flagged.push(rec); }   // confirmed: parked, steady, narrow
+    for(const [,rec] of fbTrack){ if(rec.hold>=FB_CONFIRM && rec.swing<FB_MAXSWING) flagged.push(rec); }
     flagged.sort((a,b)=>b.db-a.db);
     ctx.textAlign='center';
     flagged.slice(0,4).forEach(rec=>{
@@ -1983,15 +2061,15 @@ function drawRta(W,H,nyquist,bins,xForFreq){
       ctx.font='10px monospace';
       const tw=ctx.measureText(lbl).width+8;
       let tx=Math.max(2,Math.min(W-tw-2, x-tw/2));
-      ctx.fillStyle='rgba(40,10,18,.92)'; ctx.fillRect(tx,y-26,tw,13);
+      ctx.fillStyle=sunMode?'#fef2f2':'rgba(40,10,18,.92)'; ctx.fillRect(tx,y-26,tw,13);
       ctx.strokeStyle='rgba(255,59,107,.7)'; ctx.strokeRect(tx,y-26,tw,13);
-      ctx.fillStyle='#ff9db1'; ctx.fillText(lbl, tx+tw/2, y-16);
+      ctx.fillStyle='#dc2626'; ctx.fillText(lbl, tx+tw/2, y-16);
     });
   }
   let exactHz=0;
   if(peakBand>=0 && peakVal>0.05){
     const fc=ISO[peakBand];
-    let lo=Math.floor((fc/R)/nyquist*bins), hi=Math.ceil((fc/R)/nyquist*bins);
+    let lo=Math.floor((fc/R)/nyquist*bins), hi=Math.ceil((fc*R)/nyquist*bins);
     lo=Math.max(1,lo); hi=Math.min(bins-1,hi);
     let bMax=-999, bi=lo;
     for(let i=lo;i<=hi;i++){ if(floatData[i]>bMax){ bMax=floatData[i]; bi=i; } }
@@ -2017,11 +2095,11 @@ function drawSpec(W,H,nyquist,bins,xForFreq){
   const specH = H - meterH;
   ctx.clearRect(0,0,W,H);
   ctx.drawImage(specCanvas,0,0,W,specH);
-  ctx.fillStyle='#c2cbd6'; ctx.font='11px monospace'; ctx.textAlign='center';
+  ctx.fillStyle=sunMode?'#0f172a':'#c2cbd6'; ctx.font='11px monospace'; ctx.textAlign='center';
   const lo=ISO[0], hi=ISO[BANDS-1];
   [20,31.5,50,100,200,500,1000,2000,5000,10000,20000].filter(f=>f>=lo&&f<=hi).forEach(f=>{
     const x=xForFreq(f);
-    ctx.strokeStyle='rgba(255,255,255,.14)';ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,specH);ctx.stroke();
+    ctx.strokeStyle=sunMode?'rgba(0,0,0,.14)':'rgba(255,255,255,.14)';ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,specH);ctx.stroke();
     ctx.fillText(fLabel(f)+'Hz',x,12);
   });
   let pk=-Infinity,pkf=0;
@@ -2029,18 +2107,15 @@ function drawSpec(W,H,nyquist,bins,xForFreq){
   peakHzEl.textContent= pk>floorDb ? (pkf>=1000?(pkf/1000).toFixed(1)+' kHz':Math.round(pkf)+' Hz') : '—';
 }
 
-// Real feedback ≠ music. A ringing tone is (a) loud, (b) very narrow, (c) parked at the
-// exact same frequency for a sustained time, and (d) steady/rising in level. Musical notes
-// are transient and move around. We require all four so held chords/melodies don't false-trip.
-const FB_MINDB=-50;      // ignore quiet tonal peaks
-const FB_MINQ=6;         // feedback is narrow; broad musical humps are rejected
-const FB_CONFIRM=18;     // ~2.3s of a stable, steady tone before it's flagged
-const FB_MAXSWING=2.5;   // dB — large level swings mean musical dynamics, not a ring
+const FB_MINDB=-50;
+const FB_MINQ=6;
+const FB_CONFIRM=18;
+const FB_MAXSWING=2.5;
 function detectFeedback(nyquist,bins){
   const PROM=fbProm;
   const win=24;
   const seen=new Set();
-  const iLo=Math.max(2,Math.floor(120/nyquist*bins));    // feedback rarely rings below ~120Hz
+  const iLo=Math.max(2,Math.floor(120/nyquist*bins));
   const iHi=Math.min(bins-2,Math.floor(10000/nyquist*bins));
   for(let i=iLo;i<=iHi;i++){
     const d=floatData[i];
@@ -2057,16 +2132,16 @@ function detectFeedback(nyquist,bins){
     const bw3=Math.max(1,(ri-li))*nyquist/bins;
     const hz=Math.round(i*nyquist/bins);
     const q=Math.max(2,Math.min(30, hz/bw3));
-    if(q<FB_MINQ) continue;                               // too broad → not feedback
+    if(q<FB_MINQ) continue;
     const cut=Math.max(3,Math.min(12, Math.round(prom*0.7)));
-    const key=Math.round(hz/ (hz<300?4:hz<2000?10:40));   // finer buckets so different notes don't merge
+    const key=Math.round(hz/ (hz<300?4:hz<2000?10:40));
     seen.add(key);
     const tol = hz<300?5:hz<2000?14:50;
     const rec=fbTrack.get(key);
     if(rec){
-      if(Math.abs(hz-rec.hz)<=tol) rec.hold=Math.min(FB_CONFIRM+30, rec.hold+1);   // parked → build confidence
-      else rec.hold=Math.max(0, rec.hold-3);                                       // jumped → likely a new note
-      rec.swing = rec.swing*0.8 + Math.abs(d-rec.db)*0.2;                          // running level volatility
+      if(Math.abs(hz-rec.hz)<=tol) rec.hold=Math.min(FB_CONFIRM+30, rec.hold+1);
+      else rec.hold=Math.max(0, rec.hold-3);
+      rec.swing = rec.swing*0.8 + Math.abs(d-rec.db)*0.2;
       rec.db=d; rec.hz=hz; rec.cut=cut; rec.q=q;
     } else {
       fbTrack.set(key,{hold:1, swing:0, db:d, hz:hz, cut:cut, q:q});
@@ -2076,9 +2151,9 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v157';
-// ---- accent color picker (swaps one CSS var — instant, no per-frame cost) ----
-let accentRgb=[62,166,255];   // default #3ea6ff — bars use this so they follow the picker
+document.getElementById('ver').textContent='v158';
+
+let accentRgb=[62,166,255];
 function applyAccent(hex){
   document.documentElement.style.setProperty('--accent',hex);
   document.documentElement.style.setProperty('--amber',hex);
@@ -2088,7 +2163,7 @@ function applyAccent(hex){
 }
 function lsGet(k){ try{ return localStorage.getItem(k); }catch(_){ return null; } }
 function prefSet(k,v){ try{ localStorage.setItem(k, v); }catch(_){} }
-// ---- before/after: keep a reference curve of the response prior to EQ changes ----
+
 document.getElementById('refCurveBtn').addEventListener('click',function(){
   if(refCurve){ refCurve=null; this.classList.remove('on'); this.textContent='שמור כ״לפני״'; return; }
   if(!running || !lastV.length){ alert('הפעל מיקרופון ונגן אות לפני שמירת עקומת ייחוס.'); return; }
@@ -2096,7 +2171,6 @@ document.getElementById('refCurveBtn').addEventListener('click',function(){
   this.classList.add('on'); this.textContent='נקה ״לפני״';
 });
 
-// ---- saved measurements ----
 const SAVE_KEY='rta_saves';
 let saves=[];
 function loadSaves(){ try{ const r=lsGet(SAVE_KEY); saves=r?JSON.parse(r):[]; }catch(_){ saves=[]; } }
@@ -2105,7 +2179,7 @@ function snapshotState(name){
   return {
     id:'s'+Date.now(), name:name, date:new Date().toISOString().slice(0,10),
     target:targetMode,
-    positions:eqPositions.map(p=>({name:p.name, db:Array.from(p.db)})),   // 31-band, tiny
+    positions:eqPositions.map(p=>({name:p.name, db:Array.from(p.db)})),
     areas:areas.map(a=>({name:a.name, color:a.color, db:Array.from(a.db), show:a.show})),
     speakers:dlySpeakers.map(s=>({name:s.name, ms:s.ms})),
     anchor:dlyAnchor,
@@ -2136,14 +2210,13 @@ function loadSave(id){
   if(measureBusy()){ alert('מדידה פעילה — המתן לסיומה.'); return; }
   if((eqPositions.length||areas.length) && !confirm('לטעון "'+s.name+'"? המדידות הנוכחיות יוחלפו.')) return;
   eqPositions=(s.positions||[]).map(p=>{
-    if(p.db) return {name:p.name, db:Float32Array.from(p.db)};                       // new 31-band format
-    // legacy full-FFT-bin save → reduce to 31 bands (needs a live context for the sample rate)
+    if(p.db) return {name:p.name, db:Float32Array.from(p.db)};
     if(p.data && audioCtx){
       const bd=p.data, bins=bd.length, nyq=audioCtx.sampleRate/2, R6=Math.pow(2,1/6);
       const db=GEQ.map(fc=>bandDbFromBins(bd, fc/R6, fc*R6, nyq, bins));
       return {name:p.name, db:Float32Array.from(db)};
     }
-    return {name:p.name, db:new Float32Array(GEQ.length).fill(-120)};                 // unconvertible → placeholder
+    return {name:p.name, db:new Float32Array(GEQ.length).fill(-120)};
   });
   areas=(s.areas||[]).map(a=>({name:a.name, color:a.color, db:Float32Array.from(a.db), show:a.show!==false}));
   if(s.speakers&&s.speakers.length){ dlySpeakers=s.speakers.map(x=>({name:x.name, ms:x.ms})); dlyAnchor=s.anchor||0; }
@@ -2168,21 +2241,23 @@ document.getElementById('saveNowBtn').addEventListener('click',()=>{
   persistSaves(); renderSaveList(); inp.value='';
 });
 loadSaves();
-// ---- restore saved view/measurement preferences from previous sessions ----
+
 (function initPrefs(){
   const applyInput=(id,key)=>{ const v=lsGet(key); if(v==null) return; const el=document.getElementById(id); if(!el) return; el.value=v; el.dispatchEvent(new Event('input')); };
-  applyInput('res','rta_res');           // resolution (bands/octave)
-  applyInput('smooth','rta_smooth');     // display smoothing
-  applyInput('floor','rta_floor');       // noise floor
-  applyInput('cal','rta_cal');           // SPL calibration offset
-  applyInput('fbSens','rta_fbSens');     // feedback sensitivity
-  const fft=lsGet('rta_fft');            // FFT size
+  applyInput('res','rta_res');
+  applyInput('smooth','rta_smooth');
+  applyInput('floor','rta_floor');
+  applyInput('cal','rta_cal');
+  applyInput('fbSens','rta_fbSens');
+  const fft=lsGet('rta_fft');
   if(fft){ const btn=document.querySelector('#fftSeg button[data-n="'+fft+'"]'); if(btn) btn.click(); }
-  const tgt=lsGet('rta_target');         // target curve
+  const tgt=lsGet('rta_target');
   if(tgt) setTarget(tgt);
-  const wgt=lsGet('rta_wgt');            // weighting Z/A/C
+  const wgt=lsGet('rta_wgt');
   if(wgt && wgt!=='Z'){ weightMode=wgt; const wb=document.getElementById('wgtBtn');
     wb.textContent='dB'+wgt; wb.classList.add('on'); document.getElementById('wLbl').textContent=wgt; }
+  const sm = lsGet('rta_sunmode');
+  if(sm === '1'){ sunMode = true; document.body.classList.add('sun-mode'); const sb = document.getElementById('sunBtn'); if(sb) sb.classList.add('on'); }
 })();
 (function initAccent(){
   const saved=lsGet('rta_accent');
@@ -2193,7 +2268,7 @@ document.querySelectorAll('#swatches .sw').forEach(b=>b.addEventListener('click'
   document.querySelectorAll('#swatches .sw').forEach(x=>x.classList.remove('on'));
   this.classList.add('on'); applyAccent(this.dataset.c);
 }));
-// ---- signal tint: subtle edge glow that follows the generator signal ----
+
 const sigTint=document.getElementById('sigTint');
 let _lastTint='';
 function updateSignalTint(){
@@ -2203,7 +2278,7 @@ function updateSignalTint(){
   else if(genType==='pink') rgb='rgba(255,120,180,.16)';
   else if(genType==='sweep'){
     const now=audioCtx?audioCtx.currentTime:0, t=((now-(sweepStartT||now))%genSweepDur)/genSweepDur;
-    const hue=250-250*Math.max(0,Math.min(1,t));   // low freq→blue, high→red
+    const hue=250-250*Math.max(0,Math.min(1,t));
     rgb='hsla('+Math.round(hue)+',90%,60%,.16)';
   }
   if(rgb){ if(rgb!==_lastTint){ sigTint.style.boxShadow='inset 0 0 140px 30px '+rgb; _lastTint=rgb; } sigTint.classList.add('on'); }
@@ -2212,6 +2287,7 @@ function updateSignalTint(){
 const HELP={
   mRta:'תצוגת ספקטרום — עוצמה לפי תדר, בזמן אמת.',
   mSpec:'ווטרפול — הספקטרום לאורך זמן.',
+  sunBtn:'מצב אור שמש: רקע בהיר וניגודיות גבוהה לעבודה בשטח.',
   swatches:'צבע האפליקציה — משנה גם את צבע הברים בגרף.',
   helpBtn:'מצב עזרה: רחף על כל כפתור לקבל הסבר.',
   genBtn:'גנרטור אותות: רעש ורוד/לבן, סינוס או סוויפ.\nלמדידה ולכיוונון המערכת.',
@@ -2235,13 +2311,13 @@ const HELP={
   genOnBtn:'מפעיל/עוצר את אות הגנרטור.',
   floor:'רצפת רעש: הסף התחתון של התצוגה.',
   cal:'כיול SPL: התאם למד ייחוס\nכדי לקבל dB SPL אמיתי.',
+  autoCalBtn:'כיול אוטומטי מול פיסטונפון 1kHz.',
   genLvl:'עוצמת אות הגנרטור. התחל נמוך!',
   genFreq:'תדר הסינוס (סליידר).',
   genFreqNum:'הקלד תדר סינוס מדויק.',
   genSweep:'משך מחזור הסוויפ.',
   smooth:'החלקה: מרכך קפיצות בתצוגה.',
   res:'רזולוציה: פסים לאוקטבה (1/3 עד 1/24).',
-  // מדידת תגובה
   respModeSeg:'חד־ערוצי (מיק\' מול יעד) או\nדו־ערוצי (מיק\'+רפרנס = TF אמיתי).',
   eqModeSeg:'תצוגת התיקון: גרפיק (31 פסים)\nאו פרמטרי (תדר/גיין/Q).',
   tfModeSeg:'תצוגת התיקון: גרפיק או פרמטרי.',
@@ -2250,18 +2326,17 @@ const HELP={
   eqResetBtn:'נקה את כל המיקומים.',
   areaMeasBtn:'מדוד אזור חדש (עד 4). להשוואת\nצדדים שונים של המעגל.',
   areaEqBtn:'חשב תיקון EQ ממוצע לכל האזורים.',
-  // דיליי
   dlyMeasBtn:'מדוד דיליי בודד (מיק\' מול רפרנס).',
   dlyCountSeg:'מספר רמקולים ליישור (2/4/6).',
   dlyReset:'נקה את מדידות הדיליי.',
-  // RT60
   rtRunBtn:'התחל מדידת RT60 (מנגן רעש ופוסק).',
   rtLevel:'עוצמת המדידה. כוונן לפני שמתחיל.',
   rtRange:'טווח דעיכה נדרש. נמוך יותר = קל\nלמדוד בחדר שקט, פחות מדויק.',
-  // בדיקת רמות
   tfOverlayHdr:'הצג/הסתר את עקומות המיק\' והרפרנס\nיחד על הגרף הראשי.',
   tfOverlayBtn:'משאיר את עקומות המיק\' והרפרנס על הגרף\nהראשי גם כשהפאנל סגור.',
   saveBtn:'מדידות שמורות: שמור וטען מדידות\nלפי מקום ותאריך.',
+  exportJsonBtn:'ייצוא כל הסשן לקובץ JSON להעברה בין מכשירים.',
+  importJsonBtn:'ייבוא קובץ JSON של סשן שמור.',
   refCurveBtn:'שומר את התגובה הנוכחית כעקומת ״לפני״\nכדי להשוות אחרי שינוי EQ.',
   cutOnlySeg:'חיתוך בלבד: EQ מוריד תדרים בלבד,\nבלי הגברות — חוסך הדרוּם ומגן על הדרייברים.',
   geqShowBtn:'הצג/הסתר את תצוגת תיקון ה-EQ\n(בנק הפיידרים מתחת לגרף).',
@@ -2290,17 +2365,15 @@ document.addEventListener('mousemove',e=>{
   if(!helpMode) return;
   showHelpTip(helpTextFor(e.target), e.clientX, e.clientY);
 });
-// keyboard users: Tab-focusing a control in help mode shows its explanation next to it
 document.addEventListener('focusin',e=>{
   if(!helpMode) return;
   const txt=helpTextFor(e.target); if(!txt){ helpTip.style.display='none'; return; }
   const r=e.target.getBoundingClientRect();
   showHelpTip(txt, r.left, r.bottom);
 });
-// touch: in help mode a tap explains the control instead of activating it
 document.addEventListener('pointerdown',e=>{
   if(!helpMode || e.pointerType==='mouse') return;
-  if(e.target.closest && e.target.closest('#helpBtn')) return;   // let the toggle itself work
+  if(e.target.closest && (e.target.closest('#helpBtn') || e.target.closest('#sunBtn'))) return;
   const txt=helpTextFor(e.target);
   if(txt){ e.preventDefault(); e.stopPropagation(); showHelpTip(txt, e.clientX, e.clientY); }
 }, true);
@@ -2310,7 +2383,6 @@ document.addEventListener('pointerdown',e=>{
   const NS='http://www.w3.org/2000/svg', W=600,H=200, N=42, LINK=54;
   let s=90210; const rnd=()=>{ s=(s*1103515245+12345)&0x7fffffff; return s/0x7fffffff; };
   const nodes=[], dots=[];
-  // one shared path for ALL connecting lines (1 DOM update/frame instead of hundreds)
   const linePath=document.createElementNS(NS,'path');
   linePath.setAttribute('stroke','#5ab0ff'); linePath.setAttribute('stroke-width','0.4');
   linePath.setAttribute('fill','none'); linePath.setAttribute('opacity','0.5'); g.appendChild(linePath);
@@ -2324,8 +2396,8 @@ document.addEventListener('pointerdown',e=>{
   let last=0;
   function frame(t){
     requestAnimationFrame(frame);
-    if(t-last<70) return;                 // ~14fps — decorative, keeps the main thread free for meters
-    if(document.hidden) return;           // pause when tab/app not visible
+    if(t-last<70) return;
+    if(document.hidden) return;
     last=t;
     let d='';
     for(const n of nodes){ n.x+=n.vx; n.y+=n.vy; if(n.x<0||n.x>W)n.vx*=-1; if(n.y<0||n.y>H)n.vy*=-1; }
@@ -2334,13 +2406,12 @@ document.addEventListener('pointerdown',e=>{
       const dx=nodes[i].x-nodes[j].x, dy=nodes[i].y-nodes[j].y, d2=dx*dx+dy*dy;
       if(d2<LINK*LINK) d+='M'+nodes[i].x.toFixed(1)+' '+nodes[i].y.toFixed(1)+'L'+nodes[j].x.toFixed(1)+' '+nodes[j].y.toFixed(1);
     }
-    linePath.setAttribute('d', d);        // single write for every connection
+    linePath.setAttribute('d', d);
   }
   requestAnimationFrame(frame);
 })();
 
 function reviveAudio(){ if(running && audioCtx && audioCtx.state==='suspended') audioCtx.resume(); }
-// keep the device list current when an interface is plugged in or removed mid-session
 if(navigator.mediaDevices && navigator.mediaDevices.addEventListener){
   navigator.mediaDevices.addEventListener('devicechange',()=>{ if(running) populateInputs(); });
 }
@@ -2354,7 +2425,6 @@ if('ResizeObserver' in window){
 if('serviceWorker' in navigator){
   window.addEventListener('load',()=>{
     navigator.serviceWorker.register('sw.js').then(reg=>{
-      // tell the user when a newer version has been fetched, so a stale PWA is never a mystery
       reg.addEventListener('updatefound',()=>{
         const sw=reg.installing; if(!sw) return;
         sw.addEventListener('statechange',()=>{
