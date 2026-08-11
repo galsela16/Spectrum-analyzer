@@ -283,7 +283,7 @@ safeOn('jsonFileInput', 'change', importSessionJson);
 
 function exportSessionJson(){
   const data = {
-    version: 'v177',
+    version: 'v178',
     timestamp: new Date().toISOString(),
     saves: saves,
     eqPositions: eqPositions.map(p=>({name:p.name, db:Array.from(p.db)})),
@@ -1616,8 +1616,16 @@ let alignOn=false;
 function setAlign(on){
   alignOn=on;
   const bar=document.getElementById('alignBar'); if(bar) bar.classList.toggle('show',on);
+  const stage=document.getElementById('stage');
   const b=document.getElementById('alignBtn'); if(b) b.classList.toggle('on',on);
   if(on) closeModals();
+  // דחיפת הגרף: הקנבס מתכווץ לפי גובה הסרגל
+  if(stage){
+    const h = (on && bar) ? bar.offsetHeight : 0;   // offsetHeight מכריח חישוב layout
+    stage.style.setProperty('--bar-h', h+'px');
+    stage.classList.toggle('bar-open', on);
+  }
+  if(typeof resize==='function') resize();
 }
 safeOn('alignBtn','click',()=>setAlign(!alignOn));
 safeOn('alignClose','click',()=>setAlign(false));
@@ -2467,7 +2475,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v177';
+document.getElementById('ver').textContent='v178';
 
 let accentRgb=[62,166,255];
 function applyAccent(hex){
