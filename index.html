@@ -571,6 +571,16 @@
         <button class="toggle" id="tfCohToggleBtn" title="מציג/מסתיר את גרף הקוהרנטיות (אדום מקווקו)">📊 קוהרנטיות</button>
       </div>
       <div id="tfDelayInfo" style="text-align:center;font-size:11px;color:var(--accent)">סנכרון דיליי TF: 0.00 ms</div>
+      <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin:6px 0">
+        <div class="ctrl" style="min-width:150px">
+          <label>יציבות TF <b id="tfSmoothVal">בינונית</b></label>
+          <input type="range" id="tfSmooth" min="70" max="98" step="1" value="93">
+        </div>
+        <div class="ctrl" style="min-width:150px">
+          <label>סף קוהרנטיות לפאזה <b id="tfCohGateVal">0.40</b></label>
+          <input type="range" id="tfCohGate" min="0" max="90" step="5" value="40">
+        </div>
+      </div>
       <canvas id="tfCanvas" style="width:100%;height:234px;background:var(--panel-2);border:1px solid var(--line);border-radius:4px;display:none"></canvas>
       <div class="seg" id="tfModeSeg" style="align-self:center">
         <button data-m="graphic" class="on">גרפיק</button>

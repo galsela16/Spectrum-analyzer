@@ -14,6 +14,8 @@ let tfDelayMs = 0;
 let tfDelaySamples = 0;
 let showTfPhase = false;
 let showTfCoh = true;
+let tfSmoothA = 0.93;   // מיצוע TF: גבוה=יציב/איטי, נמוך=מהיר/רועד
+let tfCohGate = 0.4;    // סף קוהרנטיות שמתחתיו לא מציגים פאזה
 
 const TF_FFT_N = 2048;
 const tfXr = new Float32Array(TF_FFT_N);
@@ -292,7 +294,7 @@ safeOn('jsonFileInput', 'change', importSessionJson);
 
 function exportSessionJson(){
   const data = {
-    version: 'v164',
+    version: 'v165',
     timestamp: new Date().toISOString(),
     saves: saves,
     eqPositions: eqPositions.map(p=>({name:p.name, db:Array.from(p.db)})),
@@ -1960,7 +1962,7 @@ function computeComplexTf(){
   fft(tfYr, tfYi, false);
 
   const halfN = N / 2;
-  const alpha = 0.85;
+  const alpha = tfSmoothA;
 
   for(let k=0; k<halfN; k++){
     const rx = tfXr[k], ix = tfXi[k];
@@ -2084,17 +2086,24 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     }
 
     if(showTfPhase){
+      ctx.strokeStyle = 'rgba(34, 197, 94, 0.9)';
+      ctx.lineWidth = 1.5;
       ctx.beginPath();
+      let penDown=false, prevY=0;
       for(let px = 0; px <= W; px += 2){
         const f = freqForX(px);
         const k = Math.min(TF_FFT_N/2 - 1, Math.round(f / nyquist * (TF_FFT_N/2)));
+        const pxx = tfPxx[k], pyy = tfPyy[k];
+        const pxySq = tfPxyRe[k]*tfPxyRe[k] + tfPxyIm[k]*tfPxyIm[k];
+        const coh = Math.max(0, Math.min(1, pxySq / (pxx * pyy + 1e-12)));
+        if(coh < tfCohGate){ penDown=false; continue; }   // שער קוהרנטיות: מסתיר פאזה לא-אמינה
         const phaseRad = Math.atan2(tfPxyIm[k], tfPxyRe[k]);
         const phaseNorm = 0.5 - (phaseRad / (2 * Math.PI));
         const y = plotH * Math.max(0, Math.min(1, phaseNorm));
-        px === 0 ? ctx.moveTo(px, y) : ctx.lineTo(px, y);
+        if(penDown && Math.abs(y - prevY) > plotH*0.5){ penDown=false; } // שבירה ב-wrap ±180°
+        penDown ? ctx.lineTo(px, y) : ctx.moveTo(px, y);
+        penDown=true; prevY=y;
       }
-      ctx.strokeStyle = 'rgba(34, 197, 94, 0.85)';
-      ctx.lineWidth = 1.5;
       ctx.stroke();
     }
     
@@ -2339,7 +2348,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v164';
+document.getElementById('ver').textContent='v165';
 
 let accentRgb=[62,166,255];
 function applyAccent(hex){
@@ -2380,6 +2389,16 @@ safeOn('abClear','click',function(){
   syncAbSeg();
 });
 document.querySelectorAll('#abViewSeg button').forEach(b=>b.addEventListener('click',function(){ abView=this.dataset.v; syncAbSeg(); }));
+safeOn('tfSmooth','input',function(e){
+  tfSmoothA = Math.max(0.70, Math.min(0.98, parseInt(e.target.value,10)/100));
+  const t = document.getElementById('tfSmoothVal');
+  if(t) t.textContent = tfSmoothA>=0.955?'מקסימלית':tfSmoothA>=0.90?'גבוהה':tfSmoothA>=0.85?'בינונית':'מהירה';
+});
+safeOn('tfCohGate','input',function(e){
+  tfCohGate = Math.max(0, Math.min(0.9, parseInt(e.target.value,10)/100));
+  const t = document.getElementById('tfCohGateVal');
+  if(t) t.textContent = tfCohGate.toFixed(2);
+});
 
 const SAVE_KEY='rta_saves';
 let saves=[];
