@@ -82,6 +82,22 @@
   .tfQuickBar button.on{
     border-color:var(--accent); color:var(--accent); background:rgba(62,166,255,.16);
   }
+  #alignBar{
+    position:absolute; inset-inline:0; bottom:12px; margin-inline:auto; width:max-content; max-width:calc(100% - 24px);
+    z-index:9; display:none; gap:8px; align-items:center; flex-wrap:wrap; justify-content:center;
+    background:rgba(13,17,23,.92); backdrop-filter:blur(6px);
+    padding:8px 12px; border:1px solid var(--accent); border-radius:8px; box-shadow:0 6px 22px rgba(0,0,0,.55);
+  }
+  body.sun-mode #alignBar{ background:rgba(255,255,255,.94); }
+  #alignBar.show{ display:flex; }
+  #alignBar button{
+    border:1px solid var(--line); background:var(--panel-2); color:var(--text);
+    font-family:inherit; font-size:11px; font-weight:600; padding:6px 11px;
+    border-radius:4px; cursor:pointer; transition:.12s; white-space:nowrap;
+  }
+  #alignBar button.on{ border-color:var(--accent); color:var(--accent); background:rgba(62,166,255,.16); }
+  #alignBar button:disabled{ opacity:.5; cursor:default; }
+  #alignBar #alignClose{ border-color:transparent; color:var(--dim); font-size:14px; padding:6px 8px; }
 
   .abWidget{
     position:absolute; top:10px; inset-inline-start:10px; z-index:8;
@@ -143,11 +159,6 @@
   #dlyPanel .sub{font-size:10px;color:var(--dim);letter-spacing:.5px;line-height:1.5}
   #dlyStatus b{color:var(--accent);font-size:24px}
   #dlyClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;font-size:12px;padding:8px 20px;border-radius:4px;cursor:pointer;align-self:center}
-  #alignPanel{position:relative;display:none;flex-direction:column;gap:10px;width:min(94%,380px);max-height:calc(100dvh - 32px);overflow:auto;
-    padding:16px 18px;border:1px solid var(--accent);border-radius:6px;background:var(--panel);box-shadow:0 12px 48px rgba(0,0,0,.8)}
-  #alignPanel.open{display:flex}
-  #alignPanel h3{font-size:13px;letter-spacing:1px;color:var(--text);font-weight:600}
-  #alignPanel .sub{font-size:10px;color:var(--dim);letter-spacing:.5px;line-height:1.5}
   #alignClose{border:1px solid var(--line);background:var(--panel-2);color:var(--dim);font-family:inherit;font-size:12px;padding:8px 20px;border-radius:4px;cursor:pointer;align-self:center}
   #srcOverlay.show{display:flex}
   #srcBox{display:flex;flex-direction:column;gap:9px;width:min(90%,280px);padding:18px;border:1px solid var(--accent);
@@ -392,6 +403,18 @@
       <button id="qbPhase" title="הצג/הסתר פאזה">📐 Phase</button>
     </div>
 
+    <div id="alignBar">
+      <button id="phPinkBtn" title="מנגן פינק נויז ישירות מהאפליקציה. לחלופין נגן ממקור חיצוני.">▶ פינק</button>
+      <button id="phSubBtn" title="מודד 3 שניות ולוכד את פאזת הסאב">מדוד סאב</button>
+      <button id="phTopBtn" title="מודד 3 שניות ולוכד את פאזת הטופ">מדוד טופ</button>
+      <button id="phClearBtn">נקה</button>
+      <span style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text);white-space:nowrap">חיתוך <b id="xoverFVal" style="color:var(--accent)">90Hz</b>
+        <input type="range" id="xoverF" min="30" max="300" step="1" value="90" style="width:120px">
+      </span>
+      <span id="phStatus" style="font-size:11px;color:var(--dim);white-space:nowrap;max-width:280px;overflow:hidden;text-overflow:ellipsis"></span>
+      <button id="alignClose" title="סגור יישור">✕</button>
+    </div>
+
     <!-- A/B Comparison Floating Widget -->
     <div id="abWidget" class="abWidget">
       <button id="abBtnA">A</button>
@@ -619,26 +642,6 @@
         <button id="dlyReset" class="toggle">אפס דיליי</button>
         <button id="dlyClose">סגור</button>
       </div>
-    </div>
-
-    <div id="alignPanel">
-      <h3>יישור סאב/טופ · פאזה</h3>
-      <div class="sub">כיוונון עדין של תדר החיתוך: מודד את פאזת הסאב ואת פאזת הטופ בנפרד, ומראה אם הם מתחברים בחיתוך. דורש רפרנס בערוץ 2 ו-Auto-Delay מראש.</div>
-      <div style="display:flex;justify-content:center">
-        <button class="toggle" id="phPinkBtn" title="מנגן פינק נויז ישירות מהאפליקציה. לחלופין נגן ממקור חיצוני.">▶ פינק נויז מהאפליקציה</button>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
-        <button class="toggle" id="phSubBtn" title="מודד 3 שניות ולוכד את פאזת הסאב">מדוד + לכוד סאב</button>
-        <button class="toggle" id="phTopBtn" title="מודד 3 שניות ולוכד את פאזת הטופ">מדוד + לכוד טופ</button>
-        <button class="toggle" id="phClearBtn">נקה</button>
-      </div>
-      <div id="phStatus" style="text-align:center;font-size:12px;color:var(--dim);min-height:18px">מדוד סאב לבד, ואז טופ לבד — כל מדידה 3 שניות.</div>
-      <div class="ctrl" style="flex:0 0 auto;align-items:center;min-width:auto">
-        <label style="justify-content:center">סמן תדר חיתוך <b id="xoverFVal">90 Hz</b></label>
-        <input type="range" id="xoverF" min="30" max="300" step="1" value="90">
-      </div>
-      <div class="sub" style="text-align:center">מדוד סאב לבד ← לכוד · מדוד טופ לבד ← לכוד · גרור לתדר החיתוך · כוונן דיליי/פולריות עד Δφ≈0°</div>
-      <button id="alignClose">סגור</button>
     </div>
     
     <div id="geqDock" style="display:none">

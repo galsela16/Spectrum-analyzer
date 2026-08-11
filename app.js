@@ -283,7 +283,7 @@ safeOn('jsonFileInput', 'change', importSessionJson);
 
 function exportSessionJson(){
   const data = {
-    version: 'v176',
+    version: 'v177',
     timestamp: new Date().toISOString(),
     saves: saves,
     eqPositions: eqPositions.map(p=>({name:p.name, db:Array.from(p.db)})),
@@ -833,10 +833,10 @@ safeOn('calResetBtn', 'click',()=>{
 });
 
 const modalBg=document.getElementById('modalBg');
-['rtPanel','eqPanel','calPanel','tfPanel','areaPanel','dlyPanel','alignPanel','savePanel'].forEach(id=>{
+['rtPanel','eqPanel','calPanel','tfPanel','areaPanel','dlyPanel','savePanel'].forEach(id=>{
   const p=document.getElementById(id); if(p) modalBg.appendChild(p);
 });
-function showModal(p){ closeModals(); p.classList.add('open'); modalBg.classList.add('show'); }
+function showModal(p){ setAlign(false); closeModals(); p.classList.add('open'); modalBg.classList.add('show'); }
 function abortRT60(){
   if(rt60State!=='capture' && !rt60Timer) return;
   rt60State='idle';
@@ -847,7 +847,7 @@ function abortRT60(){
 }
 function closeModals(){
   abortRT60();
-  ['rtPanel','eqPanel','calPanel','tfPanel','areaPanel','dlyPanel','alignPanel','savePanel'].forEach(id=>document.getElementById(id).classList.remove('open'));
+  ['rtPanel','eqPanel','calPanel','tfPanel','areaPanel','dlyPanel','savePanel'].forEach(id=>document.getElementById(id).classList.remove('open'));
   modalBg.classList.remove('show');
 }
 modalBg.addEventListener('click',e=>{ if(e.target===modalBg) closeModals(); });
@@ -1119,7 +1119,6 @@ function tfExportCsv(){
 }
 
 const dlyPanel=document.getElementById('dlyPanel');
-const alignPanel=document.getElementById('alignPanel');
 safeOn('dlyBtn', 'click',()=>{
   showModal(dlyPanel);
   if(running && !workletReady){
@@ -1613,8 +1612,15 @@ document.querySelectorAll('#fftSeg button').forEach(b=>b.addEventListener('click
 safeOn('mRta', 'click',()=>setMode('rta'));
 safeOn('mSpec', 'click',()=>setMode('spec'));
 safeOn('tfOverlayHdr', 'click',()=>setTfOverlay(!tfOverlay));
-safeOn('alignBtn','click',()=>{ showModal(alignPanel); });
-safeOn('alignClose','click',closeModals);
+let alignOn=false;
+function setAlign(on){
+  alignOn=on;
+  const bar=document.getElementById('alignBar'); if(bar) bar.classList.toggle('show',on);
+  const b=document.getElementById('alignBtn'); if(b) b.classList.toggle('on',on);
+  if(on) closeModals();
+}
+safeOn('alignBtn','click',()=>setAlign(!alignOn));
+safeOn('alignClose','click',()=>setAlign(false));
 safeOn('startBtn', 'click',()=>start());
 safeOn('stopBtn', 'click',resetSession);
 function resetSession(){
@@ -2021,7 +2027,7 @@ function drawRta(W,H,nyquist,bins,xForFreq){
   [0.25,0.5,0.75].forEach(p=>{ctx.globalAlpha=.3;ctx.strokeStyle=sunMode?'#cbd5e1':'#2b3646';ctx.beginPath();ctx.moveTo(0,plotH*p);ctx.lineTo(W,plotH*p);ctx.stroke();ctx.globalAlpha=1;});
 
   const bw=W/BANDS, gap=Math.max(0.5,bw*0.12);
-  const tfOpen = ((tfOverlay || (typeof tfPanel!=='undefined' && tfPanel.classList.contains('open')) || (typeof alignPanel!=='undefined' && alignPanel.classList.contains('open'))) && floatDataRef && analyserRef);
+  const tfOpen = ((tfOverlay || (typeof tfPanel!=='undefined' && tfPanel.classList.contains('open')) || alignOn) && floatDataRef && analyserRef);
   
   const qBar = document.getElementById('tfQuickBar');
   if(qBar) qBar.classList.toggle('show', tfOpen);
@@ -2052,7 +2058,7 @@ function drawRta(W,H,nyquist,bins,xForFreq){
   }
   
   if(tfOpen){
-    const alignView = alignPanel.classList.contains('open');
+    const alignView = alignOn;
     if(!frozen) analyserRef.getFloatFrequencyData(floatDataRef);
     if(!_pfxRef || _pfxRef.length!==bins+1) _pfxRef=new Float64Array(bins+1);
     { let acc=0; _pfxRef[0]=0; for(let i=0;i<bins;i++){ acc+=db2lin(floatDataRef[i]); _pfxRef[i+1]=acc; } }
@@ -2311,7 +2317,7 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     ctx.strokeStyle='rgba(47,155,255,.8)'; ctx.lineWidth=1;
     ctx.strokeRect(xa,0,xb-xa,plotH);
   }
-  if(targetMode!=='off' && (eqPanel.classList.contains('open')||areaPanel.classList.contains('open')||tfPanel.classList.contains('open'))){
+  if(targetMode!=='off' && (!alignOn && (eqPanel.classList.contains('open')||areaPanel.classList.contains('open')||tfPanel.classList.contains('open')))){
     ctx.strokeStyle='rgba(80,230,140,.8)'; ctx.setLineDash([6,5]); ctx.lineWidth=2; ctx.beginPath();
     for(let b=0;b<BANDS;b++){
       const ty=Math.max(0.05, Math.min(0.95, 0.55 + targetDb(ISO[b])*0.03));
@@ -2461,7 +2467,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v176';
+document.getElementById('ver').textContent='v177';
 
 let accentRgb=[62,166,255];
 function applyAccent(hex){
