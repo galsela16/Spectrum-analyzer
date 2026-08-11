@@ -283,7 +283,7 @@ safeOn('jsonFileInput', 'change', importSessionJson);
 
 function exportSessionJson(){
   const data = {
-    version: 'v178',
+    version: 'v179',
     timestamp: new Date().toISOString(),
     saves: saves,
     eqPositions: eqPositions.map(p=>({name:p.name, db:Array.from(p.db)})),
@@ -2165,15 +2165,48 @@ function drawRta(W,H,nyquist,bins,xForFreq){
         [uSub,uTop].forEach(u=>{ if(!u) return; for(let k=0;k<N2;k++){ const v=u[k]; if(!isNaN(v)){ const d=toDeg(v); if(d<mn)mn=d; if(d>mx)mx=d; } } });
         if(mn<mx){ const pad=Math.max(30,(mx-mn)*0.15); yMinDeg=mn-pad; yMaxDeg=mx+pad; }
       }
-      const degToY = deg => plotH*(1-(deg-yMinDeg)/(yMaxDeg-yMinDeg));
+      // ---- פריסה: תגובה (dB) למעלה, פאזה (°) למטה ----
+      const magH = alignView ? plotH*0.5 : 0;
+      const phBase = magH + (alignView?8:0);
+      const phH = plotH - phBase;
+      const degToY = deg => phBase + phH*(1-(deg-yMinDeg)/(yMaxDeg-yMinDeg));
 
-      // רשת פאזה + תוויות (ב-align)
+      // קנה מידה אוטומטי למגניטודה מתוך תגובת הסאב/טופ
+      let magMin=-60, magMax=0;
       if(alignView){
+        let mn=1e9, mx=-1e9;
+        [phaseSub,phaseTop].forEach(s=>{ if(!s||!s.mag) return; for(let k=0;k<N2;k++){ if(s.coh[k]>=tfCohGate){ const m=s.mag[k]; if(m<mn)mn=m; if(m>mx)mx=m; } } });
+        if(mn<mx){ const pad=Math.max(6,(mx-mn)*0.12); magMin=mn-pad; magMax=mx+pad; }
+      }
+      const magToY = db => Math.max(0,Math.min(magH, magH*(1-(db-magMin)/(magMax-magMin))));
+
+      if(alignView){
+        // רשת מגניטודה + תוויות dB
+        ctx.strokeStyle=sunMode?'rgba(0,0,0,.10)':'rgba(255,255,255,.08)'; ctx.lineWidth=1;
+        ctx.fillStyle=sunMode?'#475569':'#64748b'; ctx.font='10px monospace';
+        const mstep=(magMax-magMin)>40?12:6;
+        for(let d=Math.ceil(magMin/mstep)*mstep; d<=magMax; d+=mstep){
+          const y=magToY(d); if(y<0||y>magH) continue;
+          ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke();
+          const pd=ctx.direction; ctx.direction='ltr'; ctx.textAlign='left';
+          ctx.fillText(d.toFixed(0)+'dB', 4, y-2);
+          ctx.direction=pd; ctx.textAlign='start';
+        }
+        // קו מפריד בין תגובה לפאזה
+        ctx.strokeStyle=sunMode?'rgba(0,0,0,.25)':'rgba(255,255,255,.22)'; ctx.lineWidth=1;
+        ctx.beginPath(); ctx.moveTo(0,magH); ctx.lineTo(W,magH); ctx.stroke();
+        // תוויות אזור
+        ctx.fillStyle=sunMode?'#94a3b8':'#94a3b8'; ctx.font='10px monospace';
+        const pd2=ctx.direction; ctx.direction='rtl'; ctx.textAlign='right';
+        ctx.fillText('תגובה', W-6, 12);
+        ctx.fillText('פאזה', W-6, phBase+12);
+        ctx.direction=pd2; ctx.textAlign='start';
+        // רשת פאזה + תוויות מעלות (באזור הפאזה)
         ctx.strokeStyle=sunMode?'rgba(0,0,0,.12)':'rgba(255,255,255,.10)'; ctx.lineWidth=1;
-        ctx.fillStyle=sunMode?'#475569':'#64748b'; ctx.font='10px monospace'; ctx.textAlign='start';
+        ctx.fillStyle=sunMode?'#475569':'#64748b'; ctx.font='10px monospace';
         const step = (yMaxDeg-yMinDeg)>540?180:90;
         for(let d=Math.ceil(yMinDeg/step)*step; d<=yMaxDeg; d+=step){
-          const y=degToY(d);
+          const y=degToY(d); if(y<phBase-1||y>plotH+1) continue;
           ctx.globalAlpha = d===0?0.5:1;
           ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); ctx.globalAlpha=1;
           const pd=ctx.direction; ctx.direction='ltr'; ctx.textAlign='left';
@@ -2182,7 +2215,23 @@ function drawRta(W,H,nyquist,bins,xForFreq){
         }
       }
 
-      // ציור עקומה
+      // מגניטודה — קווים דקים (למעלה)
+      const drawMag=(snap,color)=>{
+        if(!alignView || !snap || !snap.mag) return;
+        ctx.strokeStyle=color; ctx.lineWidth=1.5; ctx.globalAlpha=0.85; ctx.beginPath();
+        let pen=false;
+        for(let px=0;px<=W;px+=2){
+          const f=freqForX(px), k=Math.min(N2-1, Math.round(f/nyquist*N2));
+          if(snap.coh[k] < tfCohGate){ pen=false; continue; }
+          const y=magToY(snap.mag[k]);
+          pen?ctx.lineTo(px,y):ctx.moveTo(px,y); pen=true;
+        }
+        ctx.stroke(); ctx.globalAlpha=1;
+      };
+      drawMag(phaseSub, '#38bdf8');
+      drawMag(phaseTop, '#e879f9');
+
+      // פאזה — קווים עבים (למטה)
       const drawSnap=(snap,unw,color)=>{
         if(!snap) return;
         ctx.strokeStyle=color; ctx.lineWidth=2.5; ctx.beginPath();
@@ -2194,7 +2243,7 @@ function drawRta(W,H,nyquist,bins,xForFreq){
           let y;
           if(alignView){ const v=unw[k]; if(isNaN(v)){ pen=false; continue; } y=degToY(toDeg(v)); }
           else { y=plotH*Math.max(0,Math.min(1, 0.5 - snap.ph[k]/(2*Math.PI))); }
-          if(pen && Math.abs(y-prevY)>plotH*0.5) pen=false;
+          if(pen && Math.abs(y-prevY)>phH*0.5) pen=false;
           pen?ctx.lineTo(px,y):ctx.moveTo(px,y);
           pen=true; prevY=y;
         }
@@ -2475,7 +2524,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v178';
+document.getElementById('ver').textContent='v179';
 
 let accentRgb=[62,166,255];
 function applyAccent(hex){
@@ -2529,13 +2578,14 @@ safeOn('tfCohGate','input',function(e){
 
 // ---- יישור חיתוך סאב/טופ ----
 function tfPhaseSnapshot(){
-  const n=TF_FFT_N/2, ph=new Float32Array(n), coh=new Float32Array(n);
+  const n=TF_FFT_N/2, ph=new Float32Array(n), coh=new Float32Array(n), mag=new Float32Array(n);
   for(let k=0;k<n;k++){
     ph[k]=Math.atan2(tfPxyIm[k], tfPxyRe[k]);
     const pxySq=tfPxyRe[k]*tfPxyRe[k]+tfPxyIm[k]*tfPxyIm[k];
     coh[k]=Math.max(0,Math.min(1, pxySq/(tfPxx[k]*tfPyy[k]+1e-12)));
+    mag[k]=10*Math.log10(tfPyy[k]+1e-12);   // תגובת המיקרופון (dB) — מראה את הבור בחיתוך
   }
-  return {ph,coh};
+  return {ph,coh,mag};
 }
 let phMeasuring=false;
 function capturePhase(which){
