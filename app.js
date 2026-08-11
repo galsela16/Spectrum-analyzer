@@ -199,20 +199,7 @@ function autoCal1kHz(){
   alert('✓ הכיול הושלם בהצלחה!\nנקלט אות ב: '+peakVal.toFixed(1)+' dBFS\nכיול SPL עודכן ל: +'+calib+' dB');
 }
 
-// ---- TF Controls: Auto-Delay, Phase, Coherence ----
-safeOn('tfAutoDelayBtn', 'click', tfAutoDelay);
-safeOn('tfPhaseToggleBtn', 'click', function(){
-  showTfPhase = !showTfPhase;
-  this.classList.toggle('on', showTfPhase);
-  const qbBtn = document.getElementById('qbPhase');
-  if(qbBtn) qbBtn.classList.toggle('on', showTfPhase);
-});
-safeOn('tfCohToggleBtn', 'click', function(){
-  showTfCoh = !showTfCoh;
-  this.classList.toggle('on', showTfCoh);
-  const qbBtn = document.getElementById('qbCoh');
-  if(qbBtn) qbBtn.classList.toggle('on', showTfCoh);
-});
+// ---- TF Controls: Auto-Delay, Phase, Coherence (floating bar only) ----
 
 // Event Listeners for TF Quick Floating Bar
 safeOn('qbAutoDelay', 'click', tfAutoDelay);
@@ -297,7 +284,7 @@ safeOn('jsonFileInput', 'change', importSessionJson);
 
 function exportSessionJson(){
   const data = {
-    version: 'v172',
+    version: 'v173',
     timestamp: new Date().toISOString(),
     saves: saves,
     eqPositions: eqPositions.map(p=>({name:p.name, db:Array.from(p.db)})),
@@ -2320,7 +2307,7 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     ctx.strokeStyle='rgba(47,155,255,.8)'; ctx.lineWidth=1;
     ctx.strokeRect(xa,0,xb-xa,plotH);
   }
-  if(targetMode!=='off' && (eqPanel.classList.contains('open')||areaPanel.classList.contains('open'))){
+  if(targetMode!=='off' && (eqPanel.classList.contains('open')||areaPanel.classList.contains('open')||(tfPanel.classList.contains('open')&&!alignActive))){
     ctx.strokeStyle='rgba(80,230,140,.8)'; ctx.setLineDash([6,5]); ctx.lineWidth=2; ctx.beginPath();
     for(let b=0;b<BANDS;b++){
       const ty=Math.max(0.05, Math.min(0.95, 0.55 + targetDb(ISO[b])*0.03));
@@ -2470,7 +2457,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v172';
+document.getElementById('ver').textContent='v173';
 
 let accentRgb=[62,166,255];
 function applyAccent(hex){
