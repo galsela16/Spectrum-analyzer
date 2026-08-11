@@ -292,7 +292,7 @@ safeOn('jsonFileInput', 'change', importSessionJson);
 
 function exportSessionJson(){
   const data = {
-    version: 'v163',
+    version: 'v164',
     timestamp: new Date().toISOString(),
     saves: saves,
     eqPositions: eqPositions.map(p=>({name:p.name, db:Array.from(p.db)})),
@@ -2012,7 +2012,8 @@ function drawRta(W,H,nyquist,bins,xForFreq){
   if(qBar) qBar.classList.toggle('show', tfOpen);
 
   let peakBand=-1,peakVal=0;
-  
+  const abCompare = (abView==='both' || abView==='delta') && (abA || abB);
+
   for(let b=0;b<BANDS;b++){
     const fc=ISO[b];
     const rawDb=bandPowDb(fc/R,fc*R);
@@ -2022,7 +2023,7 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     lastV[b]=v;
     if(v>peakVal){peakVal=v;peakBand=b;}
     
-    if(!tfOpen){
+    if(!tfOpen && !abCompare){
       const x=b*bw+gap/2, barW=bw-gap;
       const barH=v*plotH, y=plotH-barH;
       let col= v<0.85?'rgba('+accentRgb[0]+','+accentRgb[1]+','+accentRgb[2]+','+(0.4+v).toFixed(2)+')' : 'var(--hot)';
@@ -2114,20 +2115,25 @@ function drawRta(W,H,nyquist,bins,xForFreq){
 
   // ---- השוואת A/B (לפני/אחרי כיוון) ----
   if(abA || abB){
-    const trace=(snap,color)=>{
+    const graph=(snap,line,fill,doFill)=>{
       if(!snap || !snap.f || !snap.f.length) return;
-      ctx.strokeStyle=color; ctx.lineWidth=2.5; ctx.beginPath();
-      for(let i=0;i<snap.f.length;i++){
-        const x=xForFreq(snap.f[i]), yy=plotH-norm(snap.db[i])*plotH;
-        i===0?ctx.moveTo(x,yy):ctx.lineTo(x,yy);
+      if(doFill){
+        ctx.beginPath();
+        ctx.moveTo(xForFreq(snap.f[0]), plotH);
+        for(let i=0;i<snap.f.length;i++){ const x=xForFreq(snap.f[i]), yy=plotH-norm(snap.db[i])*plotH; ctx.lineTo(x,yy); }
+        ctx.lineTo(xForFreq(snap.f[snap.f.length-1]), plotH);
+        ctx.closePath(); ctx.fillStyle=fill; ctx.fill();
       }
-      ctx.stroke();
+      ctx.beginPath();
+      for(let i=0;i<snap.f.length;i++){ const x=xForFreq(snap.f[i]), yy=plotH-norm(snap.db[i])*plotH; i===0?ctx.moveTo(x,yy):ctx.lineTo(x,yy); }
+      ctx.strokeStyle=line; ctx.lineWidth=2.5; ctx.lineJoin='round'; ctx.stroke();
     };
-    ctx.font='11px monospace'; ctx.textAlign='start';
-    let ly = tfOpen ? 92 : 28;
+    ctx.font='12px monospace'; ctx.textAlign='start';
+    let ly = tfOpen ? 92 : 20;
     if(abView!=='off'){
-      if((abView==='A'||abView==='both') && abA){ trace(abA,'#f59e0b'); ctx.fillStyle='#f59e0b'; ctx.fillText('— לפני (A)',10,ly); ly+=14; }
-      if((abView==='B'||abView==='both') && abB){ trace(abB,'#22c55e'); ctx.fillStyle='#22c55e'; ctx.fillText('— אחרי (B)',10,ly); ly+=14; }
+      const bothOn = (abView==='both');
+      if((abView==='A'||abView==='both') && abA){ graph(abA,'#f59e0b','rgba(245,158,11,0.18)',bothOn); ctx.fillStyle='#f59e0b'; ctx.fillText('■ לפני הכיוון (A)',10,ly); ly+=16; }
+      if((abView==='B'||abView==='both') && abB){ graph(abB,'#22c55e','rgba(34,197,94,0.18)',bothOn); ctx.fillStyle='#22c55e'; ctx.fillText('■ אחרי הכיוון (B)',10,ly); ly+=16; }
       if(abView==='delta' && abA && abB){
         const midY=plotH/2;
         ctx.setLineDash([4,4]); ctx.strokeStyle=sunMode?'rgba(0,0,0,.25)':'rgba(255,255,255,.28)';
@@ -2140,10 +2146,9 @@ function drawRta(W,H,nyquist,bins,xForFreq){
           i===0?ctx.moveTo(x,yy):ctx.lineTo(x,yy);
         }
         ctx.stroke();
-        ctx.fillStyle='#39d98a'; ctx.fillText('Δ אחרי−לפני · קו אמצע=0 · טווח ±20dB',10,ly); ly+=14;
+        ctx.fillStyle='#39d98a'; ctx.fillText('Δ אחרי−לפני · קו אמצע=0 · טווח ±20dB',10,ly); ly+=16;
       }
     }
-    // הנחיה לצעד הבא
     if(abA && !abB){
       ctx.fillStyle=sunMode?'#b45309':'#fbbf24';
       ctx.fillText('לפני (A) נלכד ✓ — כוונן את המערכת ואז לחץ ״לכוד אחרי (B)״', 10, ly);
@@ -2334,7 +2339,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v163';
+document.getElementById('ver').textContent='v164';
 
 let accentRgb=[62,166,255];
 function applyAccent(hex){
