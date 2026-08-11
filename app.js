@@ -16,6 +16,8 @@ let showTfPhase = false;
 let showTfCoh = true;
 let tfSmoothA = 0.93;   // מיצוע TF: גבוה=יציב/איטי, נמוך=מהיר/רועד
 let tfCohGate = 0.4;    // סף קוהרנטיות שמתחתיו לא מציגים פאזה
+let phaseSub=null, phaseTop=null;  // צילומי פאזה: {ph:Float32Array, coh:Float32Array}
+let xoverF=90, showXover=false;    // סמן תדר חיתוך
 
 const TF_FFT_N = 2048;
 const tfXr = new Float32Array(TF_FFT_N);
@@ -294,7 +296,7 @@ safeOn('jsonFileInput', 'change', importSessionJson);
 
 function exportSessionJson(){
   const data = {
-    version: 'v165',
+    version: 'v166',
     timestamp: new Date().toISOString(),
     saves: saves,
     eqPositions: eqPositions.map(p=>({name:p.name, db:Array.from(p.db)})),
@@ -2106,6 +2108,57 @@ function drawRta(W,H,nyquist,bins,xForFreq){
       }
       ctx.stroke();
     }
+
+    // ---- יישור חיתוך סאב/טופ: עקומות פאזה שמורות + סמן + Δφ ----
+    if(showXover && (phaseSub || phaseTop)){
+      const N2 = TF_FFT_N/2;
+      const drawSnap=(snap,color)=>{
+        if(!snap) return;
+        ctx.strokeStyle=color; ctx.lineWidth=2.5; ctx.beginPath();
+        let pen=false, prevY=0;
+        for(let px=0;px<=W;px+=2){
+          const f=freqForX(px);
+          const k=Math.min(N2-1, Math.round(f/nyquist*N2));
+          if(snap.coh[k] < tfCohGate){ pen=false; continue; }
+          const y=plotH*Math.max(0,Math.min(1, 0.5 - snap.ph[k]/(2*Math.PI)));
+          if(pen && Math.abs(y-prevY)>plotH*0.5) pen=false;
+          pen?ctx.lineTo(px,y):ctx.moveTo(px,y);
+          pen=true; prevY=y;
+        }
+        ctx.stroke();
+      };
+      drawSnap(phaseSub, '#38bdf8');  // סאב = תכלת
+      drawSnap(phaseTop, '#e879f9');  // טופ = ורוד
+
+      // סמן תדר החיתוך
+      const mx=xForFreq(xoverF);
+      ctx.strokeStyle='rgba(255,255,255,.55)'; ctx.setLineDash([5,4]); ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(mx,0); ctx.lineTo(mx,plotH); ctx.stroke(); ctx.setLineDash([]);
+
+      const k=Math.min(N2-1, Math.round(xoverF/nyquist*N2));
+      const toDeg=r=>r*180/Math.PI;
+      const wrap=d=>{ while(d>180)d-=360; while(d<-180)d+=360; return d; };
+      const subOk = phaseSub && phaseSub.coh[k]>=tfCohGate;
+      const topOk = phaseTop && phaseTop.coh[k]>=tfCohGate;
+
+      // תיבת קריאה
+      const bx=Math.min(W-230, Math.max(10, mx+8)), by=10;
+      ctx.fillStyle=sunMode?'rgba(255,255,255,.9)':'rgba(10,15,25,.82)';
+      ctx.fillRect(bx,by,222,86);
+      ctx.strokeStyle='rgba(148,163,184,.5)'; ctx.lineWidth=1; ctx.strokeRect(bx,by,222,86);
+      ctx.font='12px monospace'; ctx.textAlign='start';
+      ctx.fillStyle=sunMode?'#0f172a':'#e5e7eb'; ctx.fillText('תדר חיתוך: '+xoverF+' Hz', bx+8, by+18);
+      ctx.fillStyle='#38bdf8'; ctx.fillText('סאב:  '+(subOk?toDeg(phaseSub.ph[k]).toFixed(0)+'°':'— (קוה׳ נמוכה)'), bx+8, by+36);
+      ctx.fillStyle='#e879f9'; ctx.fillText('טופ:  '+(topOk?toDeg(phaseTop.ph[k]).toFixed(0)+'°':'— (קוה׳ נמוכה)'), bx+8, by+54);
+      if(subOk && topOk){
+        const d=wrap(toDeg(phaseTop.ph[k]-phaseSub.ph[k])); const ad=Math.abs(d);
+        const col = ad<30?'#22c55e' : ad>150?'#ef4444' : '#f59e0b';
+        const verdict = ad<30?'מיושר ✓' : ad>150?'הפוך — היפוך פולריות' : 'כוונן דיליי';
+        ctx.fillStyle=col; ctx.fillText('Δφ: '+(d>0?'+':'')+d.toFixed(0)+'°  '+verdict, bx+8, by+76);
+      } else {
+        ctx.fillStyle=sunMode?'#64748b':'#94a3b8'; ctx.fillText('לכוד סאב וטופ למדידת Δφ', bx+8, by+76);
+      }
+    }
     
     ctx.font='11px monospace'; ctx.textAlign='start';
     ctx.fillStyle='rgb('+accentRgb.join(',')+')'; ctx.fillText('— '+(tfSwap?'רפרנס':"מיקרופון"), 10, 14);
@@ -2348,7 +2401,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v165';
+document.getElementById('ver').textContent='v166';
 
 let accentRgb=[62,166,255];
 function applyAccent(hex){
@@ -2398,6 +2451,34 @@ safeOn('tfCohGate','input',function(e){
   tfCohGate = Math.max(0, Math.min(0.9, parseInt(e.target.value,10)/100));
   const t = document.getElementById('tfCohGateVal');
   if(t) t.textContent = tfCohGate.toFixed(2);
+});
+
+// ---- יישור חיתוך סאב/טופ ----
+function tfPhaseSnapshot(){
+  const n=TF_FFT_N/2, ph=new Float32Array(n), coh=new Float32Array(n);
+  for(let k=0;k<n;k++){
+    ph[k]=Math.atan2(tfPxyIm[k], tfPxyRe[k]);
+    const pxySq=tfPxyRe[k]*tfPxyRe[k]+tfPxyIm[k]*tfPxyIm[k];
+    coh[k]=Math.max(0,Math.min(1, pxySq/(tfPxx[k]*tfPyy[k]+1e-12)));
+  }
+  return {ph,coh};
+}
+safeOn('phSubBtn','click',function(){
+  if(!analyser || !analyserRef){ alert('פאזה דורשת מדידת מיק/רפרנס פעילה (ערוץ רפרנס מחובר).'); return; }
+  phaseSub=tfPhaseSnapshot(); showXover=true; this.classList.add('on'); this.textContent='✓ סאב נלכד';
+});
+safeOn('phTopBtn','click',function(){
+  if(!analyser || !analyserRef){ alert('פאזה דורשת מדידת מיק/רפרנס פעילה (ערוץ רפרנס מחובר).'); return; }
+  phaseTop=tfPhaseSnapshot(); showXover=true; this.classList.add('on'); this.textContent='✓ טופ נלכד';
+});
+safeOn('phClearBtn','click',function(){
+  phaseSub=null; phaseTop=null; showXover=false;
+  const s=document.getElementById('phSubBtn'); if(s){ s.classList.remove('on'); s.textContent='לכוד פאזת סאב'; }
+  const t=document.getElementById('phTopBtn'); if(t){ t.classList.remove('on'); t.textContent='לכוד פאזת טופ'; }
+});
+safeOn('xoverF','input',function(e){
+  xoverF=parseInt(e.target.value,10);
+  const t=document.getElementById('xoverFVal'); if(t) t.textContent=xoverF+' Hz';
 });
 
 const SAVE_KEY='rta_saves';
