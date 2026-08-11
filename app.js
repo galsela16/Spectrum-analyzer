@@ -297,7 +297,7 @@ safeOn('jsonFileInput', 'change', importSessionJson);
 
 function exportSessionJson(){
   const data = {
-    version: 'v169',
+    version: 'v170',
     timestamp: new Date().toISOString(),
     saves: saves,
     eqPositions: eqPositions.map(p=>({name:p.name, db:Array.from(p.db)})),
@@ -562,6 +562,7 @@ const eqPanel=document.getElementById('eqPanel');
 const savePanel=document.getElementById('savePanel');
 safeOn('eqClose', 'click',closeModals);
 safeOn('eqBtn', 'click',()=>{ showModal(eqPanel); updateEqUI(); });
+safeOn('tfBtn', 'click',()=>{ showModal(tfPanel); if(typeof tfResult!=='undefined' && tfResult) renderTFList(); });
 safeOn('measBtn','click',function(){
   const r=document.getElementById('measRow'); if(!r) return;
   const show = r.style.display==='none';
@@ -2455,7 +2456,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v169';
+document.getElementById('ver').textContent='v170';
 
 let accentRgb=[62,166,255];
 function applyAccent(hex){

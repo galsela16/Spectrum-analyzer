@@ -450,11 +450,7 @@
       <button id="saveClose">סגור</button>
     </div>
     <div id="eqPanel">
-      <h3>מדידת תגובה · Transfer Function</h3>
-      <div class="seg respModeSeg" style="align-self:center">
-        <button data-rm="single" class="on">חד־ערוצי · SPL</button>
-        <button data-rm="dual">דו־ערוצי · TF</button>
-      </div>
+      <h3>מדידת תגובה · חד־ערוצי (SPL)</h3>
       <div style="display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;">
         <div class="seg" id="eqModeSwitchA">
           <button class="on">ממוצע</button>
@@ -545,11 +541,7 @@
     </div>
     
     <div id="tfPanel">
-      <h3>מדידת תגובה · Transfer Function</h3>
-      <div class="seg respModeSeg" style="align-self:center">
-        <button data-rm="single">חד־ערוצי · SPL</button>
-        <button data-rm="dual" class="on">דו־ערוצי · TF</button>
-      </div>
+      <h3>מדידת תגובה · דו־ערוצי (TF)</h3>
       <div class="sub">ערוץ 1 = מיקרופון מדידה · ערוץ 2 = רפרנס מהמיקסר. שלח תוכן/רעש ורוד דרך המערכת, ומדוד.</div>
       <div class="chBar"><span id="tfL1" style="min-width:96px">כניסה 1 → מיק'</span><div class="track"><div class="fill" id="tfMicFill"></div></div><span id="tfMicDb">—</span></div>
       <div class="chBar"><span id="tfL2" style="min-width:96px">כניסה 2 → רפרנס</span><div class="track"><div class="fill" id="tfRefFill"></div></div><span id="tfRefDb">—</span></div>
@@ -771,7 +763,8 @@
         <button class="toggle" id="saveBtn">מדידות שמורות · Captures</button>
       </div>
       <div class="trow" id="measRow" style="display:none">
-        <button class="toggle" id="eqBtn">מדידת תגובה · TF</button>
+        <button class="toggle" id="eqBtn">חד־ערוצי · SPL</button>
+        <button class="toggle" id="tfBtn">דו־ערוצי · TF</button>
         <button class="toggle" id="dlyBtn">דיליי · Delay Finder</button>
         <button class="toggle" id="rtBtn">הדהוד · RT60</button>
         <button class="toggle" id="geqShowBtn" title="הצג/הסתר את תצוגת תיקון ה-EQ">תצוגת EQ</button>
