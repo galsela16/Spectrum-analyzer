@@ -283,7 +283,7 @@ safeOn('jsonFileInput', 'change', importSessionJson);
 
 function exportSessionJson(){
   const data = {
-    version: 'v174',
+    version: 'v175',
     timestamp: new Date().toISOString(),
     saves: saves,
     eqPositions: eqPositions.map(p=>({name:p.name, db:Array.from(p.db)})),
@@ -1617,9 +1617,10 @@ function resetSession(){
   const tr = stream && stream.getAudioTracks && stream.getAudioTracks()[0];
   if(running && (!tr || tr.readyState==='ended')){ stop(); start(); return; }
   peaks.fill(0); avgBuf.fill(0); snapCurve=null; frozen=false;
-  phaseSub=null; phaseTop=null; showXover=false;
-  { const s=document.getElementById('phSubBtn'); if(s){ s.classList.remove('on'); s.textContent='לכוד פאזת סאב'; } }
-  { const t=document.getElementById('phTopBtn'); if(t){ t.classList.remove('on'); t.textContent='לכוד פאזת טופ'; } }
+  phaseSub=null; phaseTop=null; showXover=false; phMeasuring=false;
+  { const s=document.getElementById('phSubBtn'); if(s){ s.classList.remove('on'); s.textContent='מדוד + לכוד סאב'; s.disabled=false; } }
+  { const t=document.getElementById('phTopBtn'); if(t){ t.classList.remove('on'); t.textContent='מדוד + לכוד טופ'; t.disabled=false; } }
+  { const st=document.getElementById('phStatus'); if(st){ st.textContent='מדוד סאב לבד, ואז טופ לבד — כל מדידה 3 שניות.'; st.style.color='var(--dim)'; } }
   abA=null; abB=null; abView='off';
   { const a=document.getElementById('abCapA'); if(a){ a.classList.remove('on'); a.textContent='לכוד לפני (A)'; } }
   { const b=document.getElementById('abCapB'); if(b){ b.classList.remove('on'); b.textContent='לכוד אחרי (B)'; } }
@@ -2455,7 +2456,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v174';
+document.getElementById('ver').textContent='v175';
 
 let accentRgb=[62,166,255];
 function applyAccent(hex){
@@ -2517,18 +2518,48 @@ function tfPhaseSnapshot(){
   }
   return {ph,coh};
 }
-safeOn('phSubBtn','click',function(){
-  if(!analyser || !analyserRef){ alert('פאזה דורשת מדידת מיק/רפרנס פעילה (ערוץ רפרנס מחובר).'); return; }
-  phaseSub=tfPhaseSnapshot(); showXover=true; this.classList.add('on'); this.textContent='✓ סאב נלכד';
-});
-safeOn('phTopBtn','click',function(){
-  if(!analyser || !analyserRef){ alert('פאזה דורשת מדידת מיק/רפרנס פעילה (ערוץ רפרנס מחובר).'); return; }
-  phaseTop=tfPhaseSnapshot(); showXover=true; this.classList.add('on'); this.textContent='✓ טופ נלכד';
-});
+let phMeasuring=false;
+function capturePhase(which){
+  if(!analyser || !analyserRef){ alert('פאזה דורשת מדידת מיק/רפרנס פעילה (רפרנס בערוץ 2).'); return; }
+  if(phMeasuring) return;
+  phMeasuring=true;
+  const btn=document.getElementById(which==='sub'?'phSubBtn':'phTopBtn');
+  const other=document.getElementById(which==='sub'?'phTopBtn':'phSubBtn');
+  const st=document.getElementById('phStatus');
+  const label=which==='sub'?'סאב':'טופ';
+  const baseTxt=which==='sub'?'מדוד + לכוד סאב':'מדוד + לכוד טופ';
+  if(other) other.disabled=true;
+  // אפס צוברים לחלון מדידה נקי
+  tfPxx.fill(0); tfPyy.fill(0); tfPxyRe.fill(0); tfPxyIm.fill(0);
+  let t=3;
+  const tick=()=>{ if(btn) btn.textContent='מודד… '+t; if(st){ st.textContent='מודד '+label+'… '+t+' שניות'; st.style.color='var(--accent)'; } };
+  tick();
+  const iv=setInterval(()=>{
+    t--;
+    if(t>0){ tick(); return; }
+    clearInterval(iv);
+    const snap=tfPhaseSnapshot();
+    if(which==='sub') phaseSub=snap; else phaseTop=snap;
+    showXover=true;
+    const N2=TF_FFT_N/2, nyq=(typeof audioCtx!=='undefined'&&audioCtx)?audioCtx.sampleRate/2:24000;
+    const k=Math.min(N2-1, Math.round(xoverF/nyq*N2));
+    const c=snap.coh[k];
+    if(btn){ btn.classList.add('on'); btn.textContent='✓ '+label+' נלכד'; }
+    if(other) other.disabled=false;
+    if(st){
+      if(c>=0.5){ st.textContent='✓ '+label+' נלכד · קוהרנטיות '+c.toFixed(2)+' — אמין'; st.style.color='#22c55e'; }
+      else { st.textContent='⚠ '+label+' נלכד · קוהרנטיות '+c.toFixed(2)+' נמוכה — קרב מיק׳/העלה רמה ומדוד שוב'; st.style.color='#f59e0b'; }
+    }
+    phMeasuring=false;
+  },1000);
+}
+safeOn('phSubBtn','click',()=>capturePhase('sub'));
+safeOn('phTopBtn','click',()=>capturePhase('top'));
 safeOn('phClearBtn','click',function(){
   phaseSub=null; phaseTop=null; showXover=false;
-  const s=document.getElementById('phSubBtn'); if(s){ s.classList.remove('on'); s.textContent='לכוד פאזת סאב'; }
-  const t=document.getElementById('phTopBtn'); if(t){ t.classList.remove('on'); t.textContent='לכוד פאזת טופ'; }
+  const s=document.getElementById('phSubBtn'); if(s){ s.classList.remove('on'); s.textContent='מדוד + לכוד סאב'; s.disabled=false; }
+  const t=document.getElementById('phTopBtn'); if(t){ t.classList.remove('on'); t.textContent='מדוד + לכוד טופ'; t.disabled=false; }
+  const st=document.getElementById('phStatus'); if(st){ st.textContent='מדוד סאב לבד, ואז טופ לבד — כל מדידה 3 שניות.'; st.style.color='var(--dim)'; }
 });
 safeOn('xoverF','input',function(e){
   xoverF=parseInt(e.target.value,10);

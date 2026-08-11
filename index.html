@@ -625,10 +625,11 @@
       <h3>יישור סאב/טופ · פאזה</h3>
       <div class="sub">כיוונון עדין של תדר החיתוך: מודד את פאזת הסאב ואת פאזת הטופ בנפרד, ומראה אם הם מתחברים בחיתוך. דורש רפרנס בערוץ 2 ו-Auto-Delay מראש.</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
-        <button class="toggle" id="phSubBtn" title="מדוד סאב לבד ולחץ">לכוד פאזת סאב</button>
-        <button class="toggle" id="phTopBtn" title="מדוד טופ לבד ולחץ">לכוד פאזת טופ</button>
+        <button class="toggle" id="phSubBtn" title="מודד 3 שניות ולוכד את פאזת הסאב">מדוד + לכוד סאב</button>
+        <button class="toggle" id="phTopBtn" title="מודד 3 שניות ולוכד את פאזת הטופ">מדוד + לכוד טופ</button>
         <button class="toggle" id="phClearBtn">נקה</button>
       </div>
+      <div id="phStatus" style="text-align:center;font-size:12px;color:var(--dim);min-height:18px">מדוד סאב לבד, ואז טופ לבד — כל מדידה 3 שניות.</div>
       <div class="ctrl" style="flex:0 0 auto;align-items:center;min-width:auto">
         <label style="justify-content:center">סמן תדר חיתוך <b id="xoverFVal">90 Hz</b></label>
         <input type="range" id="xoverF" min="30" max="300" step="1" value="90">
