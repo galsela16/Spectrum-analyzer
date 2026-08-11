@@ -297,7 +297,7 @@ safeOn('jsonFileInput', 'change', importSessionJson);
 
 function exportSessionJson(){
   const data = {
-    version: 'v171',
+    version: 'v172',
     timestamp: new Date().toISOString(),
     saves: saves,
     eqPositions: eqPositions.map(p=>({name:p.name, db:Array.from(p.db)})),
@@ -1632,6 +1632,14 @@ function resetSession(){
   const tr = stream && stream.getAudioTracks && stream.getAudioTracks()[0];
   if(running && (!tr || tr.readyState==='ended')){ stop(); start(); return; }
   peaks.fill(0); avgBuf.fill(0); snapCurve=null; frozen=false;
+  phaseSub=null; phaseTop=null; showXover=false;
+  { const s=document.getElementById('phSubBtn'); if(s){ s.classList.remove('on'); s.textContent='לכוד פאזת סאב'; } }
+  { const t=document.getElementById('phTopBtn'); if(t){ t.classList.remove('on'); t.textContent='לכוד פאזת טופ'; } }
+  abA=null; abB=null; abView='off';
+  { const a=document.getElementById('abCapA'); if(a){ a.classList.remove('on'); a.textContent='לכוד לפני (A)'; } }
+  { const b=document.getElementById('abCapB'); if(b){ b.classList.remove('on'); b.textContent='לכוד אחרי (B)'; } }
+  refCurve=null;
+  { const rc=document.getElementById('refCurveBtn'); if(rc){ rc.classList.remove('on'); rc.textContent='שמור כ״לפני״'; } }
   const fz=document.getElementById('freezeBtn'); fz.classList.remove('on'); fz.textContent='הקפא';
   eqPositions=[]; eqMarks=null; eqCurveData=null; lastEqCorr=null;
   { const pl=document.getElementById('eqPosList'); if(pl) pl.innerHTML=''; const el=document.getElementById('eqList'); if(el) el.innerHTML=''; }
@@ -2462,7 +2470,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v171';
+document.getElementById('ver').textContent='v172';
 
 let accentRgb=[62,166,255];
 function applyAccent(hex){
