@@ -364,7 +364,7 @@
     <div class="modes">
       <button id="mRta" class="on">ספקטרום · RTA</button>
       <button id="mSpec">ווטרפול · Spectrograph</button>
-      <button id="mSys" title="מדידה דו-ערוצית: מיק + רפרנס. דורש רפרנס בערוץ 2">מדידת מערכת · TF</button>
+      <button id="tfOverlayHdr" title="הצג מיק' + רפרנס יחד">מיק'/רפרנס · TF</button>
     </div>
     <button id="sunBtn" title="מצב אור שמש / ניגודיות גבוהה" aria-label="מצב אור שמש">☀️</button>
     <button id="helpBtn" title="מצב עזרה — רחף על כפתור להסבר" aria-label="מצב עזרה">?</button>
@@ -375,28 +375,6 @@
       <button class="sw" data-c="#ff9d3c" style="background:#ff9d3c" aria-label="כתום" title="כתום"></button>
     </div>
   </header>
-
-  <div id="sysBar" style="display:none;margin:6px 0;padding:8px 10px;background:var(--panel-2);border:1px solid var(--line);border-radius:6px">
-    <div id="sysBanner" style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--accent);margin-bottom:8px">
-      <span>⚠︎ מצב דו-ערוצי — דורש רפרנס בערוץ 2. הפעל Auto-Delay לפני מדידת פאזה.</span>
-    </div>
-    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center">
-      <div class="seg" id="sysSubSeg">
-        <button data-s="resp" class="on">תגובה + פאזה</button>
-        <button data-s="align">יישור סאב/טופ</button>
-      </div>
-      <button class="toggle" id="qbAutoDelay2" title="סנכרון דיליי אוטומטי">⏱️ Auto-Delay</button>
-    </div>
-    <div id="sysAlignRow" style="display:none;gap:10px;flex-wrap:wrap;align-items:center;justify-content:center;margin-top:8px">
-      <button class="toggle" id="phSubBtn" title="מדוד סאב לבד ולחץ">לכוד פאזת סאב</button>
-      <button class="toggle" id="phTopBtn" title="מדוד טופ לבד ולחץ">לכוד פאזת טופ</button>
-      <button class="toggle" id="phClearBtn">נקה פאזות</button>
-      <div class="ctrl" style="min-width:180px">
-        <label>סמן תדר חיתוך <b id="xoverFVal">90 Hz</b></label>
-        <input type="range" id="xoverF" min="30" max="300" step="1" value="90">
-      </div>
-    </div>
-  </div>
 
   <div id="stage">
     <canvas id="cv"></canvas>
@@ -603,6 +581,22 @@
           <input type="range" id="tfCohGate" min="0" max="90" step="5" value="40">
         </div>
       </div>
+      <div style="border:1px solid var(--line);border-radius:6px;padding:10px;margin:8px 0;background:var(--panel-2)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <span style="font-size:12px;font-weight:600;color:var(--text)">יישור חיתוך סאב/טופ</span>
+          <button class="toggle" id="alignModeBtn" title="מצב יישור: מציג פאזת סאב מול טופ במסך נקי">מצב יישור</button>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;margin-bottom:8px">
+          <button class="toggle" id="phSubBtn" title="מדוד סאב לבד ולחץ">לכוד פאזת סאב</button>
+          <button class="toggle" id="phTopBtn" title="מדוד טופ לבד ולחץ">לכוד פאזת טופ</button>
+          <button class="toggle" id="phClearBtn">נקה</button>
+        </div>
+        <div class="ctrl" style="min-width:auto">
+          <label style="justify-content:center">סמן תדר חיתוך <b id="xoverFVal">90 Hz</b></label>
+          <input type="range" id="xoverF" min="30" max="300" step="1" value="90">
+        </div>
+        <div class="sub" style="text-align:center;margin-top:6px">מדוד סאב לבד ← לכוד · מדוד טופ לבד ← לכוד · גרור לתדר החיתוך · כוונן עד Δφ≈0°</div>
+      </div>
       <canvas id="tfCanvas" style="width:100%;height:234px;background:var(--panel-2);border:1px solid var(--line);border-radius:4px;display:none"></canvas>
       <div class="seg" id="tfModeSeg" style="align-self:center">
         <button data-m="graphic" class="on">גרפיק</button>
@@ -773,11 +767,14 @@
     <div class="tabpage" data-page="tune">
       <div class="trow">
         <button class="toggle" id="genBtn">גנרטור · Generator</button>
-        <button class="toggle" id="eqBtn">מדידת תגובה · Transfer Function</button>
+        <button class="toggle" id="measBtn">מדידה</button>
+        <button class="toggle" id="saveBtn">מדידות שמורות · Captures</button>
+      </div>
+      <div class="trow" id="measRow" style="display:none">
+        <button class="toggle" id="eqBtn">מדידת תגובה · TF</button>
         <button class="toggle" id="dlyBtn">דיליי · Delay Finder</button>
         <button class="toggle" id="rtBtn">הדהוד · RT60</button>
         <button class="toggle" id="geqShowBtn" title="הצג/הסתר את תצוגת תיקון ה-EQ">תצוגת EQ</button>
-        <button class="toggle" id="saveBtn">מדידות שמורות · Captures</button>
       </div>
       <div class="trow">
         <div class="ctrl" style="flex:0 0 auto">

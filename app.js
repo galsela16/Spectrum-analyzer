@@ -72,7 +72,7 @@ const GEQ=[20,25,31.5,40,50,63,80,100,125,160,200,250,315,400,500,630,800,1000,
            1250,1600,2000,2500,3150,4000,5000,6300,8000,10000,12500,16000,20000];
 let tfState='idle', tfSwap=false, tfMic=null, tfRef=null, tfFrames=0, tfResult=null, _tfCorr=0;
 let running=false, mode='rta';
-let sysMode=false, sysSub='align';   // מצב מדידת מערכת (דו-ערוצי) + תת-כלי
+let alignActive=false;   // מצב יישור סאב/טופ בתוך פאנל TF
 let peakHold=true, fbOn=true, avgOn=false;
 let floorDb=-85, ceilDb=-15;
 let calib=0;
@@ -297,7 +297,7 @@ safeOn('jsonFileInput', 'change', importSessionJson);
 
 function exportSessionJson(){
   const data = {
-    version: 'v167',
+    version: 'v169',
     timestamp: new Date().toISOString(),
     saves: saves,
     eqPositions: eqPositions.map(p=>({name:p.name, db:Array.from(p.db)})),
@@ -562,6 +562,12 @@ const eqPanel=document.getElementById('eqPanel');
 const savePanel=document.getElementById('savePanel');
 safeOn('eqClose', 'click',closeModals);
 safeOn('eqBtn', 'click',()=>{ showModal(eqPanel); updateEqUI(); });
+safeOn('measBtn','click',function(){
+  const r=document.getElementById('measRow'); if(!r) return;
+  const show = r.style.display==='none';
+  r.style.display = show?'flex':'none';
+  this.classList.toggle('on',show);
+});
 
 document.querySelectorAll('.respModeSeg button').forEach(b=>b.addEventListener('click',function(){
   if(this.dataset.rm==='dual'){ showModal(tfPanel); if(typeof tfResult!=='undefined' && tfResult) renderTFList(); }
@@ -1613,13 +1619,11 @@ document.querySelectorAll('#fftSeg button').forEach(b=>b.addEventListener('click
 }));
 safeOn('mRta', 'click',()=>setMode('rta'));
 safeOn('mSpec', 'click',()=>setMode('spec'));
-safeOn('mSys', 'click',()=>setMode('sys'));
-document.querySelectorAll('#sysSubSeg button').forEach(b=>b.addEventListener('click',function(){
-  sysSub=this.dataset.s;
-  document.querySelectorAll('#sysSubSeg button').forEach(x=>x.classList.toggle('on', x.dataset.s===sysSub));
-  const ar=document.getElementById('sysAlignRow'); if(ar) ar.style.display = sysSub==='align'?'flex':'none';
-}));
-safeOn('qbAutoDelay2','click',()=>{ if(typeof tfAutoDelay==='function') tfAutoDelay(); });
+safeOn('tfOverlayHdr', 'click',()=>setTfOverlay(!tfOverlay));
+safeOn('alignModeBtn','click',function(){
+  alignActive=!alignActive; this.classList.toggle('on',alignActive);
+  if(alignActive) setTfOverlay(true);
+});
 safeOn('startBtn', 'click',()=>start());
 safeOn('stopBtn', 'click',resetSession);
 function resetSession(){
@@ -1649,15 +1653,8 @@ function resetSession(){
 
 function setMode(m){
   mode=m;
-  sysMode = (m==='sys');
   document.getElementById('mRta').classList.toggle('on',m==='rta');
   document.getElementById('mSpec').classList.toggle('on',m==='spec');
-  const sb=document.getElementById('mSys'); if(sb) sb.classList.toggle('on',m==='sys');
-  const bar=document.getElementById('sysBar'); if(bar) bar.style.display = sysMode?'block':'none';
-  if(typeof setTfOverlay==='function') setTfOverlay(sysMode);
-  if(sysMode){
-    const ar=document.getElementById('sysAlignRow'); if(ar) ar.style.display = sysSub==='align'?'flex':'none';
-  }
   if(specCtx){
     specCtx.fillStyle=sunMode ? '#f8fafc' : '#0d1117';
     specCtx.fillRect(0,0,specCanvas.width,specCanvas.height);
@@ -1950,8 +1947,8 @@ function draw(){
   const logMin=Math.log(ISO[0]), logMax=Math.log(ISO[BANDS-1]);
   const xForFreq=f=>((Math.log(f)-logMin)/(logMax-logMin))*W;
 
-  if(mode==='spec') drawSpec(W,H,nyquist,bins,xForFreq);
-  else drawRta(W,H,nyquist,bins,xForFreq);
+  if(mode==='rta') drawRta(W,H,nyquist,bins,xForFreq);
+  else drawSpec(W,H,nyquist,bins,xForFreq);
 
   fbFrameCounter++;
   if(fbOn && !frozen && fbFrameCounter % 4 === 0) detectFeedback(nyquist,bins);
@@ -2055,7 +2052,7 @@ function drawRta(W,H,nyquist,bins,xForFreq){
   }
   
   if(tfOpen){
-    const alignView = sysMode && sysSub==='align';
+    const alignView = alignActive;
     if(!frozen) analyserRef.getFloatFrequencyData(floatDataRef);
     if(!_pfxRef || _pfxRef.length!==bins+1) _pfxRef=new Float64Array(bins+1);
     { let acc=0; _pfxRef[0]=0; for(let i=0;i<bins;i++){ acc+=db2lin(floatDataRef[i]); _pfxRef[i+1]=acc; } }
@@ -2458,7 +2455,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v167';
+document.getElementById('ver').textContent='v169';
 
 let accentRgb=[62,166,255];
 function applyAccent(hex){
