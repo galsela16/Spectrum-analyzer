@@ -72,6 +72,7 @@ const GEQ=[20,25,31.5,40,50,63,80,100,125,160,200,250,315,400,500,630,800,1000,
            1250,1600,2000,2500,3150,4000,5000,6300,8000,10000,12500,16000,20000];
 let tfState='idle', tfSwap=false, tfMic=null, tfRef=null, tfFrames=0, tfResult=null, _tfCorr=0;
 let running=false, mode='rta';
+let sysMode=false, sysSub='align';   // מצב מדידת מערכת (דו-ערוצי) + תת-כלי
 let peakHold=true, fbOn=true, avgOn=false;
 let floorDb=-85, ceilDb=-15;
 let calib=0;
@@ -296,7 +297,7 @@ safeOn('jsonFileInput', 'change', importSessionJson);
 
 function exportSessionJson(){
   const data = {
-    version: 'v166',
+    version: 'v167',
     timestamp: new Date().toISOString(),
     saves: saves,
     eqPositions: eqPositions.map(p=>({name:p.name, db:Array.from(p.db)})),
@@ -976,7 +977,6 @@ function setTfOverlay(on){
   if(b) b.classList.toggle('on',on);
 }
 safeOn('tfOverlayBtn', 'click',()=>setTfOverlay(!tfOverlay));
-safeOn('tfOverlayHdr', 'click',()=>setTfOverlay(!tfOverlay));
 safeOn('tfMeasBtn', 'click',()=>pickSource(tfMeasure,6000));
 safeOn('tfCsvBtn', 'click',tfExportCsv);
 
@@ -1613,6 +1613,13 @@ document.querySelectorAll('#fftSeg button').forEach(b=>b.addEventListener('click
 }));
 safeOn('mRta', 'click',()=>setMode('rta'));
 safeOn('mSpec', 'click',()=>setMode('spec'));
+safeOn('mSys', 'click',()=>setMode('sys'));
+document.querySelectorAll('#sysSubSeg button').forEach(b=>b.addEventListener('click',function(){
+  sysSub=this.dataset.s;
+  document.querySelectorAll('#sysSubSeg button').forEach(x=>x.classList.toggle('on', x.dataset.s===sysSub));
+  const ar=document.getElementById('sysAlignRow'); if(ar) ar.style.display = sysSub==='align'?'flex':'none';
+}));
+safeOn('qbAutoDelay2','click',()=>{ if(typeof tfAutoDelay==='function') tfAutoDelay(); });
 safeOn('startBtn', 'click',()=>start());
 safeOn('stopBtn', 'click',resetSession);
 function resetSession(){
@@ -1642,8 +1649,15 @@ function resetSession(){
 
 function setMode(m){
   mode=m;
+  sysMode = (m==='sys');
   document.getElementById('mRta').classList.toggle('on',m==='rta');
   document.getElementById('mSpec').classList.toggle('on',m==='spec');
+  const sb=document.getElementById('mSys'); if(sb) sb.classList.toggle('on',m==='sys');
+  const bar=document.getElementById('sysBar'); if(bar) bar.style.display = sysMode?'block':'none';
+  if(typeof setTfOverlay==='function') setTfOverlay(sysMode);
+  if(sysMode){
+    const ar=document.getElementById('sysAlignRow'); if(ar) ar.style.display = sysSub==='align'?'flex':'none';
+  }
   if(specCtx){
     specCtx.fillStyle=sunMode ? '#f8fafc' : '#0d1117';
     specCtx.fillRect(0,0,specCanvas.width,specCanvas.height);
@@ -1936,8 +1950,8 @@ function draw(){
   const logMin=Math.log(ISO[0]), logMax=Math.log(ISO[BANDS-1]);
   const xForFreq=f=>((Math.log(f)-logMin)/(logMax-logMin))*W;
 
-  if(mode==='rta') drawRta(W,H,nyquist,bins,xForFreq);
-  else drawSpec(W,H,nyquist,bins,xForFreq);
+  if(mode==='spec') drawSpec(W,H,nyquist,bins,xForFreq);
+  else drawRta(W,H,nyquist,bins,xForFreq);
 
   fbFrameCounter++;
   if(fbOn && !frozen && fbFrameCounter % 4 === 0) detectFeedback(nyquist,bins);
@@ -2041,6 +2055,7 @@ function drawRta(W,H,nyquist,bins,xForFreq){
   }
   
   if(tfOpen){
+    const alignView = sysMode && sysSub==='align';
     if(!frozen) analyserRef.getFloatFrequencyData(floatDataRef);
     if(!_pfxRef || _pfxRef.length!==bins+1) _pfxRef=new Float64Array(bins+1);
     { let acc=0; _pfxRef[0]=0; for(let i=0;i<bins;i++){ acc+=db2lin(floatDataRef[i]); _pfxRef[i+1]=acc; } }
@@ -2059,6 +2074,7 @@ function drawRta(W,H,nyquist,bins,xForFreq){
       refPts.push([px, plotH - norm(rDb) * plotH]);
     }
 
+    if(!alignView){
     ctx.beginPath(); micPts.forEach(([x,y],i)=> i?ctx.lineTo(x,y):ctx.moveTo(x,y)); ctx.lineTo(micPts[micPts.length-1][0],plotH); ctx.lineTo(micPts[0][0],plotH); ctx.closePath();
     ctx.fillStyle='rgba('+accentRgb.join(',')+',0.13)'; ctx.fill();
     ctx.beginPath(); micPts.forEach(([x,y],i)=> i?ctx.lineTo(x,y):ctx.moveTo(x,y));
@@ -2066,10 +2082,11 @@ function drawRta(W,H,nyquist,bins,xForFreq){
     
     ctx.beginPath(); refPts.forEach(([x,y],i)=> i?ctx.lineTo(x,y):ctx.moveTo(x,y));
     ctx.strokeStyle='#d97706'; ctx.lineWidth=2; ctx.lineJoin='round'; ctx.stroke();
+    }
 
     computeComplexTf();
 
-    if(showTfCoh){
+    if(showTfCoh && !alignView){
       ctx.beginPath();
       for(let px = 0; px <= W; px += 2){
         const f = freqForX(px);
@@ -2087,7 +2104,7 @@ function drawRta(W,H,nyquist,bins,xForFreq){
       ctx.setLineDash([]);
     }
 
-    if(showTfPhase){
+    if(showTfPhase && !alignView){
       ctx.strokeStyle = 'rgba(34, 197, 94, 0.9)';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
@@ -2109,10 +2126,51 @@ function drawRta(W,H,nyquist,bins,xForFreq){
       ctx.stroke();
     }
 
-    // ---- יישור חיתוך סאב/טופ: עקומות פאזה שמורות + סמן + Δφ ----
-    if(showXover && (phaseSub || phaseTop)){
+    // ---- יישור חיתוך סאב/טופ: פאזה לא-עטופה + סמן + Δφ ----
+    if(alignView || (showXover && (phaseSub || phaseTop))){
       const N2 = TF_FFT_N/2;
-      const drawSnap=(snap,color)=>{
+      const toDeg=r=>r*180/Math.PI;
+      const wrap=d=>{ while(d>180)d-=360; while(d<-180)d+=360; return d; };
+      // ביטול עטיפה (unwrap) של צילום פאזה, מגודר בקוהרנטיות
+      const unwrapSnap=(snap)=>{
+        if(!snap) return null;
+        const u=new Float32Array(N2); let cum=0, prev=0, have=false;
+        for(let k=0;k<N2;k++){
+          if(snap.coh[k] < tfCohGate){ u[k]=NaN; have=false; continue; }
+          const p=snap.ph[k];
+          if(have){ let d=p-prev; while(d>Math.PI)d-=2*Math.PI; while(d<-Math.PI)d+=2*Math.PI; cum+=d; }
+          else cum=p;
+          u[k]=cum; prev=p; have=true;
+        }
+        return u;
+      };
+      const uSub = alignView ? unwrapSnap(phaseSub) : null;
+      const uTop = alignView ? unwrapSnap(phaseTop) : null;
+
+      // קביעת טווח Y אוטומטי (רק ב-align עם unwrap)
+      let yMinDeg=-180, yMaxDeg=180;
+      if(alignView && (uSub || uTop)){
+        let mn=1e9, mx=-1e9;
+        [uSub,uTop].forEach(u=>{ if(!u) return; for(let k=0;k<N2;k++){ const v=u[k]; if(!isNaN(v)){ const d=toDeg(v); if(d<mn)mn=d; if(d>mx)mx=d; } } });
+        if(mn<mx){ const pad=Math.max(30,(mx-mn)*0.15); yMinDeg=mn-pad; yMaxDeg=mx+pad; }
+      }
+      const degToY = deg => plotH*(1-(deg-yMinDeg)/(yMaxDeg-yMinDeg));
+
+      // רשת פאזה + תוויות (ב-align)
+      if(alignView){
+        ctx.strokeStyle=sunMode?'rgba(0,0,0,.12)':'rgba(255,255,255,.10)'; ctx.lineWidth=1;
+        ctx.fillStyle=sunMode?'#475569':'#64748b'; ctx.font='10px monospace'; ctx.textAlign='start';
+        const step = (yMaxDeg-yMinDeg)>540?180:90;
+        for(let d=Math.ceil(yMinDeg/step)*step; d<=yMaxDeg; d+=step){
+          const y=degToY(d);
+          ctx.globalAlpha = d===0?0.5:1;
+          ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); ctx.globalAlpha=1;
+          ctx.fillText(d+'°', 4, y-2);
+        }
+      }
+
+      // ציור עקומה
+      const drawSnap=(snap,unw,color)=>{
         if(!snap) return;
         ctx.strokeStyle=color; ctx.lineWidth=2.5; ctx.beginPath();
         let pen=false, prevY=0;
@@ -2120,15 +2178,17 @@ function drawRta(W,H,nyquist,bins,xForFreq){
           const f=freqForX(px);
           const k=Math.min(N2-1, Math.round(f/nyquist*N2));
           if(snap.coh[k] < tfCohGate){ pen=false; continue; }
-          const y=plotH*Math.max(0,Math.min(1, 0.5 - snap.ph[k]/(2*Math.PI)));
+          let y;
+          if(alignView){ const v=unw[k]; if(isNaN(v)){ pen=false; continue; } y=degToY(toDeg(v)); }
+          else { y=plotH*Math.max(0,Math.min(1, 0.5 - snap.ph[k]/(2*Math.PI))); }
           if(pen && Math.abs(y-prevY)>plotH*0.5) pen=false;
           pen?ctx.lineTo(px,y):ctx.moveTo(px,y);
           pen=true; prevY=y;
         }
         ctx.stroke();
       };
-      drawSnap(phaseSub, '#38bdf8');  // סאב = תכלת
-      drawSnap(phaseTop, '#e879f9');  // טופ = ורוד
+      drawSnap(phaseSub, uSub, '#38bdf8');  // סאב = תכלת
+      drawSnap(phaseTop, uTop, '#e879f9');  // טופ = ורוד
 
       // סמן תדר החיתוך
       const mx=xForFreq(xoverF);
@@ -2136,16 +2196,13 @@ function drawRta(W,H,nyquist,bins,xForFreq){
       ctx.beginPath(); ctx.moveTo(mx,0); ctx.lineTo(mx,plotH); ctx.stroke(); ctx.setLineDash([]);
 
       const k=Math.min(N2-1, Math.round(xoverF/nyquist*N2));
-      const toDeg=r=>r*180/Math.PI;
-      const wrap=d=>{ while(d>180)d-=360; while(d<-180)d+=360; return d; };
       const subOk = phaseSub && phaseSub.coh[k]>=tfCohGate;
       const topOk = phaseTop && phaseTop.coh[k]>=tfCohGate;
 
-      // תיבת קריאה
-      const bx=Math.min(W-230, Math.max(10, mx+8)), by=10;
-      ctx.fillStyle=sunMode?'rgba(255,255,255,.9)':'rgba(10,15,25,.82)';
-      ctx.fillRect(bx,by,222,86);
-      ctx.strokeStyle='rgba(148,163,184,.5)'; ctx.lineWidth=1; ctx.strokeRect(bx,by,222,86);
+      const bx=Math.min(W-236, Math.max(10, mx+8)), by=10;
+      ctx.fillStyle=sunMode?'rgba(255,255,255,.92)':'rgba(10,15,25,.85)';
+      ctx.fillRect(bx,by,228,86);
+      ctx.strokeStyle='rgba(148,163,184,.5)'; ctx.lineWidth=1; ctx.strokeRect(bx,by,228,86);
       ctx.font='12px monospace'; ctx.textAlign='start';
       ctx.fillStyle=sunMode?'#0f172a':'#e5e7eb'; ctx.fillText('תדר חיתוך: '+xoverF+' Hz', bx+8, by+18);
       ctx.fillStyle='#38bdf8'; ctx.fillText('סאב:  '+(subOk?toDeg(phaseSub.ph[k]).toFixed(0)+'°':'— (קוה׳ נמוכה)'), bx+8, by+36);
@@ -2401,7 +2458,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v166';
+document.getElementById('ver').textContent='v167';
 
 let accentRgb=[62,166,255];
 function applyAccent(hex){
