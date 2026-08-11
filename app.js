@@ -297,7 +297,7 @@ safeOn('jsonFileInput', 'change', importSessionJson);
 
 function exportSessionJson(){
   const data = {
-    version: 'v170',
+    version: 'v171',
     timestamp: new Date().toISOString(),
     saves: saves,
     eqPositions: eqPositions.map(p=>({name:p.name, db:Array.from(p.db)})),
@@ -2163,7 +2163,9 @@ function drawRta(W,H,nyquist,bins,xForFreq){
           const y=degToY(d);
           ctx.globalAlpha = d===0?0.5:1;
           ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); ctx.globalAlpha=1;
+          const pd=ctx.direction; ctx.direction='ltr'; ctx.textAlign='left';
           ctx.fillText(d+'°', 4, y-2);
+          ctx.direction=pd; ctx.textAlign='start';
         }
       }
 
@@ -2197,22 +2199,26 @@ function drawRta(W,H,nyquist,bins,xForFreq){
       const subOk = phaseSub && phaseSub.coh[k]>=tfCohGate;
       const topOk = phaseTop && phaseTop.coh[k]>=tfCohGate;
 
-      const bx=Math.min(W-236, Math.max(10, mx+8)), by=10;
+      const boxW=228;
+      const bx=Math.min(W-boxW-8, Math.max(10, mx+8)), by=10;
       ctx.fillStyle=sunMode?'rgba(255,255,255,.92)':'rgba(10,15,25,.85)';
-      ctx.fillRect(bx,by,228,86);
-      ctx.strokeStyle='rgba(148,163,184,.5)'; ctx.lineWidth=1; ctx.strokeRect(bx,by,228,86);
-      ctx.font='12px monospace'; ctx.textAlign='start';
-      ctx.fillStyle=sunMode?'#0f172a':'#e5e7eb'; ctx.fillText('תדר חיתוך: '+xoverF+' Hz', bx+8, by+18);
-      ctx.fillStyle='#38bdf8'; ctx.fillText('סאב:  '+(subOk?toDeg(phaseSub.ph[k]).toFixed(0)+'°':'— (קוה׳ נמוכה)'), bx+8, by+36);
-      ctx.fillStyle='#e879f9'; ctx.fillText('טופ:  '+(topOk?toDeg(phaseTop.ph[k]).toFixed(0)+'°':'— (קוה׳ נמוכה)'), bx+8, by+54);
+      ctx.fillRect(bx,by,boxW,86);
+      ctx.strokeStyle='rgba(148,163,184,.5)'; ctx.lineWidth=1; ctx.strokeRect(bx,by,boxW,86);
+      ctx.font='12px monospace';
+      const prevDir=ctx.direction; ctx.direction='rtl'; ctx.textAlign='right';
+      const rx=bx+boxW-10;
+      ctx.fillStyle=sunMode?'#0f172a':'#e5e7eb'; ctx.fillText('תדר חיתוך: '+xoverF+' Hz', rx, by+18);
+      ctx.fillStyle='#38bdf8'; ctx.fillText('סאב: '+(subOk?toDeg(phaseSub.ph[k]).toFixed(0)+'°':'— קוה׳ נמוכה'), rx, by+36);
+      ctx.fillStyle='#e879f9'; ctx.fillText('טופ: '+(topOk?toDeg(phaseTop.ph[k]).toFixed(0)+'°':'— קוה׳ נמוכה'), rx, by+54);
       if(subOk && topOk){
         const d=wrap(toDeg(phaseTop.ph[k]-phaseSub.ph[k])); const ad=Math.abs(d);
         const col = ad<30?'#22c55e' : ad>150?'#ef4444' : '#f59e0b';
-        const verdict = ad<30?'מיושר ✓' : ad>150?'הפוך — היפוך פולריות' : 'כוונן דיליי';
-        ctx.fillStyle=col; ctx.fillText('Δφ: '+(d>0?'+':'')+d.toFixed(0)+'°  '+verdict, bx+8, by+76);
+        const verdict = ad<30?'מיושר ✓' : ad>150?'הפוך — פולריות' : 'כוונן דיליי';
+        ctx.fillStyle=col; ctx.fillText('Δφ: '+(d>0?'+':'')+d.toFixed(0)+'°  '+verdict, rx, by+76);
       } else {
-        ctx.fillStyle=sunMode?'#64748b':'#94a3b8'; ctx.fillText('לכוד סאב וטופ למדידת Δφ', bx+8, by+76);
+        ctx.fillStyle=sunMode?'#64748b':'#94a3b8'; ctx.fillText('לכוד סאב וטופ למדידת Δφ', rx, by+76);
       }
+      ctx.direction=prevDir; ctx.textAlign='start';
     }
     
     ctx.font='11px monospace'; ctx.textAlign='start';
@@ -2456,7 +2462,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v170';
+document.getElementById('ver').textContent='v171';
 
 let accentRgb=[62,166,255];
 function applyAccent(hex){
