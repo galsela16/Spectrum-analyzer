@@ -283,7 +283,7 @@ safeOn('jsonFileInput', 'change', importSessionJson);
 
 function exportSessionJson(){
   const data = {
-    version: 'v175',
+    version: 'v176',
     timestamp: new Date().toISOString(),
     saves: saves,
     eqPositions: eqPositions.map(p=>({name:p.name, db:Array.from(p.db)})),
@@ -462,6 +462,11 @@ function syncInlineGenBtns(){
       b.textContent = (genOn && genType==='pink') ? '⏹ עצור רעש' : '▶ רעש ורוד';
     }
   });
+  const pb=document.getElementById('phPinkBtn');
+  if(pb){
+    pb.classList.toggle('on', genOn && genType==='pink');
+    pb.textContent = (genOn && genType==='pink') ? '⏹ עצור פינק נויז' : '▶ פינק נויז מהאפליקציה';
+  }
 }
 
 function genApplyLevel(){
@@ -2456,7 +2461,7 @@ function detectFeedback(nyquist,bins){
 }
 
 loadCalStore();
-document.getElementById('ver').textContent='v175';
+document.getElementById('ver').textContent='v176';
 
 let accentRgb=[62,166,255];
 function applyAccent(hex){
@@ -2555,6 +2560,11 @@ function capturePhase(which){
 }
 safeOn('phSubBtn','click',()=>capturePhase('sub'));
 safeOn('phTopBtn','click',()=>capturePhase('top'));
+safeOn('phPinkBtn','click',function(){
+  if(genOn && genType==='pink'){ genStop(); return; }
+  genType='pink'; if(typeof setGenTypeUI==='function') setGenTypeUI('pink');
+  genStart();
+});
 safeOn('phClearBtn','click',function(){
   phaseSub=null; phaseTop=null; showXover=false;
   const s=document.getElementById('phSubBtn'); if(s){ s.classList.remove('on'); s.textContent='מדוד + לכוד סאב'; s.disabled=false; }
